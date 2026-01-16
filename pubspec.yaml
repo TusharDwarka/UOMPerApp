@@ -1,0 +1,38 @@
+name: uom_per_app
+description: A new Flutter project for University Management.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State Management
+  provider: ^6.1.1
+  
+  # Local Database
+  isar_community: ^3.2.0
+  isar_community_flutter_libs: ^3.2.0
+  path_provider: ^2.1.2 
+  
+  # UI Libraries
+  table_calendar: ^3.1.0
+  time_planner: ^0.1.0
+  intl: ^0.19.0
+  
+  # Data
+  read_pdf_text: ^0.3.1
+  http: ^1.1.0
+  
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.3
+  build_runner: ^2.4.6
+  isar_community_generator: ^3.2.0
+
+flutter:
+  uses-material-design: true
