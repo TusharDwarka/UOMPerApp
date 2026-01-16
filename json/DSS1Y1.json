@@ -1,0 +1,158 @@
+{
+    "timetable": {
+      "Monday": [
+        {
+          "day": "Monday",
+          "startTime": "09:30",
+          "endTime": "12:30",
+          "moduleCode": "SIS 1065(1)",
+          "moduleName": "Scientific Writing and Presentation",
+          "location": "Room G3 (The Core)",
+          "mode": "CAMPUS"
+        },
+        {
+          "day": "Monday",
+          "startTime": "12:30",
+          "endTime": "15:30",
+          "moduleCode": "SIS 1064",
+          "moduleName": "Propositional and Predicate Logic",
+          "location": "ROOM G3 (The Core)",
+          "mode": "CAMPUS"
+        }
+      ],
+      "Tuesday": [
+        {
+          "day": "Tuesday",
+          "startTime": "09:00",
+          "endTime": "12:00",
+          "moduleCode": "ICT 1101(1)",
+          "moduleName": "Introduction to Computer Science",
+          "location": "Online",
+          "mode": "ONLINE"
+        },
+        {
+          "day": "Tuesday",
+          "startTime": "12:00",
+          "endTime": "15:00",
+          "moduleCode": "MA 1020(1)",
+          "moduleName": "Linear Algebra",
+          "location": "Online",
+          "mode": "ONLINE"
+        }
+      ],
+      "Wednesday": [
+        {
+          "day": "Wednesday",
+          "startTime": "08:30",
+          "endTime": "10:30",
+          "moduleCode": "ICT 1101(1)",
+          "moduleName": "Lab practicals",
+          "location": "CITS Lab 1B",
+          "mode": "CAMPUS"
+        },
+        {
+          "day": "Wednesday",
+          "startTime": "12:00",
+          "endTime": "13:00",
+          "moduleCode": "ICT 1101(1)",
+          "moduleName": "Lab practicals",
+          "location": "FOA Lab 2B",
+          "mode": "CAMPUS"
+        },
+        {
+          "day": "Wednesday",
+          "startTime": "13:00",
+          "endTime": "15:30",
+          "moduleCode": "MA1021(1)",
+          "moduleName": "Mathematical Analysis (Tutorial)",
+          "location": "Rm 2.12 NAC",
+          "mode": "CAMPUS"
+        }
+      ],
+      "Thursday": [
+        {
+          "day": "Thursday",
+          "startTime": "08:00",
+          "endTime": "11:00",
+          "moduleCode": "PHYSI 1010(1)",
+          "moduleName": "Physics (L)",
+          "location": "Room G1 (The Core)",
+          "mode": "CAMPUS"
+        },
+        {
+          "day": "Thursday",
+          "startTime": "12:00",
+          "endTime": "15:00",
+          "moduleCode": "MA 1020(1)",
+          "moduleName": "Linear Algebra",
+          "location": "Room G1 (The Core)",
+          "mode": "CAMPUS"
+        }
+      ],
+      "Friday": [
+        {
+          "day": "Friday",
+          "startTime": "08:00",
+          "endTime": "11:00",
+          "moduleCode": "PHYSI 1010(1)",
+          "moduleName": "Physics (T)",
+          "location": "Room G3 (The Core)",
+          "mode": "CAMPUS"
+        },
+        {
+          "day": "Friday",
+          "startTime": "12:00",
+          "endTime": "15:00",
+          "moduleCode": "MA1021(1)",
+          "moduleName": "Mathematical Analysis (Tutorial)",
+          "location": "Room G3 (The Core)",
+          "mode": "CAMPUS"
+        }
+      ],
+      "Saturday": []
+    },
+    "modules": [
+      {
+        "moduleCode": "MA 1020(1)",
+        "moduleName": "Linear Algebra",
+        "hours": "30 + 30",
+        "resourcePerson": "Dr N Sookia",
+        "email": "sookian@uom.ac.mu"
+      },
+      {
+        "moduleCode": "MA 1021(1)",
+        "moduleName": "Mathematical Analysis I",
+        "hours": "30 + 30",
+        "resourcePerson": "Dr J Cheeneebash",
+        "email": "jayrani@uom.ac.mu"
+      },
+      {
+        "moduleCode": "SIS 1064(1)",
+        "moduleName": "Propositional and Predicate Logic",
+        "hours": "15 + 15",
+        "resourcePerson": "Dr N Gooda Sahib",
+        "email": "n.goodasahib@uom.ac.mu"
+      },
+      {
+        "moduleCode": "PHYSI 1010(1)",
+        "moduleName": "Physics",
+        "hours": "30 + 30",
+        "resourcePerson": "Dr N Rughoonauth",
+        "email": "n.rughoonauth@uom.ac.mu"
+      },
+      {
+        "moduleCode": "ICT 1101(1)",
+        "moduleName": "Introduction to Computer Science",
+        "hours": "30 + 30",
+        "resourcePerson": "Mrs B Durgahee",
+        "email": "b.durgahee@uom.ac.mu"
+      },
+      {
+        "moduleCode": "SIS 1065(1)",
+        "moduleName": "Scientific Writing and Presentation",
+        "hours": "15 + 15",
+        "resourcePerson": "Dr N Gooda Sahib",
+        "email": "n.goodasahib@uom.ac.mu"
+      }
+    ]
+  }

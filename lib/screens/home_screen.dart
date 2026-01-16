@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dashboard_tab.dart';
+import 'schedule_tab.dart';
+import 'academic_tab.dart';
 import 'bus_tab.dart';
-import 'timetable_tab.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,10 +16,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static const List<Widget> _pages = <Widget>[
     DashboardTab(),
-    TimetableTab(),
-    Center(child: Text('Academic')),
+    ScheduleTab(),
+    AcademicTab(), // Formerly Calendar/Notes
     BusTab(), // Transport
-    Center(child: Text('Notes')),
   ];
 
   void _onItemTapped(int index) {
@@ -32,7 +32,6 @@ class _HomeScreenState extends State<HomeScreen> {
     // Premium bottom bar colors
     const activeColor = Color(0xFF0066FF);
     const inactiveColor = Color(0xFF9E9E9E);
-    const bgColor = Colors.white;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -64,20 +63,16 @@ class _HomeScreenState extends State<HomeScreen> {
               label: 'Dashboard',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_month_rounded),
-              label: 'Timetable',
+              icon: Icon(Icons.calendar_view_week_rounded),
+              label: 'Schedule',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.school_rounded),
+              icon: Icon(Icons.calendar_month_rounded),
               label: 'Academic',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.directions_bus_filled_rounded),
               label: 'Transport',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.list_alt_rounded),
-              label: 'Notes',
             ),
           ],
         ),
