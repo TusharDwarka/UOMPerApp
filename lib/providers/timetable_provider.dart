@@ -43,6 +43,74 @@ class TimetableProvider extends ChangeNotifier {
     await loadSessions();
   }
 
+  // Import Semester Logic
+  Future<void> importSemester(Map<String, dynamic> json, DateTime startOfWeek1) async {
+    final isar = await isarService.db;
+    final timetable = json['timetable'] as Map<String, dynamic>;
+    final faceToFaceWeeks = [1, 2, 3, 6, 10];
+    final totalWeeks = 10;
+    
+    await isar.writeTxn(() async {
+      // Loop through 10 weeks
+      for (int week = 1; week <= totalWeeks; week++) {
+        // Calculate the Monday of this week
+        final weekMonday = startOfWeek1.add(Duration(days: (week - 1) * 7));
+        
+        // Loop through days in the JSON template
+        timetable.forEach((dayName, sessions) {
+          final sessionsList = sessions as List<dynamic>;
+          
+          for (var s in sessionsList) {
+             // Determine Mode/Location
+             bool isF2F = faceToFaceWeeks.contains(week);
+             String room = s['location'] ?? 'Unknown';
+             String mode = s['mode'] ?? 'CAMPUS'; // "CAMPUS" or "ONLINE"
+             
+             if (mode == "ONLINE") {
+               room = "Online";
+             } else {
+               if (!isF2F) {
+                 room = "Online";
+               }
+             }
+
+             // Calculate specific date
+             int dayOffset = _getDayOffset(dayName);
+             final specificDate = weekMonday.add(Duration(days: dayOffset));
+             
+             // Create Session for this SPECIFIC date
+             final session = ClassSession(
+               subject: s['moduleName'],
+               startTime: s['startTime'],
+               endTime: s['endTime'],
+               day: dayName,
+               room: room,
+               moduleCode: s['moduleCode'] ?? '',
+               isUser: true,
+               specificDate: specificDate
+             );
+             
+             isar.classSessions.put(session);
+          }
+        });
+      }
+    });
+    await loadSessions();
+  }
+
+  int _getDayOffset(String day) {
+    switch (day) {
+      case 'Monday': return 0;
+      case 'Tuesday': return 1;
+      case 'Wednesday': return 2;
+      case 'Thursday': return 3;
+      case 'Friday': return 4;
+      case 'Saturday': return 5;
+      case 'Sunday': return 6;
+      default: return 0;
+    }
+  }
+
   // --- Logic for Free Time Comparison ---
 
   void _calculateCommonFreeTime() {

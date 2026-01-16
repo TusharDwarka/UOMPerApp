@@ -28,8 +28,19 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
   // Helper: Get sessions for the selected day
   List<ClassSession> _getEventsForDay(DateTime day, List<ClassSession> allSessions) {
+    // We now have two types of sessions:
+    // 1. Generic recurring (specificDate == null) -> Match day name
+    // 2. Specific date (specificDate != null) -> Match exact date
+    
     final dayName = DateFormat('EEEE').format(day);
-    return allSessions.where((s) => s.day == dayName).toList();
+    
+    return allSessions.where((s) {
+       if (s.specificDate != null) {
+         return isSameDay(s.specificDate!, day);
+       } else {
+         return s.day == dayName;
+       }
+    }).toList();
   }
 
   // Show "Add Class" Bottom Sheet
@@ -302,26 +313,102 @@ class _ScheduleTabState extends State<ScheduleTab> {
             children: [
               const Text("Today", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C))),
               const SizedBox(height: 4),
-              Text(DateFormat('MMMM d').format(_selectedDate), style: TextStyle(fontSize: 14, color: Colors.grey[400], fontWeight: FontWeight.w500)),
+              GestureDetector(
+                onTap: () async {
+                  // Month Picker
+                  final DateTime? picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2030),
+                    builder: (context, child) {
+                      return Theme(
+                        data: ThemeData.light().copyWith(
+                          primaryColor: const Color(0xFF0066FF),
+                          colorScheme: const ColorScheme.light(primary: Color(0xFF0066FF)),
+                          buttonTheme: const ButtonThemeData(textTheme: ButtonTextTheme.primary),
+                        ),
+                        child: child!,
+                      );
+                    },
+                  );
+                  if (picked != null && picked != _selectedDate) {
+                    setState(() {
+                      _selectedDate = picked;
+                    });
+                  }
+                },
+                child: Row(
+                  children: [
+                    Text(DateFormat('MMMM d, y').format(_selectedDate), style: TextStyle(fontSize: 14, color: Colors.grey[400], fontWeight: FontWeight.w500)),
+                    const SizedBox(width: 5),
+                    Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.grey[400])
+                  ],
+                ),
+              ),
             ],
           ),
           
-          // Enhanced Touch Target Button
-          InkWell(
-            onTap: () => _showAddSessionDialog(),
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0066FF),
+          Row(
+            children: [
+               IconButton(
+                 icon: const Icon(Icons.cloud_download_outlined, color: Colors.blueGrey),
+                 tooltip: "Import Timetable",
+                 onPressed: () {
+                   // Import Timetable Trigger
+                   final startOfSemester = DateTime(2026, 1, 19); // 19 Jan 2026
+                   
+                   // JSON DATA (Hardcoded as requested for "Use that file")
+                   // In a real app we might read file, but for now passing the structure
+                   // We need to pass the Map.
+                   final jsonMap = {
+                      "timetable": {
+                        "Monday": [
+                          {"day": "Monday", "startTime": "09:30", "endTime": "12:30", "moduleName": "Scientific Writing and Presentation", "location": "Room G3", "mode": "CAMPUS"},
+                          {"day": "Monday", "startTime": "12:30", "endTime": "15:30", "moduleName": "Propositional and Predicate Logic", "location": "ROOM G3", "mode": "CAMPUS"}
+                        ],
+                        "Tuesday": [
+                          {"day": "Tuesday", "startTime": "09:00", "endTime": "12:00", "moduleName": "Introduction to Computer Science", "location": "Online", "mode": "ONLINE"},
+                          {"day": "Tuesday", "startTime": "12:00", "endTime": "15:00", "moduleName": "Linear Algebra", "location": "Online", "mode": "ONLINE"}
+                        ],
+                        "Wednesday": [
+                          {"day": "Wednesday", "startTime": "08:30", "endTime": "10:30", "moduleName": "Lab practicals", "location": "CITS Lab 1B", "mode": "CAMPUS"},
+                          {"day": "Wednesday", "startTime": "12:00", "endTime": "13:00", "moduleName": "Lab practicals", "location": "FOA Lab 2B", "mode": "CAMPUS"},
+                          {"day": "Wednesday", "startTime": "13:00", "endTime": "15:30", "moduleName": "Mathematical Analysis (Tutorial)", "location": "Rm 2.12 NAC", "mode": "CAMPUS"}
+                        ],
+                        "Thursday": [
+                          {"day": "Thursday", "startTime": "08:00", "endTime": "11:00", "moduleName": "Physics (L)", "location": "Room G1", "mode": "CAMPUS"},
+                          {"day": "Thursday", "startTime": "12:00", "endTime": "15:00", "moduleName": "Linear Algebra", "location": "Room G1", "mode": "CAMPUS"}
+                        ],
+                        "Friday": [
+                          {"day": "Friday", "startTime": "08:00", "endTime": "11:00", "moduleName": "Physics (T)", "location": "Room G3", "mode": "CAMPUS"},
+                          {"day": "Friday", "startTime": "12:00", "endTime": "15:00", "moduleName": "Mathematical Analysis (Tutorial)", "location": "Room G3", "mode": "CAMPUS"}
+                        ]
+                      }
+                   };
+
+                   Provider.of<TimetableProvider>(context, listen: false).importSemester(jsonMap, startOfSemester);
+                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Semester Imported: Weeks 1-10 populated")));
+                 },
+               ),
+               const SizedBox(width: 10),
+               InkWell(
+                onTap: () => _showAddSessionDialog(),
                 borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(color: const Color(0xFF0066FF).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
-                ]
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0066FF),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(color: const Color(0xFF0066FF).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
+                    ]
+                  ),
+                  child: const Text("Add", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
               ),
-              child: const Text("Add task", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-          ),
+            ],
+          )
         ],
       ),
     );
