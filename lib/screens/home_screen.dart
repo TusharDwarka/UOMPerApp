@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dashboard_tab.dart';
 import 'bus_tab.dart';
+import 'timetable_tab.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,10 +15,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static const List<Widget> _pages = <Widget>[
     DashboardTab(),
-    Center(child: Text('Timetable: My Schedule vs Friend')),
-    Center(child: Text('Academic: Assignments & Attendance')),
-    BusTab(),
-    Center(child: Text('Notes/Calendar')),
+    TimetableTab(),
+    Center(child: Text('Academic')),
+    BusTab(), // Transport
+    Center(child: Text('Notes')),
   ];
 
   void _onItemTapped(int index) {
@@ -28,41 +29,58 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Premium bottom bar colors
+    const activeColor = Color(0xFF0066FF);
+    const inactiveColor = Color(0xFF9E9E9E);
+    const bgColor = Colors.white;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('UOMPerApp'),
-      ),
+      backgroundColor: Colors.white,
       body: _pages[_selectedIndex],
-      bottomNavigationBar: NavigationBar(
-        onDestinationSelected: _onItemTapped,
-        selectedIndex: _selectedIndex,
-        destinations: const <Widget>[
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.calendar_view_week_outlined),
-            selectedIcon: Icon(Icons.calendar_view_week),
-            label: 'Timetable',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.school_outlined),
-            selectedIcon: Icon(Icons.school),
-            label: 'Academic',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.directions_bus_outlined),
-            selectedIcon: Icon(Icons.directions_bus),
-            label: 'Transport',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.note_alt_outlined),
-            selectedIcon: Icon(Icons.note_alt),
-            label: 'Notes',
-          ),
-        ],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            )
+          ]
+        ),
+        child: BottomNavigationBar(
+          elevation: 0,
+          backgroundColor: Colors.transparent, // Handled by Container
+          type: BottomNavigationBarType.fixed,
+          currentIndex: _selectedIndex,
+          selectedItemColor: activeColor,
+          unselectedItemColor: inactiveColor,
+          showSelectedLabels: false,
+          showUnselectedLabels: false,
+          onTap: _onItemTapped,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.grid_view_rounded),
+              label: 'Dashboard',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_month_rounded),
+              label: 'Timetable',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.school_rounded),
+              label: 'Academic',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.directions_bus_filled_rounded),
+              label: 'Transport',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.list_alt_rounded),
+              label: 'Notes',
+            ),
+          ],
+        ),
       ),
     );
   }
