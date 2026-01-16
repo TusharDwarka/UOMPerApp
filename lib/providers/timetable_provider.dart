@@ -35,6 +35,14 @@ class TimetableProvider extends ChangeNotifier {
     await loadSessions();
   }
 
+  Future<void> deleteSession(int id) async {
+    final isar = await isarService.db;
+    await isar.writeTxn(() async {
+      await isar.classSessions.delete(id);
+    });
+    await loadSessions();
+  }
+
   // --- Logic for Free Time Comparison ---
 
   void _calculateCommonFreeTime() {
