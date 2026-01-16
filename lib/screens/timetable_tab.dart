@@ -1,181 +1,317 @@
 import 'package:flutter/material.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import '../providers/timetable_provider.dart';
+import '../models/class_session.dart';
 
-class TimetableTab extends StatelessWidget {
+class TimetableTab extends StatefulWidget {
   const TimetableTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildTimeColumn(),
-                    const SizedBox(width: 20),
-                    Expanded(child: _buildEventColumn()),
-                  ],
+  State<TimetableTab> createState() => _TimetableTabState();
+}
+
+class _TimetableTabState extends State<TimetableTab> {
+  CalendarFormat _calendarFormat = CalendarFormat.week;
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDay = _focusedDay;
+    // Load data
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<TimetableProvider>(context, listen: false).loadSessions();
+    });
+  }
+
+  List<ClassSession> _getEventsForDay(DateTime day, List<ClassSession> allSessions) {
+    // Convert DateTime day to string (e.g., "Monday")
+    final dayName = DateFormat('EEEE').format(day);
+    
+    // Filter recurring sessions for this weekday
+    return allSessions.where((s) => s.day == dayName).toList()
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+  }
+
+  void _showAddSessionDialog() {
+    final formKey = GlobalKey<FormState>();
+    String subject = '';
+    String room = '';
+    String startTime = "09:00";
+    String endTime = "10:30";
+    // Default to selected day name
+    String selectedDayName = DateFormat('EEEE').format(_selectedDay ?? DateTime.now());
+    final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, top: 20, left: 20, right: 20),
+        child: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Add New Class", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              TextFormField(
+                decoration: InputDecoration(
+                  labelText: "Subject / Module",
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.book_outlined),
+                ),
+                validator: (v) => v!.isEmpty ? "Required" : null,
+                onSaved: (v) => subject = v!,
+              ),
+              const SizedBox(height: 15),
+              TextFormField(
+                decoration: InputDecoration(
+                  labelText: "Room / Location",
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.location_on_outlined),
+                ),
+                onSaved: (v) => room = v ?? '',
+              ),
+              const SizedBox(height: 15),
+              DropdownButtonFormField<String>(
+                value: days.contains(selectedDayName) ? selectedDayName : 'Monday',
+                decoration: InputDecoration(labelText: "Day", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                items: days.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                onChanged: (v) => selectedDayName = v!,
+              ),
+              const SizedBox(height: 15),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      initialValue: startTime,
+                      decoration: const InputDecoration(labelText: "Start (HH:MM)", border: OutlineInputBorder()),
+                      onSaved: (v) => startTime = v!,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextFormField(
+                      initialValue: endTime,
+                      decoration: const InputDecoration(labelText: "End (HH:MM)", border: OutlineInputBorder()),
+                      onSaved: (v) => endTime = v!,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 25),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () {
+                    if (formKey.currentState!.validate()) {
+                      formKey.currentState!.save();
+                      final newSession = ClassSession(
+                        subject: subject,
+                        room: room,
+                        day: selectedDayName,
+                        startTime: startTime,
+                        endTime: endTime,
+                        isUser: true,
+                      );
+                      Provider.of<TimetableProvider>(context, listen: false).addSession(newSession);
+                      Navigator.pop(context);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2962FF),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text("Save Class"),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('Timetable', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.today, color: Colors.blue),
+            onPressed: () {
+              setState(() {
+                _focusedDay = DateTime.now();
+                _selectedDay = DateTime.now();
+              });
+            },
+          )
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showAddSessionDialog,
+        backgroundColor: const Color(0xFF2962FF),
+        icon: const Icon(Icons.add),
+        label: const Text("Add Class"),
+      ),
+      body: Consumer<TimetableProvider>(
+        builder: (context, timetable, _) {
+          final events = _getEventsForDay(_selectedDay ?? DateTime.now(), timetable.userSessions);
+          
+          return Column(
             children: [
-              IconButton(onPressed: () {}, icon: const Icon(Icons.arrow_back_ios, size: 18)),
-              ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0066FF),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  elevation: 0,
-                ),
-                child: const Text("+ Add task", style: TextStyle(color: Colors.white)),
+              _buildCalendar(),
+              const Divider(height: 1),
+              Expanded(
+                child: events.isEmpty 
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(20),
+                      itemCount: events.length,
+                      itemBuilder: (context, index) {
+                        return _buildClassCard(events[index]);
+                      },
+                    ),
               ),
             ],
-          ),
-          const SizedBox(height: 20),
-          const Text("Today", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-          Text("June 28th", style: TextStyle(color: Colors.grey[400], fontSize: 14)),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              _buildTab("This week", true),
-              _buildTab("Next week", false),
-              _buildTab("Month", false), // Cut off in image, guessing
-            ],
-          ),
-          const SizedBox(height: 10),
-        ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildTab(String text, bool isSelected) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 24),
-      child: Column(
-        children: [
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: isSelected ? Colors.black : Colors.grey[300],
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (isSelected)
-            Container(width: 20, height: 3, color: const Color(0xFF0066FF))
-        ],
+  Widget _buildCalendar() {
+    return TableCalendar(
+      firstDay: DateTime.utc(2023, 1, 1),
+      lastDay: DateTime.utc(2030, 12, 31),
+      focusedDay: _focusedDay,
+      calendarFormat: _calendarFormat,
+      selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+      onDaySelected: (selectedDay, focusedDay) {
+        setState(() {
+          _selectedDay = selectedDay;
+          _focusedDay = focusedDay;
+        });
+      },
+      onFormatChanged: (format) {
+        if (_calendarFormat != format) {
+          setState(() {
+            _calendarFormat = format;
+          });
+        }
+      },
+      onPageChanged: (focusedDay) {
+        _focusedDay = focusedDay;
+      },
+      calendarStyle: const CalendarStyle(
+        selectedDecoration: BoxDecoration(color: Color(0xFF2962FF), shape: BoxShape.circle),
+        todayDecoration: BoxDecoration(color: Color(0xFF90CAF9), shape: BoxShape.circle),
+        markerDecoration: BoxDecoration(color: Color(0xFF2962FF), shape: BoxShape.circle),
+      ),
+      headerStyle: const HeaderStyle(
+        formatButtonVisible: true,
+        titleCentered: true,
+        formatButtonShowsNext: false,
       ),
     );
   }
 
-  Widget _buildTimeColumn() {
-    return Column(
-      children: [
-        for (int i = 7; i <= 16; i++)
-          Container(
-            height: 100, // Grid height
-            alignment: Alignment.topCenter,
-            child: Text(
-              "${i.toString().padLeft(2, '0')}:00",
-              style: TextStyle(color: Colors.grey[400], fontSize: 12),
-            ),
-          ),
-      ],
-    );
-  }
+  Widget _buildClassCard(ClassSession session) {
+    // Generate color from subject hash for consistency
+    final color = [
+       const Color(0xFFE3F2FD), // Blue
+       const Color(0xFFF3E5F5), // Purple
+       const Color(0xFFE8F5E9), // Green
+       const Color(0xFFFFF3E0), // Orange
+    ][session.subject.hashCode.abs() % 4];
 
-  Widget _buildEventColumn() {
-    return Stack(
-      children: [
-        // Grid lines (optional, kept subtle)
-        // Events
-        Column(
-          children: [
-             const SizedBox(height: 100), // Gap for 7-8
-             _buildEventCard("How to grow...", const Color(0xFF69F0AE), 100), // 8-9
-             const SizedBox(height: 0),
-             _buildEventCard("Code Review...", const Color(0xFFFFD180), 80), // 9-10ish
-             const SizedBox(height: 20),
-             Stack(
-               children: [
-                 _buildEventCard("Grow your...", const Color(0xFFEA80FC), 120),
-                 Positioned(
-                   right: -10,
-                   top: 20,
-                   child: _buildFloatingBubble(),
-                 )
-               ]
-             ),
-             const SizedBox(height: 20),
-             _buildEventCard("Instagram...", const Color(0xFFFF5252), 100, isStriped: true),
-          ],
-        )
-      ],
-    );
-  }
+    final accentColor = [
+       const Color(0xFF1565C0),
+       const Color(0xFF7B1FA2),
+       const Color(0xFF2E7D32),
+       const Color(0xFFEF6C00),
+    ][session.subject.hashCode.abs() % 4];
 
-  Widget _buildEventCard(String title, Color color, double height, {bool isStriped = false}) {
     return Container(
-      width: double.infinity,
-      height: height,
+      margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
-      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: color.withOpacity(isStriped ? 0.2 : 0.4), // Soft pastel
-        borderRadius: BorderRadius.circular(24),
-        // If striped, we would add a CustomPaint or DecorationImage, simplified here to plain
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accentColor.withOpacity(0.1)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-           Icon(isStriped ? Icons.camera_alt : Icons.chat_bubble_outline, color: Colors.white, size: 20),
-           const SizedBox(width: 10),
-           Expanded(
-             child: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-           ),
-           const Icon(Icons.more_horiz, color: Colors.white),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Text(session.startTime, style: TextStyle(fontWeight: FontWeight.bold, color: accentColor)),
+                Container(height: 1, width: 20, color: Colors.grey[300], margin: const EdgeInsets.symmetric(vertical: 4)),
+                Text(session.endTime, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  session.subject, 
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: accentColor)
+                ),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    Icon(Icons.location_on, size: 16, color: accentColor.withOpacity(0.7)),
+                    const SizedBox(width: 4),
+                    Text(session.room, style: TextStyle(color: Colors.grey[700])),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ],
-      )
+      ),
     );
   }
 
-  Widget _buildFloatingBubble() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 5))
-        ]
-      ),
+  Widget _buildEmptyState() {
+    return Center(
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircleAvatar(radius: 10, child: Icon(Icons.person, size: 12)),
-          const SizedBox(height: 5),
-          const Text("Don't forget to\ncall John...", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+          Icon(Icons.event_busy, size: 80, color: Colors.grey[200]),
+          const SizedBox(height: 20),
+          Text(
+            "No classes on this day", 
+            style: TextStyle(color: Colors.grey[400], fontSize: 18, fontWeight: FontWeight.bold)
+          ),
+          const SizedBox(height: 10),
+          TextButton.icon(
+             onPressed: _showAddSessionDialog,
+             icon: const Icon(Icons.add),
+             label: const Text("Add a class"),
+          )
         ],
       ),
     );
