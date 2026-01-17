@@ -20,6 +20,9 @@ class ClassSession {
   // If set, this session applies ONLY to this specific date.
   // If null, it applies to every week (generic).
   DateTime? specificDate;
+  
+  // Weeks this session is active (e.g. [1, 2, 3, 6, 10])
+  List<int>? weeks;
 
   ClassSession({
     this.subject = '',
@@ -30,6 +33,7 @@ class ClassSession {
     this.moduleCode = '',
     this.isUser = true,
     this.specificDate,
+    this.weeks,
   });
 
   factory ClassSession.fromJson(Map<String, dynamic> json, {bool isUser = true}) {

@@ -55,9 +55,9 @@ class _ScheduleTabState extends State<ScheduleTab> {
                   final mainEvents = timetable.userSessions;
                   final compareEvents = timetable.friendSessions;
 
-                  final dailyMain = _filterEventsForDay(mainEvents, _selectedDate);
+                  final dailyMain = timetable.getEventsForDay(_selectedDate);
                   // Only load comparison events if compare mode is ON
-                  final dailyCompare = _isCompareMode ? _filterEventsForDay(compareEvents, _selectedDate) : <ClassSession>[];
+                  final dailyCompare = _isCompareMode ? timetable.getFriendEventsForDay(_selectedDate) : <ClassSession>[];
                   
                   final relevantTasks = timetable.getTasksForDay(_selectedDate);
                   final freeSlots = _isCompareMode ? timetable.getFreeSlotsForDay(_selectedDate) : <CommonFreeSlot>[];

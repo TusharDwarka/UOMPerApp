@@ -1,0 +1,176 @@
+{
+  "timetable": {
+    "Monday": [
+      {
+        "day": "Monday",
+        "startTime": "09:00",
+        "endTime": "12:00",
+        "moduleCode": "SIS 1067(1)",
+        "moduleName": "Graphs",
+        "location": "Room (NAC 2.12)",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Monday",
+        "startTime": "09:00",
+        "endTime": "12:00",
+        "moduleCode": "SIS 1067(1)",
+        "moduleName": "Graphs",
+        "location": "ONLINE",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      }
+    ],
+    "Tuesday": [
+      {
+        "day": "Tuesday",
+        "startTime": "08:30",
+        "endTime": "11:30",
+        "moduleCode": "SIS 1066",
+        "moduleName": "Programming Lecture",
+        "location": "ONLINE",
+        "mode": "ONLINE",
+        "weeks": []
+      },
+      {
+        "day": "Tuesday",
+        "startTime": "12:00",
+        "endTime": "15:00",
+        "moduleCode": "MA 1024(1)",
+        "moduleName": "Mathematical Analysis II",
+        "location": "ONLINE",
+        "mode": "ONLINE",
+        "weeks": []
+      },
+      {
+        "day": "Tuesday",
+        "startTime": "16:00",
+        "endTime": "17:30",
+        "moduleCode": "STAT 1244",
+        "moduleName": "Probability and Statistics",
+        "location": "ONLINE",
+        "mode": "ONLINE",
+        "weeks": []
+      }
+    ],
+    "Wednesday": [
+      {
+        "day": "Wednesday",
+        "startTime": "12:00",
+        "endTime": "15:00",
+        "moduleCode": "MA 1023(1)",
+        "moduleName": "Differential Equations",
+        "location": "Room 2.7 - NAC Reduit",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Wednesday",
+        "startTime": "12:00",
+        "endTime": "15:00",
+        "moduleCode": "MA 1023(1)",
+        "moduleName": "Differential Equations",
+        "location": "ONLINE",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      }
+    ],
+    "Thursday": [
+      {
+        "day": "Thursday",
+        "startTime": "09:00",
+        "endTime": "12:00",
+        "moduleCode": "MA 1022(1)",
+        "moduleName": "Matric Computation",
+        "location": "Room 2.37 FLM",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Thursday",
+        "startTime": "09:00",
+        "endTime": "12:00",
+        "moduleCode": "MA 1022(1)",
+        "moduleName": "Matric Computation",
+        "location": "ONLINE",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      },
+      {
+        "day": "Thursday",
+        "startTime": "12:00",
+        "endTime": "15:00",
+        "moduleCode": "MA 1024(1)",
+        "moduleName": "Mathematical Analysis II",
+        "location": "Room 2.37 FLM",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Thursday",
+        "startTime": "12:00",
+        "endTime": "15:00",
+        "moduleCode": "MA 1024(1)",
+        "moduleName": "Mathematical Analysis II",
+        "location": "ONLINE",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      },
+      {
+        "day": "Thursday",
+        "startTime": "16:00",
+        "endTime": "17:30",
+        "moduleCode": "STAT 1244",
+        "moduleName": "Probability and Statistics",
+        "location": "Room 1.14 Phase II Building",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Thursday",
+        "startTime": "16:00",
+        "endTime": "17:30",
+        "moduleCode": "STAT 1244",
+        "moduleName": "Probability and Statistics",
+        "location": "ONLINE",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      }
+    ],
+    "Friday": [
+      {
+        "day": "Friday",
+        "startTime": "08:30",
+        "endTime": "11:30",
+        "moduleCode": "SIS 1066",
+        "moduleName": "Programming Lab",
+        "location": "SIS Lab - Second Floor Phase II Building",
+        "mode": "CAMPUS",
+        "weeks": []
+      }
+    ],
+    "Saturday": [
+        {
+        "day": "Saturday",
+        "startTime": "09:00",
+        "endTime": "12:00",
+        "moduleCode": "ICT 1201",
+        "moduleName": "Computer Architecture",
+        "location": "ONLINE",
+        "mode": "ONLINE",
+        "weeks": []
+      },
+      {
+        "day": "Saturday",
+        "startTime": "12:00",
+        "endTime": "15:00",
+        "moduleCode": "STAT 1244",
+        "moduleName": "Probability and Statistics",
+        "location": "ONLINE",
+        "mode": "ONLINE",
+        "weeks": []
+      }
+    ]
+  }
+}

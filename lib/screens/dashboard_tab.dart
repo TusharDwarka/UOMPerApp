@@ -39,9 +39,7 @@ class _DashboardTabState extends State<DashboardTab> {
         child: Consumer<TimetableProvider>(
           builder: (context, timetable, child) {
              final today = DateFormat('EEEE').format(DateTime.now()); // e.g., "Friday"
-             final todayClasses = timetable.userSessions
-                 .where((s) => s.day == today)
-                 .toList();
+             final todayClasses = timetable.getEventsForDay(DateTime.now());
              
              // Sort by time
              todayClasses.sort((a,b) => a.startTime.compareTo(b.startTime));
@@ -84,9 +82,40 @@ class _DashboardTabState extends State<DashboardTab> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            DateFormat('MMMM d').format(DateTime.now()),
-                            style: TextStyle(color: Colors.grey[500], fontSize: 14, fontWeight: FontWeight.w600),
+                          Row(
+                            children: [
+                              Text(
+                                DateFormat('MMMM d').format(DateTime.now()),
+                                style: TextStyle(color: Colors.grey[500], fontSize: 14, fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(width: 8),
+                              // Week Badge
+                              Builder(
+                                builder: (context) {
+                                  final week = timetable.getWeekNumber(DateTime.now());
+                                  final isOnline = timetable.isOnlineWeek(week);
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: isOnline ? Colors.orange.withOpacity(0.1) : Colors.blue.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: isOnline ? Colors.orange.withOpacity(0.3) : Colors.blue.withOpacity(0.3),
+                                        width: 1
+                                      )
+                                    ),
+                                    child: Text(
+                                      "Week $week • ${isOnline ? "Online" : "Campus"}",
+                                      style: TextStyle(
+                                        fontSize: 10, 
+                                        fontWeight: FontWeight.bold,
+                                        color: isOnline ? Colors.orange[800] : Colors.blue[800]
+                                      ),
+                                    ),
+                                  );
+                                }
+                              )
+                            ],
                           ),
                           const SizedBox(height: 4),
                           const Text(

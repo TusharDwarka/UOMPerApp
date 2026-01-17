@@ -130,7 +130,7 @@ class TimetableProvider extends ChangeNotifier {
     // Load Attendance too
     await loadAttendance();
     
-    _calculateCommonFreeTime();
+    // _calculateCommonFreeTime();
     notifyListeners();
   }
 
@@ -169,13 +169,36 @@ class TimetableProvider extends ChangeNotifier {
 
 
   // Helpers
+  final DateTime _semesterStart = DateTime(2026, 1, 19);
+
+  int getWeekNumber(DateTime date) {
+    // Normalize dates to midnight to avoid time discrepancies
+    final start = DateTime(_semesterStart.year, _semesterStart.month, _semesterStart.day);
+    final current = DateTime(date.year, date.month, date.day);
+    
+    if (current.isBefore(start)) return 0;
+    final diff = current.difference(start).inDays;
+    return (diff / 7).floor() + 1;
+  }
+
+  bool _shouldShowSession(ClassSession session, DateTime date) {
+    // If no weeks specified, assume it runs every week
+    if (session.weeks == null || session.weeks!.isEmpty) return true;
+    
+    final week = getWeekNumber(date);
+    return session.weeks!.contains(week);
+  }
+
   bool isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   List<ClassSession> getEventsForDay(DateTime date) {
     final dayName = DateFormat('EEEE').format(date);
-    return userSessions.where((s) => s.day == dayName).toList();
+    // Filter sessions by Day AND Week
+    return userSessions.where((s) => 
+      s.day == dayName && _shouldShowSession(s, date)
+    ).toList();
   }
   
   // New: Get specific classes for today (or specific date) to aid UI
@@ -203,7 +226,12 @@ class TimetableProvider extends ChangeNotifier {
        final dayName = DateFormat('EEEE').format(d);
        
        if (validDays.contains(dayName)) {
-         dates.add(d);
+         // Also check if the session was active that week!
+         // We need at least one session on that day that was active.
+         bool isActive = sessions.any((s) => s.day == dayName && _shouldShowSession(s, d));
+         if (isActive) {
+           dates.add(d);
+         }
        }
     }
     return dates;
@@ -235,12 +263,76 @@ class TimetableProvider extends ChangeNotifier {
   // Friend Helpers
   List<ClassSession> getFriendEventsForDay(DateTime date) {
     final dayName = DateFormat('EEEE').format(date);
-    return _friendSessions.where((s) => s.day == dayName).toList();
+    return _friendSessions.where((s) => 
+      s.day == dayName && _shouldShowSession(s, date)
+    ).toList();
   }
 
   List<CommonFreeSlot> getFreeSlotsForDay(DateTime date) {
+    if (isOnlineWeek(getWeekNumber(date))) {
+      return []; // No physical meetings on Online weeks
+    }
+
     final dayName = DateFormat('EEEE').format(date);
-    return _commonFreeTime[dayName] ?? [];
+    
+    // 1. Get User and Friend Sessions active for THIS specific date (checking weeks)
+    final dailyUser = _userSessions.where((s) => 
+      s.day == dayName && _shouldShowSession(s, date)
+    ).toList();
+
+    final dailyFriend = _friendSessions.where((s) => 
+      s.day == dayName && _shouldShowSession(s, date)
+    ).toList();
+    
+    // Bounds: 8:00 (480) to 16:00 (960)
+    final timeBounds = _TimeInterval(start: 480, end: 960);
+    
+    final busy = <_TimeInterval>[];
+    for (var s in [...dailyUser, ...dailyFriend]) {
+      busy.add(_TimeInterval(start: _timeToMinutes(s.startTime), end: _timeToMinutes(s.endTime)));
+    }
+    busy.sort((a,b) => a.start.compareTo(b.start));
+    
+    // Merge Overlapping Busy Slots
+    final merged = <_TimeInterval>[];
+    if (busy.isNotEmpty) {
+      var current = busy.first;
+      for (var i = 1; i < busy.length; i++) {
+         if (busy[i].start < current.end) {
+           current.end = busy[i].end > current.end ? busy[i].end : current.end;
+         } else {
+           merged.add(current);
+           current = busy[i];
+         }
+      }
+      merged.add(current);
+    }
+    
+    // Invert for Free Time
+    final freeSlots = <CommonFreeSlot>[];
+    int pointer = timeBounds.start;
+    
+    for (var block in merged) {
+       if (block.start > pointer) {
+         // Gap found
+         freeSlots.add(CommonFreeSlot(start: pointer, end: block.start));
+       }
+       pointer = block.end > pointer ? block.end : pointer;
+    }
+    
+    if (pointer < timeBounds.end) {
+      freeSlots.add(CommonFreeSlot(start: pointer, end: timeBounds.end));
+    }
+    
+    // Filter out tiny slots (< 30 mins)
+    return freeSlots.where((s) => (s.end - s.start) >= 30).toList();
+  }
+
+  bool isOnlineWeek(int week) {
+    // Campus Weeks: 1, 2, 3, 6, 10
+    const campusWeeks = [1, 2, 3, 6, 10];
+    // If it's not a campus week, it's online
+    return !campusWeeks.contains(week);
   }
 
   // Task Management
@@ -295,117 +387,75 @@ class TimetableProvider extends ChangeNotifier {
     await loadSessions();
   }
 
-  // Friend Load
+  // Friend Load - Now Supercharged to Reset & Seed Data
   Future<void> loadFriendTimetable() async {
-     // Hardcoded CSS1Y1 data as requested
-     final json = {
-        "timetable": {
-          "Monday": [
-            {"day": "Monday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICDT 1202Y(1)", "moduleName": "LECTURE", "location": "Room 1.16", "mode": "CAMPUS"},
-            {"day": "Monday", "startTime": "10:30", "endTime": "12:30", "moduleCode": "ICDT 1016Y(1)", "moduleName": "LECTURE", "location": "Room 1.16", "mode": "CAMPUS"}
-          ],
-          "Tuesday": [
-            {"day": "Tuesday", "startTime": "08:30", "endTime": "12:30", "moduleCode": "ICDT 1201Y(1)", "moduleName": "LAB", "location": "CITS FoA Lab 2B", "mode": "CAMPUS"},
-            {"day": "Tuesday", "startTime": "12:30", "endTime": "16:30", "moduleCode": "ICDT 1206Y(1)", "moduleName": "LAB(A1)", "location": "CITS FoA Lab 2B", "mode": "CAMPUS"}
-          ],
-          "Wednesday": [
-            {"day": "Wednesday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICT 1207 Y", "moduleName": "TUTORIAL", "location": "Room 2.10", "mode": "CAMPUS"},
-            {"day": "Wednesday", "startTime": "11:30", "endTime": "15:30", "moduleCode": "ICDT 1202Y(1)", "moduleName": "LAB", "location": "ETB Lab", "mode": "CAMPUS"}
-          ],
-          "Thursday": [
-            {"day": "Thursday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICT 1207 Y", "moduleName": "LECTURE", "location": "Room 1.16", "mode": "CAMPUS"},
-            {"day": "Thursday", "startTime": "10:30", "endTime": "12:30", "moduleCode": "ICT 1206Y", "moduleName": "LECTURE", "location": "Room 1.16", "mode": "CAMPUS"},
-            {"day": "Thursday", "startTime": "12:30", "endTime": "15:00", "moduleCode": "ICT 1208Y(1)", "moduleName": "TUTORIAL", "location": "Room 1.16", "mode": "CAMPUS"}
-          ],
-          "Friday": [
-            {"day": "Friday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICDT 1201Y(1)", "moduleName": "LECTURE", "location": "Room 1.16", "mode": "CAMPUS"},
-            {"day": "Friday", "startTime": "10:30", "endTime": "12:30", "moduleCode": "ICT 1208Y(1)", "moduleName": "LECTURE", "location": "Room 1.16", "mode": "CAMPUS"},
-            {"day": "Friday", "startTime": "12:30", "endTime": "15:00", "moduleCode": "ICT 1208Y(1)", "moduleName": "TUTORIAL", "location": "Room 1.15", "mode": "CAMPUS"}
-          ]
-        }
+     
+     // DS2Y1 (Data Science - User)
+     final dssJson = {
+      "timetable": {
+        "Monday": [{"day": "Monday", "startTime": "09:00", "endTime": "12:00", "moduleCode": "SIS 1067(1)", "moduleName": "Graphs", "location": "Room (NAC 2.12)", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Monday", "startTime": "09:00", "endTime": "12:00", "moduleCode": "SIS 1067(1)", "moduleName": "Graphs", "location": "ONLINE", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
+        "Tuesday": [{"day": "Tuesday", "startTime": "08:30", "endTime": "11:30", "moduleCode": "SIS 1066", "moduleName": "Programming Lecture", "location": "ONLINE", "mode": "ONLINE", "weeks": []}, {"day": "Tuesday", "startTime": "12:00", "endTime": "15:00", "moduleCode": "MA 1024(1)", "moduleName": "Mathematical Analysis II", "location": "ONLINE", "mode": "ONLINE", "weeks": []}, {"day": "Tuesday", "startTime": "16:00", "endTime": "17:30", "moduleCode": "STAT 1244", "moduleName": "Probability and Statistics", "location": "ONLINE", "mode": "ONLINE", "weeks": []}],
+        "Wednesday": [{"day": "Wednesday", "startTime": "12:00", "endTime": "15:00", "moduleCode": "MA 1023(1)", "moduleName": "Differential Equations", "location": "Room 2.7 - NAC Reduit", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Wednesday", "startTime": "12:00", "endTime": "15:00", "moduleCode": "MA 1023(1)", "moduleName": "Differential Equations", "location": "ONLINE", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
+        "Thursday": [{"day": "Thursday", "startTime": "09:00", "endTime": "12:00", "moduleCode": "MA 1022(1)", "moduleName": "Matric Computation", "location": "Room 2.37 FLM", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Thursday", "startTime": "09:00", "endTime": "12:00", "moduleCode": "MA 1022(1)", "moduleName": "Matric Computation", "location": "ONLINE", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Thursday", "startTime": "12:00", "endTime": "15:00", "moduleCode": "MA 1024(1)", "moduleName": "Mathematical Analysis II", "location": "Room 2.37 FLM", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Thursday", "startTime": "12:00", "endTime": "15:00", "moduleCode": "MA 1024(1)", "moduleName": "Mathematical Analysis II", "location": "ONLINE", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Thursday", "startTime": "16:00", "endTime": "17:30", "moduleCode": "STAT 1244", "moduleName": "Probability and Statistics", "location": "Room 1.14 Phase II Building", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Thursday", "startTime": "16:00", "endTime": "17:30", "moduleCode": "STAT 1244", "moduleName": "Probability and Statistics", "location": "ONLINE", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
+        "Friday": [{"day": "Friday", "startTime": "08:30", "endTime": "11:30", "moduleCode": "SIS 1066", "moduleName": "Programming Lab", "location": "SIS Lab - Second Floor Phase II Building", "mode": "CAMPUS", "weeks": []}],
+        "Saturday": [{"day": "Saturday", "startTime": "09:00", "endTime": "12:00", "moduleCode": "ICT 1201", "moduleName": "Computer Architecture", "location": "ONLINE", "mode": "ONLINE", "weeks": []}, {"day": "Saturday", "startTime": "12:00", "endTime": "15:00", "moduleCode": "STAT 1244", "moduleName": "Probability and Statistics", "location": "ONLINE", "mode": "ONLINE", "weeks": []}]
+      }
+     };
+
+     // CSS2Y1 (Computer Science - Friend)
+     final cssJson = {
+       "timetable": {
+         "Monday": [{"day": "Monday", "startTime": "08:00", "endTime": "10:00", "moduleCode": "ICDT 1202Y(1)", "moduleName": "Database Systems Lecture", "location": "Room 1.16", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Monday", "startTime": "08:00", "endTime": "10:00", "moduleCode": "ICDT 1202Y(1)", "moduleName": "Database Systems Lecture", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Monday", "startTime": "13:00", "endTime": "15:00", "moduleCode": "ICDT 1016Y", "moduleName": "Communication and Business Skills for IT (Lecture)", "location": "ELT1", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Monday", "startTime": "13:00", "endTime": "15:00", "moduleCode": "ICDT 1016Y", "moduleName": "Communication and Business Skills for IT (Lecture)", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
+         "Tuesday": [{"day": "Tuesday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICDT 1201Y(1)", "moduleName": "Computer Programming", "location": "ELT1", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Tuesday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICDT 1201Y(1)", "moduleName": "Computer Programming", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Tuesday", "startTime": "11:00", "endTime": "12:00", "moduleCode": "ICDT 1016Y(1)", "moduleName": "Communication and Business Skills for IT (Tutorial)", "location": "Room 1.14", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Tuesday", "startTime": "11:00", "endTime": "12:00", "moduleCode": "ICDT 1016Y(1)", "moduleName": "Communication and Business Skills for IT (Tutorial)", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
+         "Wednesday": [{"day": "Wednesday", "startTime": "08:30", "endTime": "09:30", "moduleCode": "ICDT 1201Y(1)", "moduleName": "Computer Programming (Lab)", "location": "CITS Lab 1A", "group": "A1", "mode": "CAMPUS", "weeks": []}, {"day": "Wednesday", "startTime": "09:30", "endTime": "10:30", "moduleCode": "ICDT 1208Y", "moduleName": "Software Engineering Principles (Tutorial)", "location": "Tech Avenue", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Wednesday", "startTime": "09:30", "endTime": "10:30", "moduleCode": "ICDT 1208Y", "moduleName": "Software Engineering Principles (Tutorial)", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Wednesday", "startTime": "10:30", "endTime": "11:30", "moduleCode": "ICDT 1207Y", "moduleName": "Computational Mathematics(Tutorial)", "location": "Room 1.15", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Wednesday", "startTime": "10:30", "endTime": "11:30", "moduleCode": "ICDT 1207Y", "moduleName": "Computational Mathematics(Tutorial)", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
+         "Thursday": [{"day": "Thursday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICT 1207(1)", "moduleName": "Computational Mathematics", "location": "ELT1", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Thursday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICT 1207(1)", "moduleName": "Computational Mathematics", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Thursday", "startTime": "10:30", "endTime": "12:30", "moduleCode": "ICDT 1208Y", "moduleName": "Software Engineering Principles (Lecture)", "location": "ELT1", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Thursday", "startTime": "10:30", "endTime": "12:30", "moduleCode": "ICDT 1208Y", "moduleName": "Software Engineering Principles (Lecture)", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
+         "Friday": [{"day": "Friday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICT 1206Y(1)", "moduleName": "Computer Organisation and Architecture(Lecture)", "location": "ELT1", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Friday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICT 1206Y(1)", "moduleName": "Computer Organisation and Architecture(Lecture)", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Friday", "startTime": "12:30", "endTime": "13:30", "moduleCode": "ICT 1206Y(1)", "moduleName": "Computer Organisation and Architecture(Lecture)", "location": "CITS Lab 1A", "group": "A1", "mode": "CAMPUS", "weeks": []}],
+         "Saturday": [{"day": "Saturday", "startTime": "08:00", "endTime": "09:00", "moduleCode": "ICDT 1202Y(1)", "moduleName": "Database Systems Lecture", "location": "ICT Lab", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Saturday", "startTime": "08:00", "endTime": "09:00", "moduleCode": "ICDT 1202Y(1)", "moduleName": "Database Systems Lecture", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}]
+       }
      };
 
      final isar = await isarService.db;
      await isar.writeTxn(() async {
-       // Clear old friend sessions
-       await isar.classSessions.filter().isUserEqualTo(false).deleteAll();
+       // Clear ALL existing sessions to ensure fresh start
+       await isar.classSessions.clear(); // Safest
        
-       // Import new
-       final timetable = json['timetable'] as Map<String, dynamic>;
-       timetable.forEach((day, sessions) {
-         for (var s in sessions as List<dynamic>) {
-            final session = ClassSession(
-               subject: s['moduleName'],
-               startTime: s['startTime'],
-               endTime: s['endTime'],
-               day: day,
-               room: s['location'],
-               moduleCode: s['moduleCode'] ?? '',
-               isUser: false, // Compares as Friend
-            );
-            isar.classSessions.put(session);
-         }
-       });
+       // Import DSS (User = true)
+       _importSessions(isar, dssJson['timetable'] as Map<String, dynamic>, true);
+       
+       // Import CSS (Friend = false)
+       _importSessions(isar, cssJson['timetable'] as Map<String, dynamic>, false);
      });
      
      await loadSessions();
   }
 
-  void _calculateCommonFreeTime() {
-    _commonFreeTime.clear();
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-    
-    // Bounds: 8:00 (480) to 16:00 (960)
-    final timeBounds = _TimeInterval(start: 480, end: 960);
-    
-    for (var day in days) {
-      final dailyUser = _userSessions.where((s) => s.day == day).toList();
-      final dailyFriend = _friendSessions.where((s) => s.day == day).toList();
-      
-      final busy = <_TimeInterval>[];
-      for (var s in [...dailyUser, ...dailyFriend]) {
-        busy.add(_TimeInterval(start: _timeToMinutes(s.startTime), end: _timeToMinutes(s.endTime)));
-      }
-      busy.sort((a,b) => a.start.compareTo(b.start));
-      
-      // Merge
-      final merged = <_TimeInterval>[];
-      if (busy.isNotEmpty) {
-        var current = busy.first;
-        for (var i = 1; i < busy.length; i++) {
-           if (busy[i].start < current.end) {
-             current.end = busy[i].end > current.end ? busy[i].end : current.end;
-           } else {
-             merged.add(current);
-             current = busy[i];
-           }
-        }
-        merged.add(current);
-      }
-      
-      // Invert for Free Time
-      final freeSlots = <CommonFreeSlot>[];
-      int pointer = timeBounds.start;
-      
-      for (var block in merged) {
-         if (block.start > pointer) {
-           // Gap found
-           freeSlots.add(CommonFreeSlot(start: pointer, end: block.start));
+  void _importSessions(Isar isar, Map<String, dynamic> timetable, bool isUser) {
+    timetable.forEach((day, sessions) {
+      for (var s in sessions as List<dynamic>) {
+         // Parse weeks
+         List<int>? weeksList;
+         if (s['weeks'] != null) {
+            weeksList = (s['weeks'] as List).map((e) => e as int).toList();
          }
-         pointer = block.end > pointer ? block.end : pointer;
+
+         final session = ClassSession(
+            subject: s['moduleName'],
+            startTime: s['startTime'],
+            endTime: s['endTime'],
+            day: day,
+            room: s['location'] ?? 'Unknown',
+            moduleCode: s['moduleCode'] ?? '',
+            isUser: isUser,
+            weeks: weeksList
+         );
+         isar.classSessions.put(session);
       }
-      
-      if (pointer < timeBounds.end) {
-        freeSlots.add(CommonFreeSlot(start: pointer, end: timeBounds.end));
-      }
-      
-      // Filter out tiny slots (< 30 mins)
-      final validSlots = freeSlots.where((s) => (s.end - s.start) >= 30).toList();
-      
-      if (validSlots.isNotEmpty) {
-        _commonFreeTime[day] = validSlots;
-      }
-    }
+    });
+  }
+
+  void _calculateCommonFreeTime() {
+    // Deprecated: Now we calculate strictly per day in getFreeSlotsForDay
+    _commonFreeTime.clear();
   }
 
   // Time Utility

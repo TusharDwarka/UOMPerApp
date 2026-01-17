@@ -3,11 +3,11 @@
       "Monday": [
         {
           "day": "Monday",
-          "startTime": "09:30",
+          "startTime": "09:00",
           "endTime": "12:30",
-          "moduleCode": "SIS 1065(1)",
-          "moduleName": "Scientific Writing and Presentation",
-          "location": "Room G3 (The Core)",
+          "moduleCode": "SIS 1067(1)",
+          "moduleName": "Graphs",
+          "location": "Room 2.12 NAC",
           "mode": "CAMPUS"
         },
         {

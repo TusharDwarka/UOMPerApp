@@ -1,0 +1,257 @@
+{
+  "timetable": {
+    "Monday": [
+      {
+        "day": "Monday",
+        "startTime": "08:00",
+        "endTime": "10:00",
+        "moduleCode": "ICDT 1202Y(1)",
+        "moduleName": "Database Systems Lecture",
+        "location": "Room 1.16",
+        "group": "A1",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Monday",
+        "startTime": "08:00",
+        "endTime": "10:00",
+        "moduleCode": "ICDT 1202Y(1)",
+        "moduleName": "Database Systems Lecture",
+        "location": "ONLINE",
+        "group": "A1",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      },
+      {
+        "day": "Monday",
+        "startTime": "13:00",
+        "endTime": "15:00",
+        "moduleCode": "ICDT 1016Y",
+        "moduleName": "Communication and Business Skills for IT (Lecture)",
+        "location": "ELT1",
+        "group": "A1",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Monday",
+        "startTime": "13:00",
+        "endTime": "15:00",
+        "moduleCode": "ICDT 1016Y",
+        "moduleName": "Communication and Business Skills for IT (Lecture)",
+        "location": "ONLINE",
+        "group": "A1",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      }
+    ],
+    "Tuesday": [
+      {
+        "day": "Tuesday",
+        "startTime": "08:30",
+        "endTime": "10:30",
+        "moduleCode": "ICDT 1201Y(1)",
+        "moduleName": "Computer Programming",
+        "location": "ELT1",
+        "group": "A1",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Tuesday",
+        "startTime": "08:30",
+        "endTime": "10:30",
+        "moduleCode": "ICDT 1201Y(1)",
+        "moduleName": "Computer Programming",
+        "location": "ONLINE",
+        "group": "A1",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      },
+      {
+        "day": "Tuesday",
+        "startTime": "11:00",
+        "endTime": "12:00",
+        "moduleCode": "ICDT 1016Y(1)",
+        "moduleName": "Communication and Business Skills for IT (Tutorial)",
+        "location": "Room 1.14",
+        "group": "A1",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Tuesday",
+        "startTime": "11:00",
+        "endTime": "12:00",
+        "moduleCode": "ICDT 1016Y(1)",
+        "moduleName": "Communication and Business Skills for IT (Tutorial)",
+        "location": "ONLINE",
+        "group": "A1",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      }
+    ],
+    "Wednesday": [
+      {
+        "day": "Wednesday",
+        "startTime": "08:30",
+        "endTime": "09:30",
+        "moduleCode": "ICDT 1201Y(1)",
+        "moduleName": "Computer Programming (Lab)",
+        "location": "CITS Lab 1A",
+        "group": "A1",
+        "mode": "CAMPUS",
+        "weeks": []
+      },
+      {
+        "day": "Wednesday",
+        "startTime": "09:30",
+        "endTime": "10:30",
+        "moduleCode": "ICDT 1208Y",
+        "moduleName": "Software Engineering Principles (Tutorial)",
+        "location": "Tech Avenue",
+        "group": "A1",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Wednesday",
+        "startTime": "09:30",
+        "endTime": "10:30",
+        "moduleCode": "ICDT 1208Y",
+        "moduleName": "Software Engineering Principles (Tutorial)",
+        "location": "ONLINE",
+        "group": "A1",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      },
+      {
+        "day": "Wednesday",
+        "startTime": "10:30",
+        "endTime": "11:30",
+        "moduleCode": "ICDT 1207Y",
+        "moduleName": "Computational Mathematics(Tutorial)",
+        "location": "Room 1.15",
+        "group": "A1",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Wednesday",
+        "startTime": "10:30",
+        "endTime": "11:30",
+        "moduleCode": "ICDT 1207Y",
+        "moduleName": "Computational Mathematics(Tutorial)",
+        "location": "ONLINE",
+        "group": "A1",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      }
+    ],
+    "Thursday": [
+      {
+        "day": "Thursday",
+        "startTime": "08:30",
+        "endTime": "10:30",
+        "moduleCode": "ICT 1207(1)",
+        "moduleName": "Computational Mathematics",
+        "location": "ELT1",
+        "group": "A1",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Thursday",
+        "startTime": "08:30",
+        "endTime": "10:30",
+        "moduleCode": "ICT 1207(1)",
+        "moduleName": "Computational Mathematics",
+        "location": "ONLINE",
+        "group": "A1",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      },
+      {
+        "day": "Thursday",
+        "startTime": "10:30",
+        "endTime": "12:30",
+        "moduleCode": "ICDT 1208Y",
+        "moduleName": "Software Engineering Principles (Lecture)",
+        "location": "ELT1",
+        "group": "A1",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Thursday",
+        "startTime": "10:30",
+        "endTime": "12:30",
+        "moduleCode": "ICDT 1208Y",
+        "moduleName": "Software Engineering Principles (Lecture)",
+        "location": "ONLINE",
+        "group": "A1",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      }
+    ],
+    "Friday": [
+      {
+        "day": "Friday",
+        "startTime": "08:30",
+        "endTime": "10:30",
+        "moduleCode": "ICT 1206Y(1)",
+        "moduleName": "Computer Organisation and Architecture(Lecture)",
+        "location": "ELT1",
+        "group": "A1",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Friday",
+        "startTime": "08:30",
+        "endTime": "10:30",
+        "moduleCode": "ICT 1206Y(1)",
+        "moduleName": "Computer Organisation and Architecture(Lecture)",
+        "location": "ONLINE",
+        "group": "A1",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      },
+      {
+        "day": "Friday",
+        "startTime": "12:30",
+        "endTime": "13:30",
+        "moduleCode": "ICT 1206Y(1)",
+        "moduleName": "Computer Organisation and Architecture(Lecture)",
+        "location": "CITS Lab 1A",
+        "group": "A1",
+        "mode": "CAMPUS",
+        "weeks": []
+      }
+      
+    ],
+    "Saturday": [{
+        "day": "Saturday",
+        "startTime": "08:00",
+        "endTime": "09:00",
+        "moduleCode": "ICDT 1202Y(1)",
+        "moduleName": "Database Systems Lecture",
+        "location": "ICT Lab",
+        "group": "A1",
+        "mode": "CAMPUS",
+        "weeks": [1, 2, 3, 6, 10]
+      },
+      {
+        "day": "Saturday",
+        "startTime": "08:00",
+        "endTime": "09:00",
+        "moduleCode": "ICDT 1202Y(1)",
+        "moduleName": "Database Systems Lecture",
+        "location": "ONLINE",
+        "group": "A1",
+        "mode": "ONLINE",
+        "weeks": [4, 5, 7, 8, 9]
+      }]
+  }
+}
