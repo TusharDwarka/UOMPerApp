@@ -478,52 +478,106 @@ class _ScheduleTabState extends State<ScheduleTab> {
     final top = (startOffset / 60) * _hourHeight;
     final height = (duration / 60) * _hourHeight;
 
-    // Hash Color
+    // Stylistic Logic based on Subject Hash
+    // 1. Solid Pastels (Green, Purple, Red)
+    // 2. Outlined/Translucent (Yellow/Orange)
+    // Reference Image has: Green filled, Yellow filled, Purple filled, Red filled.
+    // They are light pastels but distinct.
+
     final colorOption = event.subject.hashCode.abs() % 4;
+    
+    // Exact colors from reference image approx
+    // Green: #9CCC65 (approx)
+    // Yellow: #FFD600 (approx)
+    // Purple: #B39DDB (approx) - actually more vibrant violet
+    // Red/Pink: #FF8A80
+    
     final colors = [
-      const Color(0xFF69F0AE), // Green
-      const Color(0xFFFFD180), // Orange
-      const Color(0xFFEA80FC), // Purple
-      const Color(0xFFFF5252), // Red
+      const Color(0xFFC5E1A5), // Light Green (Matte)
+      const Color(0xFFFFE082), // Light Amber (Matte)
+      const Color(0xFFCE93D8), // Light Purple (Matte)
+      const Color(0xFFFFAB91), // Light Deep Orange (Matte)
     ];
-    final color = colors[colorOption];
+    
+    // Darker text colors for contrast on pastels
+    final textColors = [
+      const Color(0xFF33691E), // Dark Green
+      const Color(0xFFBF360C), // Dark Orange/Brown
+      const Color(0xFF4A148C), // Dark Purple
+      const Color(0xFFB71C1C), // Dark Red
+    ];
+
+    final bgColor = colors[colorOption];
+    final textColor = textColors[colorOption];
+    final iconColor = textColor.withOpacity(0.7);
 
     return Positioned(
       top: top,
       left: 10,
       right: 24,
-      height: height - 4,
+      height: height - 6, // larger gap
       child: GestureDetector(
         onTap: () => _showAddSessionDialog(sessionToEdit: event),
         child: Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.85),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(color: color.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
-            ]
+            color: bgColor,
+            borderRadius: BorderRadius.circular(24), // Very rounded corners like image
+            // No shadow or very subtle
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center, // Center vertically
             children: [
+              // Icon with square/circle bg (outlined in image)
               Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.25), shape: BoxShape.circle),
-                child: const Icon(Icons.school, color: Colors.white, size: 16),
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.white.withOpacity(0.5), width: 1.5),
+                  borderRadius: BorderRadius.circular(12), // Squircle
+                ),
+                child: Icon(Icons.class_outlined, color: Colors.white, size: 18),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 14),
+              
+              // Text Content
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(event.subject, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text(event.room, style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12)),
+                    Text(
+                      event.subject,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter', // Assuming standard font
+                        color: Colors.white, // Actually white text looks good on these pastels? 
+                        // Wait, reference image has WHITE text on Green/Purple/Red.
+                        // But Yellow has DARK text.
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ).copyWith(color: (colorOption == 1) ? const Color(0xFF5D4037) : Colors.white),
+                    ),
+                    // If height permits, show room
+                    if (height > 50)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          event.room,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: (colorOption == 1) ? const Color(0xFF5D4037).withOpacity(0.7) : Colors.white.withOpacity(0.8),
+                            fontWeight: FontWeight.w500
+                          ),
+                        ),
+                      )
                   ],
                 ),
               ),
-              const Icon(Icons.edit, color: Colors.white60, size: 16) // Edit Hint
+              
+              // Three dots icon
+              Icon(Icons.more_horiz, color: (colorOption == 1) ? const Color(0xFF5D4037).withOpacity(0.5) : Colors.white.withOpacity(0.6), size: 20)
             ],
           ),
         ),
