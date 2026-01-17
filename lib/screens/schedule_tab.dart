@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/timetable_provider.dart';
 import '../models/class_session.dart';
+import '../models/academic_task.dart';
 
 class ScheduleTab extends StatefulWidget {
   const ScheduleTab({super.key});
@@ -491,36 +492,130 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
     return Positioned(
       top: top,
-      left: 60, // Indent to distinguish from classes? Or mix in?
+      left: 60, // Indent
       right: 24,
       height: height - 10,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: Colors.redAccent, width: 2), // Red border for deadlines
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(color: Colors.redAccent.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
-          ]
+      child: GestureDetector(
+        onTap: () {
+          // Open Edit Dialog for this Task
+          // We can reuse the TodoBoardTab sheet if we make it public or duplicate logic.
+          // For simplicity, let's just duplicate the minimal edit logic here or use a helper.
+          // Actually, we can't easily access TodoBoardTab state.
+          // Let's create a local _showTaskEditDialog in ScheduleTab.
+          _showTaskEditDialog(task);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: Colors.redAccent, width: 2), // Red border for deadlines
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(color: Colors.redAccent.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
+            ]
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text("DUE: ${task.title}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.redAccent)),
+                    Text(task.subject, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  ],
+                ),
+              )
+            ],
+          ),
         ),
-        child: Row(
+      ),
+    );
+  }
+
+  void _showTaskEditDialog(dynamic task) {
+    // Basic Edit Dialog for Task from Schedule
+    final formKey = GlobalKey<FormState>();
+    String title = task.title;
+    String subject = task.subject;
+    DateTime date = task.dueDate;
+    TimeOfDay time = TimeOfDay.fromDateTime(date);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Edit Task"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text("DUE: ${task.title}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.redAccent)),
-                  Text(task.subject, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                ],
-              ),
+            TextFormField(
+              initialValue: title,
+              decoration: const InputDecoration(labelText: "Title"),
+              onChanged: (v) => title = v,
+            ),
+            TextFormField(
+              initialValue: subject,
+              decoration: const InputDecoration(labelText: "Subject"),
+              onChanged: (v) => subject = v,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () async {
+                    final d = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime(2030));
+                    if(d!=null) date = d;
+                  },
+                  child: const Text("Change Date"),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final t = await showTimePicker(context: context, initialTime: time);
+                    if(t!=null) time = t;
+                  },
+                  child: const Text("Change Time"),
+                ),
+              ],
             )
           ],
         ),
-      ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+
+              // Delete
+              final isarService = Provider.of<TimetableProvider>(context, listen: false).isarService;
+              final isar = await isarService.db;
+              await isar.writeTxn(() async {
+                await isar.academicTasks.delete(task.id);
+              });
+              Provider.of<TimetableProvider>(context, listen: false).loadSessions();
+              Navigator.pop(context);
+            }, 
+            child: const Text("Delete", style: TextStyle(color: Colors.red))
+          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () async {
+              // Save
+              final newDateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+              final isarService = Provider.of<TimetableProvider>(context, listen: false).isarService;
+              final isar = await isarService.db;
+              await isar.writeTxn(() async {
+                 task.title = title;
+                 task.subject = subject;
+                 task.dueDate = newDateTime;
+                 await isar.academicTasks.put(task);
+              });
+              Provider.of<TimetableProvider>(context, listen: false).loadSessions();
+              Navigator.pop(context);
+            }, 
+            child: const Text("Save")
+          )
+        ],
+      )
     );
   }
 

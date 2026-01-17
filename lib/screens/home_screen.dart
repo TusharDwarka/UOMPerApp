@@ -19,8 +19,8 @@ class _HomeScreenState extends State<HomeScreen> {
     DashboardTab(),
     ScheduleTab(),
     AcademicTab(), 
-    BusTab(), 
-    TodoBoardTab(), // 5th Tab
+    TodoBoardTab(), // 4th Tab
+    BusTab(), // 5th Tab
   ];
 
   void _onItemTapped(int index) {
@@ -69,16 +69,16 @@ class _HomeScreenState extends State<HomeScreen> {
               label: 'Schedule',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_month_rounded), // Reverted back to Calendar for clarity as 3rd tab
+              icon: Icon(Icons.calendar_month_rounded),
               label: 'Calendar',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.directions_bus_filled_rounded),
-              label: 'Transport',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.assignment_turned_in_rounded), // Board Icon
               label: 'Board',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.directions_bus_filled_rounded),
+              label: 'Transport',
             ),
           ],
         ),

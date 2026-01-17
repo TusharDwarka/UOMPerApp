@@ -60,92 +60,168 @@ class _AcademicTabState extends State<AcademicTab> {
 
   // --- UI Components ---
 
-  void _showAddTaskDialog() {
+  Future<void> _updateTask(int id, String title, String subject, String type, DateTime due) async {
+    final isarService = IsarService();
+    final isar = await isarService.db;
+    await isar.writeTxn(() async {
+      final task = await isar.academicTasks.get(id);
+      if (task != null) {
+        task.title = title;
+        task.subject = subject;
+        task.type = type;
+        task.dueDate = due;
+        await isar.academicTasks.put(task);
+      }
+    });
+    _loadTasks();
+  }
+
+  void _showAddEditTaskDialog({AcademicTask? taskToEdit}) {
     final formKey = GlobalKey<FormState>();
-    String title = '';
-    String subject = 'General';
-    String type = 'Assignment';
-    DateTime selectedDate = _selectedDay ?? DateTime.now();
-    
+    final isEditing = taskToEdit != null;
+    String title = taskToEdit?.title ?? '';
+    String subject = taskToEdit?.subject ?? 'General';
+    String type = taskToEdit?.type ?? 'Assignment';
+    DateTime selectedDate = taskToEdit?.dueDate ?? _selectedDay ?? DateTime.now();
+    TimeOfDay selectedTime = taskToEdit != null ? TimeOfDay.fromDateTime(taskToEdit.dueDate) : const TimeOfDay(hour: 23, minute: 59);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20, 
-          top: 30, left: 24, right: 24
-        ),
-        child: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Add Homework/Task", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 20),
-              
-              TextFormField(
-                decoration: InputDecoration(
-                  labelText: "Task Title",
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
+      builder: (context) {
+        return StatefulBuilder(
+            builder: (context, setSheetState) {
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 20, 
+                  top: 30, left: 24, right: 24
                 ),
-                validator: (v) => v!.isEmpty ? "Required" : null,
-                onSaved: (v) => title = v!,
-              ),
-              const SizedBox(height: 15),
-              
-              TextFormField(
-                initialValue: subject,
-                decoration: InputDecoration(
-                  labelText: "Subject (e.g. Mobile Computing)",
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
-                ),
-                onSaved: (v) => subject = v!,
-              ),
-              const SizedBox(height: 15),
-              
-              DropdownButtonFormField<String>(
-                value: type,
-                items: ["Assignment", "Exam", "Note", "Project"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                onChanged: (v) => type = v!,
-                decoration: InputDecoration(
-                  labelText: "Type",
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (formKey.currentState!.validate()) {
-                      formKey.currentState!.save();
-                      _addTask(title, subject, type, selectedDate);
-                      Navigator.pop(context);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2962FF),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(isEditing ? "Edit Task" : "Add Homework/Task", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                          if (isEditing)
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () async {
+                                final isarService = IsarService();
+                                final isar = await isarService.db;
+                                await isar.writeTxn(() async => await isar.academicTasks.delete(taskToEdit!.id));
+                                _loadTasks();
+                                Navigator.pop(context);
+                              },
+                            )
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      TextFormField(
+                        initialValue: title,
+                        decoration: InputDecoration(
+                          labelText: "Task Title",
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
+                        ),
+                        validator: (v) => v!.isEmpty ? "Required" : null,
+                        onSaved: (v) => title = v!,
+                        onChanged: (v) => title = v,
+                      ),
+                      const SizedBox(height: 15),
+                      
+                      TextFormField(
+                        initialValue: subject,
+                        decoration: InputDecoration(
+                          labelText: "Subject (e.g. Mobile Computing)",
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
+                        ),
+                        onChanged: (v) => subject = v, // update local var
+                        onSaved: (v) => subject = v!,
+                      ),
+                      const SizedBox(height: 15),
+                      
+                      DropdownButtonFormField<String>(
+                        value: type,
+                        items: ["Assignment", "Exam", "Note", "Project"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                        onChanged: (v) => setSheetState(() => type = v!),
+                        decoration: InputDecoration(
+                          labelText: "Type",
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      
+                      // Date/Time
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final d = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
+                                if (d!=null) setSheetState(() => selectedDate = d);
+                              }, 
+                              icon: const Icon(Icons.calendar_today), 
+                              label: Text(DateFormat('MMM dd').format(selectedDate))
+                            )
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final t = await showTimePicker(context: context, initialTime: selectedTime);
+                                if (t!=null) setSheetState(() => selectedTime = t);
+                              }, 
+                              icon: const Icon(Icons.access_time), 
+                              label: Text(selectedTime.format(context))
+                            )
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            if (formKey.currentState!.validate()) {
+                              formKey.currentState!.save();
+                              final dueDateTime = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, selectedTime.hour, selectedTime.minute);
+                              if (isEditing) {
+                                _updateTask(taskToEdit!.id, title, subject, type, dueDateTime);
+                              } else {
+                                _addTask(title, subject, type, dueDateTime);
+                              }
+                              Navigator.pop(context);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2962FF),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                          ),
+                          child: Text(isEditing ? "Save Changes" : "Save Task"),
+                        ),
+                      )
+                    ],
                   ),
-                  child: const Text("Save Task"),
                 ),
-              )
-            ],
-          ),
-        ),
-      )
+              );
+            }
+        );
+      }
     );
   }
 
@@ -169,7 +245,7 @@ class _AcademicTabState extends State<AcademicTab> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add_circle_outline, color: Color(0xFF2962FF), size: 28),
-            onPressed: _showAddTaskDialog,
+            onPressed: () => _showAddEditTaskDialog(),
           )
         ],
       ),
@@ -252,13 +328,16 @@ class _AcademicTabState extends State<AcademicTab> {
                         ),
                         const SizedBox(width: 15),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(task.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                              const SizedBox(height: 4),
-                              Text(task.subject, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                            ],
+                          child: GestureDetector(
+                            onTap: () => _showAddEditTaskDialog(taskToEdit: task),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(task.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                const SizedBox(height: 4),
+                                Text(task.subject, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                              ],
+                            ),
                           ),
                         ),
                         Checkbox(

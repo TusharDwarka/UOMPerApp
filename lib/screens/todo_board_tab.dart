@@ -54,12 +54,30 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
     _loadTasks();
   }
 
-  void _showQuickAddSheet() {
-    String title = '';
-    String subject = 'General';
-    String type = 'Assignment';
-    DateTime selectedDate = DateTime.now();
-    TimeOfDay selectedTime = const TimeOfDay(hour: 23, minute: 59);
+  Future<void> _updateTask(int id, String title, String subject, String type, DateTime due) async {
+    final isar = await _isarService.db;
+    await isar.writeTxn(() async {
+      final task = await isar.academicTasks.get(id);
+      if (task != null) {
+        task.title = title;
+        task.subject = subject;
+        task.type = type;
+        task.dueDate = due;
+        await isar.academicTasks.put(task);
+      }
+    });
+    _loadTasks();
+  }
+
+  void _showAddEditSheet({AcademicTask? taskToEdit}) {
+    final isEditing = taskToEdit != null;
+    String title = taskToEdit?.title ?? '';
+    String subject = taskToEdit?.subject ?? 'General';
+    String type = taskToEdit?.type ?? 'Assignment';
+    DateTime selectedDate = taskToEdit?.dueDate ?? DateTime.now();
+    TimeOfDay selectedTime = taskToEdit != null 
+       ? TimeOfDay.fromDateTime(taskToEdit.dueDate) 
+       : const TimeOfDay(hour: 23, minute: 59);
 
     showModalBottomSheet(
       context: context,
@@ -78,12 +96,29 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Quick Add Task", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(isEditing ? "Edit Task" : "Quick Add Task", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                      if (isEditing)
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          onPressed: () async {
+                             // Delete
+                             final isar = await _isarService.db;
+                             await isar.writeTxn(() async => await isar.academicTasks.delete(taskToEdit!.id));
+                             _loadTasks();
+                             Navigator.pop(context);
+                          },
+                        )
+                    ],
+                  ),
                   const SizedBox(height: 20),
                   
                   // Task Title
-                  TextField(
-                    autofocus: true,
+                  TextFormField(
+                    initialValue: title,
+                    autofocus: !isEditing,
                     decoration: InputDecoration(
                       hintText: "What needs to be done?",
                       filled: true, 
@@ -113,7 +148,8 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: TextField(
+                        child: TextFormField(
+                          initialValue: subject,
                           decoration: InputDecoration(
                             labelText: "Subject",
                             filled: true, fillColor: Colors.grey[50],
@@ -133,7 +169,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                       Expanded(
                         child: InkWell(
                           onTap: () async {
-                            final d = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime.now(), lastDate: DateTime(2030));
+                            final d = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
                             if(d != null) setSheetState(() => selectedDate = d);
                           },
                           child: Container(
@@ -181,7 +217,11 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                       onPressed: () {
                         if(title.isNotEmpty) {
                           final dueDateTime = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, selectedTime.hour, selectedTime.minute);
-                          _addTask(title, subject, type, dueDateTime);
+                          if (isEditing) {
+                             _updateTask(taskToEdit!.id, title, subject, type, dueDateTime);
+                          } else {
+                             _addTask(title, subject, type, dueDateTime);
+                          }
                           Navigator.pop(context);
                         }
                       },
@@ -190,7 +230,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
                       ),
-                      child: const Text("Add to Board", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      child: Text(isEditing ? "Save Changes" : "Add to Board", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
                   )
                 ],
@@ -216,7 +256,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
         elevation: 0,
         title: const Text("To-Do Board", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 26)),
         actions: [
-          IconButton(onPressed: _showQuickAddSheet, icon: const Icon(Icons.add_circle, color: Colors.black, size: 30))
+          IconButton(onPressed: () => _showAddEditSheet(), icon: const Icon(Icons.add_circle, color: Colors.black, size: 30))
         ],
       ),
       body: _tasks.isEmpty 
@@ -296,9 +336,11 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              child: GestureDetector(
+                onTap: () => _showAddEditSheet(taskToEdit: task),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   Row(
                     children: [
                       Container(
@@ -320,7 +362,8 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                   Text(task.title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, decoration: task.isCompleted ? TextDecoration.lineThrough : null, color: task.isCompleted ? Colors.grey : Colors.black87)),
                   const SizedBox(height: 4),
                   Text(DateFormat('MMM d, h:mm a').format(task.dueDate), style: TextStyle(color: Colors.grey[400], fontSize: 12, fontWeight: FontWeight.w500)),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
