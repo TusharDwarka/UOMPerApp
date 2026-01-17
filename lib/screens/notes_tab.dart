@@ -63,7 +63,8 @@ class _NotesTabState extends State<NotesTab> {
     await isar.writeTxn(() async {
       await isar.notes.put(note);
     });
-    _loadNotes();
+    // Explicit reload after transaction
+    await _loadNotes();
   }
 
   Future<void> _deleteNote(int id) async {
@@ -252,7 +253,16 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
     _titleController = TextEditingController(text: widget.note?.title ?? '');
     _contentController = TextEditingController(text: widget.note?.content ?? '');
     _subjectController = TextEditingController(text: widget.note?.subject ?? 'General');
-    _selectedColorIndex = widget.note?.colorIndex ?? Random().nextInt(widget.colors.length);
+    
+    // Fix: Correctly initialize color index. If it's 0 (default) but strictly not set, standard is 0.
+    // If randomized, ensure it's within bounds.
+    if (widget.note != null) {
+      _selectedColorIndex = widget.note!.colorIndex;
+      // Safety check
+      if (_selectedColorIndex >= widget.colors.length) _selectedColorIndex = 0;
+    } else {
+      _selectedColorIndex = Random().nextInt(widget.colors.length);
+    }
   }
 
   @override

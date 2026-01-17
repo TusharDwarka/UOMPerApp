@@ -204,7 +204,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
     // Replaced Scaffold body with resizeToAvoidBottomInset: false to prevent layout thrashing (lag) when keyboard opens.
     return Scaffold(
       backgroundColor: Colors.white,
-      resizeToAvoidBottomInset: true, // User requested fix for keyboard layout
+      resizeToAvoidBottomInset: false, // Reverting to FALSE to completely stop keyboard lag.
       body: SafeArea(
         child: Column(
           children: [
