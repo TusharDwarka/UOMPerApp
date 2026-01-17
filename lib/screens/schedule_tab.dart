@@ -252,21 +252,28 @@ class _ScheduleTabState extends State<ScheduleTab> {
                         Expanded(
                           child: SizedBox(
                             height: (_endHour - _startHour + 1) * _hourHeight,
-                            child: Stack(
-                              children: [
-                                ...List.generate(_endHour - _startHour + 1, (index) {
-                                  return Positioned(
-                                    top: index * _hourHeight,
-                                    left: 0, 
-                                    right: 0,
-                                    child: Divider(color: Colors.grey[100], height: 1),
-                                  );
-                                }),
-                                ...events.map((event) => _buildEventBlock(event)).toList(),
-                                ...relevantTasks.map((task) => _buildTaskBlock(task)).toList(),
-                                if (isSameDay(DateTime.now(), _selectedDate))
-                                   _buildCurrentTimeLine(),
-                              ],
+                            child: RepaintBoundary(
+                              child: Stack(
+                                children: [
+                                  // Grid Background
+                                  Positioned.fill(
+                                    child: CustomPaint(
+                                      painter: _TimeGridPainter(
+                                        startHour: _startHour, 
+                                        endHour: _endHour, 
+                                        hourHeight: _hourHeight
+                                      ),
+                                    ),
+                                  ),
+                                  // Events
+                                  ...events.map((event) => _buildEventBlock(event)).toList(),
+                                  // TASKS from Academic/To-Do Tab
+                                  ...relevantTasks.map((task) => _buildTaskBlock(task)).toList(),
+                                  // Current Time Line (Red)
+                                  if (isSameDay(DateTime.now(), _selectedDate))
+                                     _buildCurrentTimeLine(),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -692,5 +699,34 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
   bool isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+}
+
+class _TimeGridPainter extends CustomPainter {
+  final int startHour;
+  final int endHour;
+  final double hourHeight;
+
+  _TimeGridPainter({required this.startHour, required this.endHour, required this.hourHeight});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.grey[100]!
+      ..strokeWidth = 1.0;
+
+    // Draw horizontal lines for each hour
+    final count = endHour - startHour + 1;
+    for (int i = 0; i < count; i++) {
+       final y = i * hourHeight;
+       canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TimeGridPainter oldDelegate) {
+    return oldDelegate.startHour != startHour || 
+           oldDelegate.endHour != endHour || 
+           oldDelegate.hourHeight != hourHeight;
   }
 }

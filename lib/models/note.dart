@@ -8,11 +8,15 @@ class Note {
 
   late String title;
   late String content;
+  late String subject;
+  late int colorIndex;
   late DateTime timestamp;
 
   Note({
     this.title = '',
     this.content = '',
+    this.subject = 'General',
+    this.colorIndex = 0,
     required this.timestamp,
   });
 }

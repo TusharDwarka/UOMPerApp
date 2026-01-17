@@ -4,6 +4,7 @@ import 'schedule_tab.dart';
 import 'academic_tab.dart';
 import 'bus_tab.dart';
 import 'todo_board_tab.dart';
+import 'notes_tab.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,8 +20,9 @@ class _HomeScreenState extends State<HomeScreen> {
     DashboardTab(),
     ScheduleTab(),
     AcademicTab(), 
-    TodoBoardTab(), // 4th Tab
-    BusTab(), // 5th Tab
+    TodoBoardTab(),
+    NotesTab(), // New Notes Tab
+    BusTab(),
   ];
 
   void _onItemTapped(int index) {
@@ -73,8 +75,12 @@ class _HomeScreenState extends State<HomeScreen> {
               label: 'Calendar',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.assignment_turned_in_rounded), // Board Icon
+              icon: Icon(Icons.assignment_turned_in_rounded),
               label: 'Board',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.edit_note_rounded), // Notes Icon
+              label: 'Notes',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.directions_bus_filled_rounded),
