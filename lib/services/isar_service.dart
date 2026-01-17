@@ -5,6 +5,7 @@ import '../models/assessment.dart';
 import '../models/attendance_record.dart';
 import '../models/bus_route.dart';
 import '../models/note.dart';
+import '../models/academic_task.dart';
 
 class IsarService {
   late Future<Isar> db;
@@ -23,6 +24,7 @@ class IsarService {
           AttendanceRecordSchema,
           BusRouteSchema,
           NoteSchema,
+          AcademicTaskSchema,
         ],
         directory: dir.path,
         inspector: true,

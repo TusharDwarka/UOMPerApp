@@ -42,13 +42,18 @@ const ClassSessionSchema = CollectionSchema(
       name: r'room',
       type: IsarType.string,
     ),
-    r'startTime': PropertySchema(
+    r'specificDate': PropertySchema(
       id: 5,
+      name: r'specificDate',
+      type: IsarType.dateTime,
+    ),
+    r'startTime': PropertySchema(
+      id: 6,
       name: r'startTime',
       type: IsarType.string,
     ),
     r'subject': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'subject',
       type: IsarType.string,
     )
@@ -93,8 +98,9 @@ void _classSessionSerialize(
   writer.writeBool(offsets[2], object.isUser);
   writer.writeString(offsets[3], object.moduleCode);
   writer.writeString(offsets[4], object.room);
-  writer.writeString(offsets[5], object.startTime);
-  writer.writeString(offsets[6], object.subject);
+  writer.writeDateTime(offsets[5], object.specificDate);
+  writer.writeString(offsets[6], object.startTime);
+  writer.writeString(offsets[7], object.subject);
 }
 
 ClassSession _classSessionDeserialize(
@@ -109,8 +115,9 @@ ClassSession _classSessionDeserialize(
     isUser: reader.readBoolOrNull(offsets[2]) ?? true,
     moduleCode: reader.readStringOrNull(offsets[3]) ?? '',
     room: reader.readStringOrNull(offsets[4]) ?? '',
-    startTime: reader.readStringOrNull(offsets[5]) ?? '',
-    subject: reader.readStringOrNull(offsets[6]) ?? '',
+    specificDate: reader.readDateTimeOrNull(offsets[5]),
+    startTime: reader.readStringOrNull(offsets[6]) ?? '',
+    subject: reader.readStringOrNull(offsets[7]) ?? '',
   );
   object.id = id;
   return object;
@@ -134,8 +141,10 @@ P _classSessionDeserializeProp<P>(
     case 4:
       return (reader.readStringOrNull(offset) ?? '') as P;
     case 5:
-      return (reader.readStringOrNull(offset) ?? '') as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 6:
+      return (reader.readStringOrNull(offset) ?? '') as P;
+    case 7:
       return (reader.readStringOrNull(offset) ?? '') as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -838,6 +847,80 @@ extension ClassSessionQueryFilter
   }
 
   QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      specificDateIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'specificDate',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      specificDateIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'specificDate',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      specificDateEqualTo(DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'specificDate',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      specificDateGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'specificDate',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      specificDateLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'specificDate',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      specificDateBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'specificDate',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
       startTimeEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -1179,6 +1262,19 @@ extension ClassSessionQuerySortBy
     });
   }
 
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy> sortBySpecificDate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'specificDate', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy>
+      sortBySpecificDateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'specificDate', Sort.desc);
+    });
+  }
+
   QueryBuilder<ClassSession, ClassSession, QAfterSortBy> sortByStartTime() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'startTime', Sort.asc);
@@ -1279,6 +1375,19 @@ extension ClassSessionQuerySortThenBy
     });
   }
 
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy> thenBySpecificDate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'specificDate', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy>
+      thenBySpecificDateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'specificDate', Sort.desc);
+    });
+  }
+
   QueryBuilder<ClassSession, ClassSession, QAfterSortBy> thenByStartTime() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'startTime', Sort.asc);
@@ -1340,6 +1449,12 @@ extension ClassSessionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<ClassSession, ClassSession, QDistinct> distinctBySpecificDate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'specificDate');
+    });
+  }
+
   QueryBuilder<ClassSession, ClassSession, QDistinct> distinctByStartTime(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1390,6 +1505,13 @@ extension ClassSessionQueryProperty
   QueryBuilder<ClassSession, String, QQueryOperations> roomProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'room');
+    });
+  }
+
+  QueryBuilder<ClassSession, DateTime?, QQueryOperations>
+      specificDateProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'specificDate');
     });
   }
 
