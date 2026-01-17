@@ -57,7 +57,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
       builder: (context) => Padding(
         padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20, 
+            bottom: MediaQuery.of(context).viewInsets.bottom, 
             top: 30, right: 24, left: 24),
         child: SingleChildScrollView(
           child: Form(
@@ -246,11 +246,13 @@ class _ScheduleTabState extends State<ScheduleTab> {
                                 children: [
                                   // Grid Background
                                   Positioned.fill(
-                                    child: CustomPaint(
-                                      painter: _TimeGridPainter(
-                                        startHour: _startHour, 
-                                        endHour: _endHour, 
-                                        hourHeight: _hourHeight
+                                    child: RepaintBoundary(
+                                      child: CustomPaint(
+                                        painter: _TimeGridPainter(
+                                          startHour: _startHour, 
+                                          endHour: _endHour, 
+                                          hourHeight: _hourHeight
+                                        ),
                                       ),
                                     ),
                                   ),

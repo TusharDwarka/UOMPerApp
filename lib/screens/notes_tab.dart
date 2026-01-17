@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:isar_community/isar.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../services/isar_service.dart';
+import '../providers/note_provider.dart';
 import '../models/note.dart';
 import 'dart:math';
 
@@ -13,9 +13,6 @@ class NotesTab extends StatefulWidget {
 }
 
 class _NotesTabState extends State<NotesTab> {
-  final IsarService _isarService = IsarService();
-  List<Note> _notes = [];
-  List<Note> _filteredNotes = [];
   String _searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
   
@@ -34,45 +31,18 @@ class _NotesTabState extends State<NotesTab> {
   @override
   void initState() {
     super.initState();
-    _loadNotes();
-  }
-
-  Future<void> _loadNotes() async {
-    final isar = await _isarService.db;
-    final notes = await isar.notes.where().sortByTimestampDesc().findAll();
-    setState(() {
-      _notes = notes;
-      _filterNotes();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<NoteProvider>(context, listen: false).loadNotes();
     });
   }
 
-  void _filterNotes() {
-    if (_searchQuery.isEmpty) {
-      _filteredNotes = _notes;
-    } else {
-      _filteredNotes = _notes.where((n) {
-        return n.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-               n.content.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-               n.subject.toLowerCase().contains(_searchQuery.toLowerCase());
-      }).toList();
-    }
-  }
-
-  Future<void> _addOrUpdateNote(Note note, bool isNew) async {
-    final isar = await _isarService.db;
-    await isar.writeTxn(() async {
-      await isar.notes.put(note);
-    });
-    // Explicit reload after transaction
-    await _loadNotes();
-  }
-
-  Future<void> _deleteNote(int id) async {
-    final isar = await _isarService.db;
-    await isar.writeTxn(() async {
-      await isar.notes.delete(id);
-    });
-    _loadNotes();
+  List<Note> _filterNotes(List<Note> notes) {
+    if (_searchQuery.isEmpty) return notes;
+    return notes.where((n) {
+      return n.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+             n.content.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+             n.subject.toLowerCase().contains(_searchQuery.toLowerCase());
+    }).toList();
   }
 
   @override
@@ -86,7 +56,7 @@ class _NotesTabState extends State<NotesTab> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.black87),
-            onPressed: _loadNotes,
+            onPressed: () => Provider.of<NoteProvider>(context, listen: false).loadNotes(),
           )
         ],
       ),
@@ -114,16 +84,28 @@ class _NotesTabState extends State<NotesTab> {
               onChanged: (val) {
                 setState(() {
                   _searchQuery = val;
-                  _filterNotes();
                 });
               },
             ),
           ),
           
           Expanded(
-            child: _filteredNotes.isEmpty 
-              ? Center(child: Text("Empty Canvas", style: TextStyle(color: Colors.grey[300], fontSize: 20, fontWeight: FontWeight.bold)))
-              : _buildMasonryGrid(),
+            child: Consumer<NoteProvider>(
+              builder: (context, noteProvider, _) {
+                final filteredNotes = _filterNotes(noteProvider.notes);
+                
+                if (filteredNotes.isEmpty) {
+                  return Center(
+                    child: Text(
+                      "Empty Canvas", 
+                      style: TextStyle(color: Colors.grey[300], fontSize: 20, fontWeight: FontWeight.bold)
+                    )
+                  );
+                }
+                
+                return _buildMasonryGrid(filteredNotes);
+              },
+            ),
           ),
         ],
       ),
@@ -131,12 +113,15 @@ class _NotesTabState extends State<NotesTab> {
   }
 
   // Simple Manual Masonry (2 columns)
-  Widget _buildMasonryGrid() {
+  Widget _buildMasonryGrid(List<Note> notes) {
     final leftColumn = <Widget>[];
     final rightColumn = <Widget>[];
 
-    for (var i = 0; i < _filteredNotes.length; i++) {
-      final card = _buildNoteCard(_filteredNotes[i]);
+    for (var i = 0; i < notes.length; i++) {
+      final card = RepaintBoundary(
+        key: ValueKey('note_${notes[i].id}'),
+        child: _buildNoteCard(notes[i])
+      );
       if (i % 2 == 0) {
         leftColumn.add(card);
       } else {
@@ -146,6 +131,7 @@ class _NotesTabState extends State<NotesTab> {
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      physics: const BouncingScrollPhysics(),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -219,8 +205,6 @@ class _NotesTabState extends State<NotesTab> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
       builder: (context) => NoteEditorSheet(
         note: note,
-        onSave: (n, isNew) => _addOrUpdateNote(n, isNew),
-        onDelete: (id) => _deleteNote(id),
         colors: _noteColors,
       ),
     );
@@ -229,11 +213,9 @@ class _NotesTabState extends State<NotesTab> {
 
 class NoteEditorSheet extends StatefulWidget {
   final Note? note;
-  final Function(Note, bool) onSave;
-  final Function(int) onDelete;
   final List<Color> colors;
 
-  const NoteEditorSheet({super.key, this.note, required this.onSave, required this.onDelete, required this.colors});
+  const NoteEditorSheet({super.key, this.note, required this.colors});
 
   @override
   State<NoteEditorSheet> createState() => _NoteEditorSheetState();
@@ -254,8 +236,7 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
     _contentController = TextEditingController(text: widget.note?.content ?? '');
     _subjectController = TextEditingController(text: widget.note?.subject ?? 'General');
     
-    // Fix: Correctly initialize color index. If it's 0 (default) but strictly not set, standard is 0.
-    // If randomized, ensure it's within bounds.
+    // Fix: Correctly initialize color index
     if (widget.note != null) {
       _selectedColorIndex = widget.note!.colorIndex;
       // Safety check
@@ -267,6 +248,8 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final noteProvider = Provider.of<NoteProvider>(context, listen: false);
+    
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -284,14 +267,14 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
                 if (!_isNew)
                   IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.red), 
-                    onPressed: () {
-                      widget.onDelete(widget.note!.id);
-                      Navigator.pop(context);
+                    onPressed: () async {
+                      await noteProvider.deleteNote(widget.note!.id);
+                      if (context.mounted) Navigator.pop(context);
                     }
                   ),
-                   IconButton(
+                 IconButton(
                    icon: const Icon(Icons.check, color: Colors.blue, size: 28),
-                   onPressed: () {
+                   onPressed: () async {
                      if (_titleController.text.isNotEmpty) {
                        final newNote = Note(
                          title: _titleController.text,
@@ -305,8 +288,13 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
                          newNote.id = widget.note!.id;
                        }
                        
-                       widget.onSave(newNote, _isNew);
-                       Navigator.pop(context);
+                       if (_isNew) {
+                         await noteProvider.addNote(newNote);
+                       } else {
+                         await noteProvider.updateNote(newNote);
+                       }
+                       
+                       if (context.mounted) Navigator.pop(context);
                      }
                    }
                  )

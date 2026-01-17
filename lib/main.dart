@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'services/isar_service.dart';
 import 'providers/timetable_provider.dart';
 import 'providers/attendance_provider.dart';
+import 'providers/note_provider.dart';
 import 'screens/home_screen.dart';
 
 import 'services/bus_service.dart';
@@ -21,6 +22,9 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (_) => AttendanceProvider(isarService),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => NoteProvider(isarService),
         ),
       ],
       child: const UOMPerApp(),
