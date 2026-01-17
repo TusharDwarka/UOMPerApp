@@ -279,7 +279,7 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
                       Navigator.pop(context);
                     }
                   ),
-                 IconButton(
+                   IconButton(
                    icon: const Icon(Icons.check, color: Colors.blue, size: 28),
                    onPressed: () {
                      if (_titleController.text.isNotEmpty) {
@@ -290,7 +290,11 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
                          colorIndex: _selectedColorIndex,
                          timestamp: DateTime.now()
                        );
-                       if (!_isNew) newNote.id = widget.note!.id;
+                       // Ensure ID is preserved for updates
+                       if (!_isNew) {
+                         newNote.id = widget.note!.id;
+                       }
+                       
                        widget.onSave(newNote, _isNew);
                        Navigator.pop(context);
                      }

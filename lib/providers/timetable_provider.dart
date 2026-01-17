@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // Added for DateFormat
 import 'package:isar_community/isar.dart';
 import '../models/class_session.dart';
 import '../models/academic_task.dart';
@@ -37,6 +38,27 @@ class TimetableProvider extends ChangeNotifier {
     
     _calculateCommonFreeTime();
     notifyListeners();
+  }
+
+  // --- Helper Methods to reduce UI logic ---
+  
+  bool isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  List<ClassSession> getEventsForDay(DateTime date) {
+    final dayName = DateFormat('EEEE').format(date);
+    return _userSessions.where((s) {
+       if (s.specificDate != null) {
+         return isSameDay(s.specificDate!, date);
+       } else {
+         return s.day == dayName;
+       }
+    }).toList();
+  }
+
+  List<AcademicTask> getTasksForDay(DateTime date) {
+    return _tasks.where((t) => isSameDay(t.dueDate, date)).toList();
   }
 
   // --- Task Management via Provider (Centralized) ---

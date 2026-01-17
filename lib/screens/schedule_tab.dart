@@ -33,17 +33,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
     });
   }
 
-  // Helper: Get sessions for the selected day
-  List<ClassSession> _getEventsForDay(DateTime day, List<ClassSession> allSessions) {
-    final dayName = _dayNameFormat.format(day);
-    return allSessions.where((s) {
-       if (s.specificDate != null) {
-         return isSameDay(s.specificDate!, day);
-       } else {
-         return s.day == dayName;
-       }
-    }).toList();
-  }
+
 
   // Show "Add Class" Bottom Sheet
   void _showAddSessionDialog({ClassSession? sessionToEdit}) {
@@ -214,7 +204,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
     // Replaced Scaffold body with resizeToAvoidBottomInset: false to prevent layout thrashing (lag) when keyboard opens.
     return Scaffold(
       backgroundColor: Colors.white,
-      resizeToAvoidBottomInset: false, // CRITICAL FIX for keyboard lag
+      resizeToAvoidBottomInset: true, // User requested fix for keyboard layout
       body: SafeArea(
         child: Column(
           children: [
@@ -223,9 +213,8 @@ class _ScheduleTabState extends State<ScheduleTab> {
             Expanded(
               child: Consumer<TimetableProvider>(
                 builder: (context, timetable, _) {
-                  final events = _getEventsForDay(_selectedDate, timetable.userSessions);
-                  // Pre-filter tasks to avoid doing it inside the rendering loop if possible, though strict date check is fast
-                  final relevantTasks = timetable.tasks.where((t) => isSameDay(t.dueDate, _selectedDate)).toList();
+                  final events = timetable.getEventsForDay(_selectedDate);
+                  final relevantTasks = timetable.getTasksForDay(_selectedDate);
 
                   return SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(vertical: 20),
