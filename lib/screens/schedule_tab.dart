@@ -16,8 +16,14 @@ class _ScheduleTabState extends State<ScheduleTab> {
   DateTime _selectedDate = DateTime.now();
   final double _hourHeight = 80.0;
   final double _timeColumnWidth = 60.0;
-  final int _startHour = 7; // 07:00
-  final int _endHour = 18;  // 18:00
+  final int _startHour = 6; // Started earlier to catch 7am classes comfortably
+  final int _endHour = 19;  // Ended later
+
+  // Cache DateFormats to avoid recreating them in loops
+  final DateFormat _dayNameFormat = DateFormat('EEEE');
+  final DateFormat _weekdayShortFormat = DateFormat('E');
+  final DateFormat _dayNumFormat = DateFormat('d');
+  final DateFormat _fullDateFormat = DateFormat('MMMM d, y');
 
   @override
   void initState() {
@@ -29,12 +35,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
   // Helper: Get sessions for the selected day
   List<ClassSession> _getEventsForDay(DateTime day, List<ClassSession> allSessions) {
-    // We now have two types of sessions:
-    // 1. Generic recurring (specificDate == null) -> Match day name
-    // 2. Specific date (specificDate != null) -> Match exact date
-    
-    final dayName = DateFormat('EEEE').format(day);
-    
+    final dayName = _dayNameFormat.format(day);
     return allSessions.where((s) {
        if (s.specificDate != null) {
          return isSameDay(s.specificDate!, day);
@@ -53,14 +54,12 @@ class _ScheduleTabState extends State<ScheduleTab> {
     String room = sessionToEdit?.room ?? '';
     String startTime = sessionToEdit?.startTime ?? "09:00";
     String endTime = sessionToEdit?.endTime ?? "10:30";
-    // If editing, use existing session day, else use selected date
     String selectedDayName = isEditing 
         ? sessionToEdit!.day 
-        : DateFormat('EEEE').format(_selectedDate);
+        : _dayNameFormat.format(_selectedDate);
         
     final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-    // Ensure keyboard doesn't cover content
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -85,7 +84,6 @@ class _ScheduleTabState extends State<ScheduleTab> {
                       IconButton(
                         icon: const Icon(Icons.delete_outline, color: Colors.red),
                         onPressed: () {
-                           // Quick delete confirm
                            showDialog(
                              context: context, 
                              builder: (c) => AlertDialog(
@@ -96,8 +94,8 @@ class _ScheduleTabState extends State<ScheduleTab> {
                                  TextButton(
                                    onPressed: () {
                                      Provider.of<TimetableProvider>(context, listen: false).deleteSession(sessionToEdit!.id);
-                                     Navigator.pop(c); // Close Dialog
-                                     Navigator.pop(context); // Close Sheet
+                                     Navigator.pop(c);
+                                     Navigator.pop(context);
                                    }, 
                                    child: const Text("Delete", style: TextStyle(color: Colors.red))
                                  ),
@@ -109,13 +107,10 @@ class _ScheduleTabState extends State<ScheduleTab> {
                   ],
                 ),
                 const SizedBox(height: 30),
-                
-                // Subject Input
                 TextFormField(
                   initialValue: subject,
                   decoration: InputDecoration(
-                    labelText: "Title (e.g. Mobile Computing)",
-                    labelStyle: TextStyle(color: Colors.grey[500]),
+                    labelText: "Title",
                     filled: true,
                     fillColor: Colors.grey[50],
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
@@ -125,13 +120,10 @@ class _ScheduleTabState extends State<ScheduleTab> {
                   onSaved: (v) => subject = v!,
                 ),
                 const SizedBox(height: 20),
-                
-                // Room Input
                 TextFormField(
                   initialValue: room,
                   decoration: InputDecoration(
-                    labelText: "Location / Room",
-                    labelStyle: TextStyle(color: Colors.grey[500]),
+                    labelText: "Location",
                     filled: true,
                     fillColor: Colors.grey[50],
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
@@ -140,8 +132,6 @@ class _ScheduleTabState extends State<ScheduleTab> {
                   onSaved: (v) => room = v ?? '',
                 ),
                 const SizedBox(height: 20),
-                
-                // Day Dropdown
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(16)),
@@ -155,8 +145,6 @@ class _ScheduleTabState extends State<ScheduleTab> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                
-                // Time Pickers
                 Row(
                   children: [
                      Expanded(child: _buildTimeField("Start", startTime, (val) => startTime = val)),
@@ -165,8 +153,6 @@ class _ScheduleTabState extends State<ScheduleTab> {
                   ],
                 ),
                 const SizedBox(height: 40),
-                
-                // Done Button
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -182,9 +168,8 @@ class _ScheduleTabState extends State<ScheduleTab> {
                           endTime: endTime,
                           isUser: true,
                         );
-                        
                         if (isEditing) {
-                          session.id = sessionToEdit!.id; // Preserve ID for update
+                          session.id = sessionToEdit!.id;
                           Provider.of<TimetableProvider>(context, listen: false).addSession(session);
                         } else {
                           Provider.of<TimetableProvider>(context, listen: false).addSession(session);
@@ -226,28 +211,28 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
   @override
   Widget build(BuildContext context) {
+    // Replaced Scaffold body with resizeToAvoidBottomInset: false to prevent layout thrashing (lag) when keyboard opens.
     return Scaffold(
       backgroundColor: Colors.white,
+      resizeToAvoidBottomInset: false, // CRITICAL FIX for keyboard lag
       body: SafeArea(
         child: Column(
           children: [
-            // 1. Header Section
             _buildHeader(),
-            
-            // 2. Week Selector (Horizontal Strip)
             _buildWeekStrip(),
-            
             Expanded(
               child: Consumer<TimetableProvider>(
                 builder: (context, timetable, _) {
                   final events = _getEventsForDay(_selectedDate, timetable.userSessions);
-                  
+                  // Pre-filter tasks to avoid doing it inside the rendering loop if possible, though strict date check is fast
+                  final relevantTasks = timetable.tasks.where((t) => isSameDay(t.dueDate, _selectedDate)).toList();
+
                   return SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(vertical: 20),
+                    physics: const BouncingScrollPhysics(), // Smoother scroll on Android
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 3. Time Column
                         SizedBox(
                           width: _timeColumnWidth,
                           child: Column(
@@ -264,14 +249,11 @@ class _ScheduleTabState extends State<ScheduleTab> {
                             }),
                           ),
                         ),
-                        
-                        // 4. Vertical Grid / Event Canvas
                         Expanded(
                           child: SizedBox(
                             height: (_endHour - _startHour + 1) * _hourHeight,
                             child: Stack(
                               children: [
-                                // Horizontal Grid Lines
                                 ...List.generate(_endHour - _startHour + 1, (index) {
                                   return Positioned(
                                     top: index * _hourHeight,
@@ -280,25 +262,9 @@ class _ScheduleTabState extends State<ScheduleTab> {
                                     child: Divider(color: Colors.grey[100], height: 1),
                                   );
                                 }),
-
-                                // Events
                                 ...events.map((event) => _buildEventBlock(event)).toList(),
-
-                                // TASKS from Academic/To-Do Tab
-                                ...timetable.tasks.where((t) => isSameDay(t.dueDate, _selectedDate)).map((task) {
-                                  // For tasks, we need a time. If user didn't specify time (just date), maybe show at top or default?
-                                  // For now let's assume tasks are "due" at a time, or we just put them in a dedicated slot
-                                  // If the task has no time component in UI yet, we can't place it on the grid accurately.
-                                  // HOWEVER, the user asked "added to the TIMETABLE SECTION".
-                                  // Let's check AcademicTask. It has `dueDate`. 
-                                  // Isar DateTime includes time.
-                                  
-                                  // Let's render them.
-                                  return _buildTaskBlock(task);
-                                }).toList(),
-                                
-                                // Current Time Line (Red)
-                                if (DateFormat('EEEE').format(DateTime.now()) == DateFormat('EEEE').format(_selectedDate))
+                                ...relevantTasks.map((task) => _buildTaskBlock(task)).toList(),
+                                if (isSameDay(DateTime.now(), _selectedDate))
                                    _buildCurrentTimeLine(),
                               ],
                             ),
@@ -316,7 +282,6 @@ class _ScheduleTabState extends State<ScheduleTab> {
     );
   }
 
-  // Reuse header...
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -330,22 +295,15 @@ class _ScheduleTabState extends State<ScheduleTab> {
               const SizedBox(height: 4),
               GestureDetector(
                 onTap: () async {
-                  // Month Picker
                   final DateTime? picked = await showDatePicker(
                     context: context,
                     initialDate: _selectedDate,
                     firstDate: DateTime(2020),
                     lastDate: DateTime(2030),
-                    builder: (context, child) {
-                      return Theme(
-                        data: ThemeData.light().copyWith(
-                          primaryColor: const Color(0xFF0066FF),
-                          colorScheme: const ColorScheme.light(primary: Color(0xFF0066FF)),
-                          buttonTheme: const ButtonThemeData(textTheme: ButtonTextTheme.primary),
-                        ),
-                        child: child!,
-                      );
-                    },
+                    builder: (context, child) => Theme(
+                      data: ThemeData.light().copyWith(primaryColor: const Color(0xFF0066FF)),
+                      child: child!,
+                    ),
                   );
                   if (picked != null && picked != _selectedDate) {
                     setState(() {
@@ -355,7 +313,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
                 },
                 child: Row(
                   children: [
-                    Text(DateFormat('MMMM d, y').format(_selectedDate), style: TextStyle(fontSize: 14, color: Colors.grey[400], fontWeight: FontWeight.w500)),
+                    Text(_fullDateFormat.format(_selectedDate), style: TextStyle(fontSize: 14, color: Colors.grey[400], fontWeight: FontWeight.w500)),
                     const SizedBox(width: 5),
                     Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.grey[400])
                   ],
@@ -363,62 +321,19 @@ class _ScheduleTabState extends State<ScheduleTab> {
               ),
             ],
           ),
-          
-          Row(
-            children: [
-               IconButton(
-                 icon: const Icon(Icons.cloud_download_outlined, color: Colors.blueGrey),
-                 tooltip: "Import Timetable",
-                 onPressed: () {
-                   final startOfSemester = DateTime(2026, 1, 19); 
-                   final jsonMap = {
-                      "timetable": {
-                        "Monday": [
-                          {"day": "Monday", "startTime": "09:30", "endTime": "12:30", "moduleName": "Scientific Writing and Presentation", "location": "Room G3", "mode": "CAMPUS"},
-                          {"day": "Monday", "startTime": "12:30", "endTime": "15:30", "moduleName": "Propositional and Predicate Logic", "location": "ROOM G3", "mode": "CAMPUS"}
-                        ],
-                        "Tuesday": [
-                          {"day": "Tuesday", "startTime": "09:00", "endTime": "12:00", "moduleName": "Introduction to Computer Science", "location": "Online", "mode": "ONLINE"},
-                          {"day": "Tuesday", "startTime": "12:00", "endTime": "15:00", "moduleName": "Linear Algebra", "location": "Online", "mode": "ONLINE"}
-                        ],
-                        "Wednesday": [
-                          {"day": "Wednesday", "startTime": "08:30", "endTime": "10:30", "moduleName": "Lab practicals", "location": "CITS Lab 1B", "mode": "CAMPUS"},
-                          {"day": "Wednesday", "startTime": "12:00", "endTime": "13:00", "moduleName": "Lab practicals", "location": "FOA Lab 2B", "mode": "CAMPUS"},
-                          {"day": "Wednesday", "startTime": "13:00", "endTime": "15:30", "moduleName": "Mathematical Analysis (Tutorial)", "location": "Rm 2.12 NAC", "mode": "CAMPUS"}
-                        ],
-                        "Thursday": [
-                          {"day": "Thursday", "startTime": "08:00", "endTime": "11:00", "moduleName": "Physics (L)", "location": "Room G1", "mode": "CAMPUS"},
-                          {"day": "Thursday", "startTime": "12:00", "endTime": "15:00", "moduleName": "Linear Algebra", "location": "Room G1", "mode": "CAMPUS"}
-                        ],
-                        "Friday": [
-                          {"day": "Friday", "startTime": "08:00", "endTime": "11:00", "moduleName": "Physics (T)", "location": "Room G3", "mode": "CAMPUS"},
-                          {"day": "Friday", "startTime": "12:00", "endTime": "15:00", "moduleName": "Mathematical Analysis (Tutorial)", "location": "Room G3", "mode": "CAMPUS"}
-                        ]
-                      }
-                   };
-
-                   Provider.of<TimetableProvider>(context, listen: false).importSemester(jsonMap, startOfSemester);
-                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Semester Imported: Weeks 1-10 populated")));
-                 },
-               ),
-               const SizedBox(width: 10),
-               InkWell(
-                onTap: () => _showAddSessionDialog(),
+          InkWell(
+            onTap: () => _showAddSessionDialog(),
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0066FF),
                 borderRadius: BorderRadius.circular(14),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0066FF),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(color: const Color(0xFF0066FF).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
-                    ]
-                  ),
-                  child: const Text("Add", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                ),
+                boxShadow: const [BoxShadow(color: Color(0x330066FF), blurRadius: 4, offset: Offset(0, 2))] // Optimized shadow
               ),
-            ],
-          )
+              child: const Text("Add", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ),
         ],
       ),
     );
@@ -426,6 +341,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
   Widget _buildWeekStrip() {
     final now = DateTime.now();
+    // Optimize: Create only necessary dates
     final weekDates = List.generate(7, (index) => now.add(Duration(days: index))); 
 
     return Container(
@@ -443,15 +359,21 @@ class _ScheduleTabState extends State<ScheduleTab> {
           const SizedBox(height: 20),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
             child: Row(
               children: weekDates.map((date) {
                 final isSelected = isSameDay(date, _selectedDate);
-                final weekdayStr = DateFormat('E').format(date)[0]; 
-                final dayNum = DateFormat('d').format(date);
+                final weekdayStr = _weekdayShortFormat.format(date)[0]; 
+                final dayNum = _dayNumFormat.format(date);
                 
                 return GestureDetector(
-                  onTap: () => setState(() => _selectedDate = date),
-                  child: Container(
+                  onTap: () {
+                     if (!isSelected) { // Prevent useless rebuilds
+                       setState(() => _selectedDate = date);
+                     }
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
                     margin: const EdgeInsets.only(right: 20),
                     padding: const EdgeInsets.all(12), 
                     decoration: isSelected 
@@ -475,44 +397,30 @@ class _ScheduleTabState extends State<ScheduleTab> {
   }
 
   Widget _buildTaskBlock(dynamic task) {
-    // Assuming task is AcademicTask
-    // If user didn't set time, we might default to 8am or use the stored DateTime time
-    // Isar DateTime usually keeps time.
     final time = task.dueDate;
     final startMinutes = time.hour * 60 + time.minute;
     final startOffset = startMinutes - (_startHour * 60);
-
-    // Assume tasks take 1 hour block for visualization
     final duration = 60; 
 
-    if (startOffset < 0) return const SizedBox(); // Before 7am not shown
+    if (startOffset < 0) return const SizedBox();
 
     final top = (startOffset / 60) * _hourHeight;
     final height = (duration / 60) * _hourHeight;
 
     return Positioned(
       top: top,
-      left: 60, // Indent
+      left: 60,
       right: 24,
       height: height - 10,
       child: GestureDetector(
-        onTap: () {
-          // Open Edit Dialog for this Task
-          // We can reuse the TodoBoardTab sheet if we make it public or duplicate logic.
-          // For simplicity, let's just duplicate the minimal edit logic here or use a helper.
-          // Actually, we can't easily access TodoBoardTab state.
-          // Let's create a local _showTaskEditDialog in ScheduleTab.
-          _showTaskEditDialog(task);
-        },
+        onTap: () => _showTaskEditDialog(task),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: Colors.redAccent, width: 2), // Red border for deadlines
+            border: Border.all(color: Colors.redAccent, width: 2),
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(color: Colors.redAccent.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
-            ]
+            boxShadow: const [BoxShadow(color: Color(0x1AFF5252), blurRadius: 4, offset: Offset(0, 2))]
           ),
           child: Row(
             children: [
@@ -523,8 +431,8 @@ class _ScheduleTabState extends State<ScheduleTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text("DUE: ${task.title}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.redAccent)),
-                    Text(task.subject, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                    Text("DUE: ${task.title}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.redAccent), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(task.subject, style: const TextStyle(fontSize: 11, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
                 ),
               )
@@ -536,86 +444,127 @@ class _ScheduleTabState extends State<ScheduleTab> {
   }
 
   void _showTaskEditDialog(dynamic task) {
-    // Basic Edit Dialog for Task from Schedule
-    final formKey = GlobalKey<FormState>();
-    String title = task.title;
-    String subject = task.subject;
-    DateTime date = task.dueDate;
-    TimeOfDay time = TimeOfDay.fromDateTime(date);
-
-    showDialog(
+    final titleController = TextEditingController(text: task.title);
+    final subjectController = TextEditingController(text: task.subject);
+    DateTime dueDate = task.dueDate;
+    
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Edit Task"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              initialValue: title,
-              decoration: const InputDecoration(labelText: "Title"),
-              onChanged: (v) => title = v,
-            ),
-            TextFormField(
-              initialValue: subject,
-              decoration: const InputDecoration(labelText: "Subject"),
-              onChanged: (v) => subject = v,
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                TextButton(
-                  onPressed: () async {
-                    final d = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime(2030));
-                    if(d!=null) date = d;
-                  },
-                  child: const Text("Change Date"),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    final t = await showTimePicker(context: context, initialTime: time);
-                    if(t!=null) time = t;
-                  },
-                  child: const Text("Change Time"),
-                ),
-              ],
-            )
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-
-              // Delete
-              final isarService = Provider.of<TimetableProvider>(context, listen: false).isarService;
-              final isar = await isarService.db;
-              await isar.writeTxn(() async {
-                await isar.academicTasks.delete(task.id);
-              });
-              Provider.of<TimetableProvider>(context, listen: false).loadSessions();
-              Navigator.pop(context);
-            }, 
-            child: const Text("Delete", style: TextStyle(color: Colors.red))
-          ),
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-          ElevatedButton(
-            onPressed: () async {
-              // Save
-              final newDateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-              final isarService = Provider.of<TimetableProvider>(context, listen: false).isarService;
-              final isar = await isarService.db;
-              await isar.writeTxn(() async {
-                 task.title = title;
-                 task.subject = subject;
-                 task.dueDate = newDateTime;
-                 await isar.academicTasks.put(task);
-              });
-              Provider.of<TimetableProvider>(context, listen: false).loadSessions();
-              Navigator.pop(context);
-            }, 
-            child: const Text("Save")
-          )
-        ],
-      )
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+             return Padding(
+               padding: EdgeInsets.only(
+                 bottom: MediaQuery.of(context).viewInsets.bottom + 20, 
+                 top: 24, left: 24, right: 24
+               ),
+               child: Column(
+                 mainAxisSize: MainAxisSize.min,
+                 crossAxisAlignment: CrossAxisAlignment.start,
+                 children: [
+                   const Text("Edit Task", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                   const SizedBox(height: 20),
+                   TextField(
+                     controller: titleController,
+                     decoration: InputDecoration(
+                        labelText: "Task Title",
+                        filled: true, fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
+                     ),
+                   ),
+                   const SizedBox(height: 12),
+                   TextField(
+                     controller: subjectController,
+                     decoration: InputDecoration(
+                        labelText: "Subject / Module",
+                        filled: true, fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
+                     ),
+                   ),
+                   const SizedBox(height: 12),
+                   Row(
+                     children: [
+                       Expanded(
+                         child: TextButton.icon(
+                           onPressed: () async {
+                              final d = await showDatePicker(context: context, initialDate: dueDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
+                              if (d != null) {
+                                final t = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(dueDate));
+                                if (t != null) {
+                                  setModalState(() {
+                                    dueDate = DateTime(d.year, d.month, d.day, t.hour, t.minute);
+                                  });
+                                }
+                              }
+                           },
+                           icon: const Icon(Icons.calendar_month),
+                           label: Text(DateFormat('MMM d, HH:mm').format(dueDate)),
+                           style: TextButton.styleFrom(
+                             backgroundColor: Colors.blue[50],
+                             padding: const EdgeInsets.symmetric(vertical: 16),
+                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                           )
+                         ),
+                       ),
+                     ],
+                   ),
+                   const SizedBox(height: 24),
+                   Row(
+                     children: [
+                       Expanded(
+                         child: OutlinedButton(
+                           onPressed: () {
+                             // Delete Logic
+                             Provider.of<TimetableProvider>(context, listen: false).deleteTask(task.id);
+                             Navigator.pop(context);
+                           },
+                           style: OutlinedButton.styleFrom(
+                             foregroundColor: Colors.red,
+                             side: const BorderSide(color: Colors.red),
+                             padding: const EdgeInsets.symmetric(vertical: 16),
+                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                           ),
+                           child: const Text("Delete"),
+                         ),
+                       ),
+                       const SizedBox(width: 12),
+                       Expanded(
+                         child: ElevatedButton(
+                           onPressed: () {
+                             // Save Logic
+                             if (titleController.text.isNotEmpty) {
+                               Provider.of<TimetableProvider>(context, listen: false).updateTask(
+                                 task.id,
+                                 titleController.text,
+                                 subjectController.text,
+                                 dueDate,
+                                 task.isCompleted
+                               );
+                               Navigator.pop(context);
+                             }
+                           },
+                           style: ElevatedButton.styleFrom(
+                             backgroundColor: const Color(0xFF1565C0),
+                             foregroundColor: Colors.white,
+                             padding: const EdgeInsets.symmetric(vertical: 16),
+                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                             elevation: 0
+                           ),
+                           child: const Text("Save Changes"),
+                         ),
+                       ),
+                     ],
+                   ),
+                   const SizedBox(height: 10),
+                 ],
+               ),
+             );
+          }
+        );
+      }
     );
   }
 
@@ -632,32 +581,23 @@ class _ScheduleTabState extends State<ScheduleTab> {
     final top = (startOffset / 60) * _hourHeight;
     final height = (duration / 60) * _hourHeight;
 
-    // Stylistic Logic based on Subject Hash
-    // Expanded Palette for more specific subject colors
-    // VIVID / ELECTRIC Colors as requested
-    final colorOption = event.subject.hashCode.abs() % 10;
+    // soft pastel aesthetic
+    final colorOption = event.subject.hashCode.abs() % 6;
     
-    final colors = [
-      const Color(0xFF2979FF), // 0. Electric Blue
-      const Color(0xFFFF1744), // 1. Vivid Red
-      const Color(0xFFD500F9), // 2. Neon Purple
-      const Color(0xFFFF9100), // 3. Bright Orange
-      const Color(0xFF00E676), // 4. Intense Green
-      const Color(0xFFFF4081), // 5. Hot Pink
-      const Color(0xFFFFEA00), // 6. Cyber Yellow
-      const Color(0xFF00B8D4), // 7. Cyan / Aqua
-      const Color(0xFF3D5AFE), // 8. Royal Indigo
-      const Color(0xFFC6FF00), // 9. Lime Punch
+    // Aesthetic Pairs (Background, Text/Accent)
+    final styles = [
+      (const Color(0xFFE3F2FD), const Color(0xFF1565C0)), // Blue
+      (const Color(0xFFF3E5F5), const Color(0xFF7B1FA2)), // Purple
+      (const Color(0xFFE0F2F1), const Color(0xFF00695C)), // Teal
+      (const Color(0xFFFFF3E0), const Color(0xFFEF6C00)), // Orange
+      (const Color(0xFFFFEBEE), const Color(0xFFC62828)), // Red
+      (const Color(0xFFE8F5E9), const Color(0xFF2E7D32)), // Green
     ];
     
-    // Define which indices need DARK text (Light backgrounds: Yellow, Lime, Cyan, Orange, Green)
-    final darkTextIndices = [3, 4, 6, 7, 9]; 
-
-    final bgColor = colors[colorOption];
-    final isDarkText = darkTextIndices.contains(colorOption);
-    final textColor = isDarkText ? const Color(0xFF263238) : Colors.white;
-    final iconBorderColor = isDarkText ? Colors.black.withOpacity(0.1) : Colors.white.withOpacity(0.3);
-    final iconColor = isDarkText ? Colors.black87 : Colors.white;
+    final style = styles[colorOption];
+    final bgColor = style.$1;
+    final accentColor = style.$2;
+    final textColor = Colors.black87;
 
     return Positioned(
       top: top,
@@ -667,25 +607,26 @@ class _ScheduleTabState extends State<ScheduleTab> {
       child: GestureDetector(
         onTap: () => _showAddSessionDialog(sessionToEdit: event),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: accentColor.withOpacity(0.15), width: 1),
+            // Removed heavy shadow for performance
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icon with square/circle bg
+              // Vertical colored strip
               Container(
-                width: 36,
-                height: 36,
+                width: 4,
+                height: double.infinity,
                 decoration: BoxDecoration(
-                  border: Border.all(color: iconBorderColor, width: 1.5),
-                  borderRadius: BorderRadius.circular(12),
+                  color: accentColor,
+                  borderRadius: BorderRadius.circular(2)
                 ),
-                child: Icon(Icons.class_outlined, color: iconColor, size: 18),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               
               // Text Content
               Expanded(
@@ -695,33 +636,32 @@ class _ScheduleTabState extends State<ScheduleTab> {
                   children: [
                     Text(
                       event.subject,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                         color: textColor,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
                       ),
                     ),
                     if (height > 50)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          event.room,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: textColor.withOpacity(0.8),
-                            fontWeight: FontWeight.w500
-                          ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.location_on, size: 12, color: textColor.withOpacity(0.6)),
+                            const SizedBox(width: 4),
+                            Expanded(child: Text(
+                              event.room,
+                              maxLines: 1,
+                              style: TextStyle(fontSize: 12, color: textColor.withOpacity(0.6), fontWeight: FontWeight.normal),
+                            )),
+                          ],
                         ),
                       )
                   ],
                 ),
               ),
-              
-              // Three dots icon
-              Icon(Icons.more_horiz, color: textColor.withOpacity(0.6), size: 20)
             ],
           ),
         ),
@@ -735,7 +675,6 @@ class _ScheduleTabState extends State<ScheduleTab> {
     final offset = nowMinutes - (_startHour * 60);
     
     if (offset < 0) return const SizedBox();
-
     final top = (offset / 60) * _hourHeight;
 
     return Positioned(

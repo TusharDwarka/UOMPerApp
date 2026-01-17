@@ -175,7 +175,13 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                              taskToEdit.subject = subject;
                              taskToEdit.type = type;
                              taskToEdit.dueDate = dueDateTime;
-                             provider.updateTask(taskToEdit);
+                             provider.updateTask(
+                               taskToEdit.id,
+                               taskToEdit.title,
+                               taskToEdit.subject,
+                               taskToEdit.dueDate,
+                               taskToEdit.isCompleted
+                             );
                           } else {
                              provider.addTask(title, subject, type, dueDateTime);
                           }
@@ -282,7 +288,13 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
             GestureDetector(
               onTap: () {
                  task.isCompleted = !task.isCompleted;
-                 Provider.of<TimetableProvider>(context, listen: false).updateTask(task);
+                 Provider.of<TimetableProvider>(context, listen: false).updateTask(
+                   task.id,
+                   task.title,
+                   task.subject,
+                   task.dueDate,
+                   task.isCompleted
+                 );
               },
               child: Container(
                 width: 28, height: 28,

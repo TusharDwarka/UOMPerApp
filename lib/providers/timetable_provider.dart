@@ -54,9 +54,18 @@ class TimetableProvider extends ChangeNotifier {
      await loadSessions(); 
   }
 
-  Future<void> updateTask(AcademicTask task) async {
+  Future<void> updateTask(int id, String title, String subject, DateTime dueDate, bool isCompleted) async {
      final isar = await isarService.db;
-     await isar.writeTxn(() async => await isar.academicTasks.put(task));
+     await isar.writeTxn(() async {
+       final task = await isar.academicTasks.get(id);
+       if (task != null) {
+         task.title = title;
+         task.subject = subject;
+         task.dueDate = dueDate;
+         task.isCompleted = isCompleted;
+         await isar.academicTasks.put(task);
+       }
+     });
      await loadSessions();
   }
 
