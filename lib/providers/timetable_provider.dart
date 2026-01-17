@@ -29,6 +29,13 @@ class TimetableProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setPerspective(bool isSwapped) {
+    if (_isSwapped != isSwapped) {
+      _isSwapped = isSwapped;
+      notifyListeners();
+    }
+  }
+
   List<AcademicTask> _tasks = [];
   List<AcademicTask> get tasks => _tasks;
   

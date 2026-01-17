@@ -16,13 +16,13 @@ class _ScheduleTabState extends State<ScheduleTab> {
   DateTime _selectedDate = DateTime.now();
   final double _hourHeight = 80.0;
   final double _timeColumnWidth = 60.0;
-  // ... inside _ScheduleTabState
   
-  final int _startHour = 8; // User requested 8:00
-  final int _endHour = 18;  // To cover 17:30 comfortably
+  final int _startHour = 8;
+  final int _endHour = 18;
   
   bool _isCompareMode = false;
-  String _friendCourse = "CSS1Y1"; // Default
+  String? _currentPerspective; // Null = Selection Screen
+  final String _compareTarget = "Computer Science"; // Default compare target
 
   // Cache DateFormats to avoid recreating them in loops
   final DateFormat _dayNameFormat = DateFormat('EEEE');
@@ -33,6 +33,10 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (_currentPerspective == null) {
+      return _buildCourseSelectionScreen();
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       resizeToAvoidBottomInset: false, 
@@ -44,10 +48,18 @@ class _ScheduleTabState extends State<ScheduleTab> {
             Expanded(
               child: Consumer<TimetableProvider>(
                 builder: (context, timetable, _) {
-                  final events = timetable.getEventsForDay(_selectedDate);
-                  final relevantTasks = timetable.getTasksForDay(_selectedDate);
+                  // Logic Simplified: Provider handles swapping based on setPerspective.
+                  // userSessions returns the "Primary" perspective (whether DS or CS)
+                  // friendSessions returns the "Comparison" perspective
                   
-                  final friendEvents = _isCompareMode ? timetable.getFriendEventsForDay(_selectedDate) : <ClassSession>[];
+                  final mainEvents = timetable.userSessions;
+                  final compareEvents = timetable.friendSessions;
+
+                  final dailyMain = _filterEventsForDay(mainEvents, _selectedDate);
+                  // Only load comparison events if compare mode is ON
+                  final dailyCompare = _isCompareMode ? _filterEventsForDay(compareEvents, _selectedDate) : <ClassSession>[];
+                  
+                  final relevantTasks = timetable.getTasksForDay(_selectedDate);
                   final freeSlots = _isCompareMode ? timetable.getFreeSlotsForDay(_selectedDate) : <CommonFreeSlot>[];
 
                   return SingleChildScrollView(
@@ -56,7 +68,6 @@ class _ScheduleTabState extends State<ScheduleTab> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Time Column
                         SizedBox(
                           width: _timeColumnWidth,
                           child: Column(
@@ -73,18 +84,15 @@ class _ScheduleTabState extends State<ScheduleTab> {
                             }),
                           ),
                         ),
-                        // Grid with Side-by-Side Logic
                         Expanded(
                           child: SizedBox(
                             height: (_endHour - _startHour + 1) * _hourHeight,
                             child: LayoutBuilder(
                               builder: (context, constraints) {
                                 final totalWidth = constraints.maxWidth;
-                                
                                 return RepaintBoundary(
                                   child: Stack(
                                     children: [
-                                      // Grid Background
                                       Positioned.fill(
                                         child: RepaintBoundary(
                                           child: CustomPaint(
@@ -97,19 +105,18 @@ class _ScheduleTabState extends State<ScheduleTab> {
                                         ),
                                       ),
                                       
-                                      // Friend Events (Right Side)
-                                      ...friendEvents.map((event) => _buildEventBlock(event, totalWidth, isGhost: true)).toList(),
+                                      // Secondary (Ghost) Events - Right Side
+                                      ...dailyCompare.map((event) => _buildEventBlock(event, totalWidth, isGhost: true)).toList(),
                                       
-                                      // Free Time Slots (Full Width)
+                                      // Free Time Slots
                                       ...freeSlots.map((slot) => _buildFreeTimeBlock(slot, totalWidth)).toList(),
 
-                                      // User Events (Left Side or Full)
-                                      ...events.map((event) => _buildEventBlock(event, totalWidth)).toList(),
+                                      // Primary (Main) Events - Left Side
+                                      ...dailyMain.map((event) => _buildEventBlock(event, totalWidth)).toList(),
                                       
-                                      // TASKS 
-                                      ...relevantTasks.map((task) => _buildTaskBlock(task)).toList(), // Tasks float on top
+                                      // Tasks
+                                      ...relevantTasks.map((task) => _buildTaskBlock(task)).toList(),
                                       
-                                      // Current Time Line
                                       if (isSameDay(DateTime.now(), _selectedDate))
                                          _buildCurrentTimeLine(),
                                     ],
@@ -131,106 +138,202 @@ class _ScheduleTabState extends State<ScheduleTab> {
     );
   }
 
+  // Helper needed for new logic
+  List<ClassSession> _filterEventsForDay(List<ClassSession> sessions, DateTime date) {
+    if (sessions.isEmpty) return [];
+    // Basic day match 
+    final dayName = DateFormat('EEEE').format(date);
+    return sessions.where((s) {
+       if (s.specificDate != null) {
+         return isSameDay(s.specificDate!, date);
+       } else {
+         return s.day == dayName;
+       }
+    }).toList();
+  }
+
+
+  Widget _buildCourseSelectionScreen() {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(30),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+               const Icon(Icons.school_rounded, size: 60, color: Color(0xFF1A237E)),
+               const SizedBox(height: 20),
+               const Text("Select Your Course", textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+               const SizedBox(height: 10),
+               const Text("Choose your main perspective for the schedule.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+               const SizedBox(height: 50),
+               
+               _buildCourseCard("Data Science", Icons.analytics_outlined, Colors.black87, () {
+                  setState(() {
+                    _currentPerspective = "Data Science";
+                    final provider = Provider.of<TimetableProvider>(context, listen: false);
+                    provider.loadFriendTimetable();
+                    provider.setPerspective(false); // DS is Default
+                  });
+               }),
+               const SizedBox(height: 20),
+               _buildCourseCard("Computer Science", Icons.computer_rounded, Colors.black87, () {
+                  setState(() {
+                    _currentPerspective = "Computer Science";
+                    final provider = Provider.of<TimetableProvider>(context, listen: false);
+                    provider.loadFriendTimetable();
+                    provider.setPerspective(true); // CS is Swapped
+                  });
+               }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCourseCard(String title, IconData icon, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey[200]!),
+          boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))]
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: const Color(0xFFE8EAF6), borderRadius: BorderRadius.circular(12)),
+              child: Icon(icon, color: const Color(0xFF1A237E)),
+            ),
+            const SizedBox(width: 20),
+            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Today", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C))),
-              const SizedBox(height: 4),
-              GestureDetector(
-                onTap: () async {
-                  final DateTime? picked = await showDatePicker(
-                    context: context,
-                    initialDate: _selectedDate,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime(2030),
-                    builder: (context, child) => Theme(
-                      data: ThemeData.light().copyWith(primaryColor: const Color(0xFF0066FF)),
-                      child: child!,
-                    ),
-                  );
-                  if (picked != null && picked != _selectedDate) {
-                    setState(() {
-                      _selectedDate = picked;
-                    });
-                  }
-                },
-                child: Row(
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Text(_fullDateFormat.format(_selectedDate), style: TextStyle(fontSize: 14, color: Colors.grey[400], fontWeight: FontWeight.w500)),
-                    const SizedBox(width: 5),
-                    Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.grey[400])
+                    Flexible(child: Text(_currentPerspective ?? "Schedule", overflow: TextOverflow.ellipsis, maxLines: 1, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2C)))),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 32, height: 32,
+                      decoration: BoxDecoration(color: Colors.grey[100], shape: BoxShape.circle),
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(Icons.swap_horiz, size: 18, color: Colors.black54),
+                        onPressed: () {
+                          setState(() {
+                            // "Return back to page 1"
+                            _currentPerspective = null; 
+                            _isCompareMode = false;
+                          });
+                        },
+                        tooltip: "Switch Course",
+                      ),
+                    )
                   ],
                 ),
-              ),
-            ],
+                GestureDetector(
+                  onTap: () async {
+                    final DateTime? picked = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                      builder: (context, child) => Theme(
+                        data: ThemeData.light().copyWith(primaryColor: const Color(0xFF0066FF)),
+                        child: child!,
+                      ),
+                    );
+                    if (picked != null && picked != _selectedDate) {
+                      setState(() {
+                        _selectedDate = picked;
+                      });
+                    }
+                  },
+                  child: Row(
+                    children: [
+                      Text(_fullDateFormat.format(_selectedDate), style: TextStyle(fontSize: 14, color: Colors.grey[400], fontWeight: FontWeight.w500)),
+                      const SizedBox(width: 5),
+                      Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.grey[400])
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
           
           Row(
             children: [
-              // Compare Button
-              GestureDetector(
-                onLongPress: () {
-                  // Mock Course Selection
-                  showModalBottomSheet(
-                    context: context,
-                    builder: (context) => Consumer<TimetableProvider>(
-                      builder: (context, provider, _) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text("Settings", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 10),
-                            ListTile(
-                              leading: const Icon(Icons.swap_horiz_rounded),
-                              title: const Text("View as Computer Science Student"),
-                              subtitle: const Text("Switch main view/colors to friend's perspective"),
-                              trailing: Switch(
-                                value: provider.isSwapped, 
-                                onChanged: (val) {
-                                  // Ensure loaded
-                                  Provider.of<TimetableProvider>(context, listen: false).loadFriendTimetable();
-                                  Provider.of<TimetableProvider>(context, listen: false).togglePerspective();
-                                  Navigator.pop(context);
-                                }
-                              ),
-                            ),
-                            const Divider(),
-                            const Padding(padding: EdgeInsets.only(left: 16, bottom: 8), child: Align(alignment: Alignment.centerLeft, child: Text("Friend's Course", style: TextStyle(color: Colors.grey, fontSize: 12)))),
-                            ListTile(
-                              leading: Radio(value: "CSS1Y1", groupValue: _friendCourse, onChanged: (v){ Navigator.pop(context); }),
-                              title: const Text("CSS1Y1 (Computer Science)"),
-                            ),
-                            ListTile(
-                              leading: Radio(value: "SE1Y1", groupValue: _friendCourse, onChanged: (v){ Navigator.pop(context); }),
-                              title: const Text("SE1Y1 (Software Eng)"),
-                              enabled: false,
-                              subtitle: const Text("Coming soon"),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  );
+              // People / Compare Button
+              IconButton(
+                icon: Icon(_isCompareMode ? Icons.people : Icons.people_outline, color: _isCompareMode ? Colors.green : Colors.black87),
+                onPressed: () {
+                   showModalBottomSheet(
+                     context: context,
+                     backgroundColor: Colors.white,
+                     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                     builder: (c) => Container(
+                       padding: const EdgeInsets.all(24),
+                       child: Column(
+                         mainAxisSize: MainAxisSize.min,
+                         crossAxisAlignment: CrossAxisAlignment.start,
+                         children: [
+                           const Text("Compare with...", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                           const SizedBox(height: 20),
+                           ListTile(
+                             contentPadding: EdgeInsets.zero,
+                             leading: const CircleAvatar(backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.science, color: Colors.green)),
+                             title: Text(_currentPerspective == "Data Science" ? "Computer Science" : "Data Science"),
+                             subtitle: const Text("View side-by-side"),
+                             trailing: _isCompareMode ? const Icon(Icons.check_circle, color: Colors.green) : const Icon(Icons.circle_outlined, color: Colors.grey),
+                             onTap: () {
+                               setState(() {
+                                 _isCompareMode = true;
+                               });
+                               Navigator.pop(c);
+                             },
+                           ),
+                           if (_isCompareMode) ...[
+                             const Divider(height: 30),
+                             ListTile(
+                               contentPadding: EdgeInsets.zero,
+                               leading: const CircleAvatar(backgroundColor: Color(0xFFFFEBEE), child: Icon(Icons.close, color: Colors.red)),
+                               title: const Text("Stop Comparing"),
+                               onTap: () {
+                                 setState(() {
+                                   _isCompareMode = false;
+                                 });
+                                 Navigator.pop(c);
+                               },
+                             )
+                           ]
+                         ],
+                       ),
+                     )
+                   );
                 },
-                child: IconButton(
-                  icon: Icon(_isCompareMode ? Icons.people : Icons.people_outline, color: _isCompareMode ? Colors.green : Colors.black87),
-                  onPressed: () {
-                     if (!_isCompareMode) {
-                       Provider.of<TimetableProvider>(context, listen: false).loadFriendTimetable();
-                       setState(() => _isCompareMode = true);
-                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Comparing with $_friendCourse..."), duration: const Duration(seconds: 1)));
-                     } else {
-                       setState(() => _isCompareMode = false);
-                     }
-                  },
-                ),
               ),
               const SizedBox(width: 8),
               InkWell(
@@ -402,14 +505,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Text("This week", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
-              const SizedBox(width: 20),
-              Text("Next week", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[300])),
-            ],
-          ),
-          const SizedBox(height: 20),
+          // Row removed as requested
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
@@ -452,6 +548,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
       ),
     );
   }
+
 
   Widget _buildTaskBlock(dynamic task) {
     final time = task.dueDate;
