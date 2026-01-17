@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/academic_task.dart';
+import '../providers/timetable_provider.dart';
+import 'package:provider/provider.dart';
 import '../services/isar_service.dart';
 import 'package:isar_community/isar.dart';
 
@@ -12,61 +14,13 @@ class TodoBoardTab extends StatefulWidget {
 }
 
 class _TodoBoardTabState extends State<TodoBoardTab> {
-  List<AcademicTask> _tasks = [];
-  final IsarService _isarService = IsarService();
 
   @override
   void initState() {
     super.initState();
-    _loadTasks();
-  }
-
-  Future<void> _loadTasks() async {
-    final isar = await _isarService.db;
-    final tasks = await isar.academicTasks.where().sortByDueDateDesc().findAll();
-    setState(() {
-      _tasks = tasks;
-    });
-  }
-
-  Future<void> _addTask(String title, String subject, String type, DateTime due) async {
-    final isar = await _isarService.db;
-    final newTask = AcademicTask(
-      title: title,
-      subject: subject,
-      type: type,
-      dueDate: due,
-      isCompleted: false
-    );
-    
-    await isar.writeTxn(() async {
-      await isar.academicTasks.put(newTask);
-    });
-    _loadTasks();
-  }
-
-  Future<void> _toggleTask(AcademicTask task) async {
-    final isar = await _isarService.db;
-    await isar.writeTxn(() async {
-      task.isCompleted = !task.isCompleted;
-      await isar.academicTasks.put(task);
-    });
-    _loadTasks();
-  }
-
-  Future<void> _updateTask(int id, String title, String subject, String type, DateTime due) async {
-    final isar = await _isarService.db;
-    await isar.writeTxn(() async {
-      final task = await isar.academicTasks.get(id);
-      if (task != null) {
-        task.title = title;
-        task.subject = subject;
-        task.type = type;
-        task.dueDate = due;
-        await isar.academicTasks.put(task);
-      }
-    });
-    _loadTasks();
+    // No need to loadTasks here if Dashboard/Main already triggered it, 
+    // but safe to trigger once ensuring provider has data.
+    // Provider.of<TimetableProvider>(context, listen: false).loadSessions();
   }
 
   void _showAddEditSheet({AcademicTask? taskToEdit}) {
@@ -103,11 +57,8 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                       if (isEditing)
                         IconButton(
                           icon: const Icon(Icons.delete_outline, color: Colors.red),
-                          onPressed: () async {
-                             // Delete
-                             final isar = await _isarService.db;
-                             await isar.writeTxn(() async => await isar.academicTasks.delete(taskToEdit!.id));
-                             _loadTasks();
+                          onPressed: () {
+                             Provider.of<TimetableProvider>(context, listen: false).deleteTask(taskToEdit!.id);
                              Navigator.pop(context);
                           },
                         )
@@ -217,10 +168,16 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                       onPressed: () {
                         if(title.isNotEmpty) {
                           final dueDateTime = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, selectedTime.hour, selectedTime.minute);
+                          final provider = Provider.of<TimetableProvider>(context, listen: false);
+                          
                           if (isEditing) {
-                             _updateTask(taskToEdit!.id, title, subject, type, dueDateTime);
+                             taskToEdit!.title = title;
+                             taskToEdit.subject = subject;
+                             taskToEdit.type = type;
+                             taskToEdit.dueDate = dueDateTime;
+                             provider.updateTask(taskToEdit);
                           } else {
-                             _addTask(title, subject, type, dueDateTime);
+                             provider.addTask(title, subject, type, dueDateTime);
                           }
                           Navigator.pop(context);
                         }
@@ -244,50 +201,52 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
 
   @override
   Widget build(BuildContext context) {
-    // Group tasks by status or generic list
-    // Let's do a simple "Upcoming" vs "Done" list view for speed and clarity
-    final pending = _tasks.where((t) => !t.isCompleted).toList();
-    final completed = _tasks.where((t) => t.isCompleted).toList();
+    return Consumer<TimetableProvider>(
+      builder: (context, timetable, child) {
+        final pending = timetable.pendingTasks;
+        final completed = timetable.completedTasks;
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: const Text("To-Do Board", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 26)),
-        actions: [
-          IconButton(onPressed: () => _showAddEditSheet(), icon: const Icon(Icons.add_circle, color: Colors.black, size: 30))
-        ],
-      ),
-      body: _tasks.isEmpty 
-        ? Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.checklist_rounded, size: 80, color: Colors.grey[200]),
-                const SizedBox(height: 10),
-                Text("No tasks yet", style: TextStyle(color: Colors.grey[400], fontSize: 18, fontWeight: FontWeight.bold)),
-                Text("Tap + to add one", style: TextStyle(color: Colors.grey[400], fontSize: 14)),
-              ],
-            ),
-          )
-        : ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            children: [
-              if (pending.isNotEmpty) ...[
-                const Text("UPCOMING", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 12)),
-                const SizedBox(height: 10),
-                ...pending.map((t) => _buildTaskCard(t)),
-                const SizedBox(height: 20),
-              ],
-              
-              if (completed.isNotEmpty) ...[
-                const Text("COMPLETED", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 12)),
-                const SizedBox(height: 10),
-                ...completed.map((t) => _buildTaskCard(t)),
-              ]
+        return Scaffold(
+          backgroundColor: Colors.white,
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            title: const Text("To-Do Board", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 26)),
+            actions: [
+              IconButton(onPressed: () => _showAddEditSheet(), icon: const Icon(Icons.add_circle, color: Colors.black, size: 30))
             ],
           ),
+          body: timetable.tasks.isEmpty 
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.checklist_rounded, size: 80, color: Colors.grey[200]),
+                    const SizedBox(height: 10),
+                    Text("No tasks yet", style: TextStyle(color: Colors.grey[400], fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text("Tap + to add one", style: TextStyle(color: Colors.grey[400], fontSize: 14)),
+                  ],
+                ),
+              )
+            : ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                children: [
+                  if (pending.isNotEmpty) ...[
+                    const Text("UPCOMING", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 12)),
+                    const SizedBox(height: 10),
+                    ...pending.map((t) => _buildTaskCard(t)),
+                    const SizedBox(height: 20),
+                  ],
+                  
+                  if (completed.isNotEmpty) ...[
+                    const Text("COMPLETED", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 12)),
+                    const SizedBox(height: 10),
+                    ...completed.map((t) => _buildTaskCard(t)),
+                  ]
+                ],
+              ),
+        );
+      }
     );
   }
 
@@ -304,10 +263,8 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
     return Dismissible(
       key: Key(task.title + task.id.toString()),
       background: Container(color: Colors.red, alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 20), child: const Icon(Icons.delete, color: Colors.white)),
-      onDismissed: (dir) async {
-        final isar = await _isarService.db;
-        await isar.writeTxn(() async => await isar.academicTasks.delete(task.id));
-        _loadTasks();
+      onDismissed: (dir) {
+        Provider.of<TimetableProvider>(context, listen: false).deleteTask(task.id);
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -323,7 +280,10 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
         child: Row(
           children: [
             GestureDetector(
-              onTap: () => _toggleTask(task),
+              onTap: () {
+                 task.isCompleted = !task.isCompleted;
+                 Provider.of<TimetableProvider>(context, listen: false).updateTask(task);
+              },
               child: Container(
                 width: 28, height: 28,
                 decoration: BoxDecoration(

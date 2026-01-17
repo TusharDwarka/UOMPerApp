@@ -1,0 +1,180 @@
+{
+  "timetable": {
+    "locations": [
+      {
+        "location_name": "At Réduit (going to L'Escalier)",
+        "bus_route": "200",
+        "schedules": {
+          "weekdays": [
+            {"arrival_at_reduit": "06:14", "arrival_at_lescalier": "07:20"},
+            {"arrival_at_reduit": "06:51", "arrival_at_lescalier": "07:57","bus_name": "Dakar"},
+            {"arrival_at_reduit": "07:28", "arrival_at_lescalier": "08:34"},
+            {"arrival_at_reduit": "08:05", "arrival_at_lescalier": "09:11"},
+            {"arrival_at_reduit": "08:42", "arrival_at_lescalier": "09:48"},
+            {"arrival_at_reduit": "09:22", "arrival_at_lescalier": "10:28"},
+            {"arrival_at_reduit": "10:25", "arrival_at_lescalier": "11:28","bus_name": "Private"},
+            {"arrival_at_reduit": "10:42", "arrival_at_lescalier": "11:48","bus_name": "UBS"},
+            {"arrival_at_reduit": "11:22", "arrival_at_lescalier": "12:28","bus_name": "Napoleon"},
+            {"arrival_at_reduit": "11:40", "arrival_at_lescalier": "12:46","bus_name": "Perle de Mahebourg"},
+            {"arrival_at_reduit": "12:02", "arrival_at_lescalier": "13:08","bus_name": "Private"},
+            {"arrival_at_reduit": "12:42", "arrival_at_lescalier": "13:48","bus_name": "Dakar"},
+            {"arrival_at_reduit": "13:05", "arrival_at_lescalier": "14:28","bus_name": "Perle de Mahebourg"},
+            {"arrival_at_reduit": "14:02", "arrival_at_lescalier": "15:08","bus_name": "Napoleon"},
+            {"arrival_at_reduit": "14:42", "arrival_at_lescalier": "15:48", "bus_name": "UBS"},
+            {"arrival_at_reduit": "16:02", "arrival_at_lescalier": "17:08"},
+            {"arrival_at_reduit": "16:42", "arrival_at_lescalier": "17:48"},
+            {"arrival_at_reduit": "17:22", "arrival_at_lescalier": "18:28"},
+            {"arrival_at_reduit": "18:04", "arrival_at_lescalier": "19:10"}
+          ],
+          "saturdays": [
+            {"arrival_at_reduit": "06:14", "arrival_at_lescalier": "07:20"},
+            {"arrival_at_reduit": "06:54", "arrival_at_lescalier": "08:00"},
+            {"arrival_at_reduit": "07:34", "arrival_at_lescalier": "08:40"},
+            {"arrival_at_reduit": "08:14", "arrival_at_lescalier": "09:20"},
+            {"arrival_at_reduit": "08:54", "arrival_at_lescalier": "10:00"},
+            {"arrival_at_reduit": "09:34", "arrival_at_lescalier": "10:40"},
+            {"arrival_at_reduit": "10:14", "arrival_at_lescalier": "11:20"},
+            {"arrival_at_reduit": "10:54", "arrival_at_lescalier": "12:00"},
+            {"arrival_at_reduit": "11:34", "arrival_at_lescalier": "12:40"},
+            {"arrival_at_reduit": "12:14", "arrival_at_lescalier": "13:20"},
+            {"arrival_at_reduit": "12:54", "arrival_at_lescalier": "14:00"},
+            {"arrival_at_reduit": "13:34", "arrival_at_lescalier": "14:40"},
+            {"arrival_at_reduit": "14:14", "arrival_at_lescalier": "15:20"},
+            {"arrival_at_reduit": "14:54", "arrival_at_lescalier": "16:00"},
+            {"arrival_at_reduit": "15:34", "arrival_at_lescalier": "16:40"},
+            {"arrival_at_reduit": "16:14", "arrival_at_lescalier": "17:20"},
+            {"arrival_at_reduit": "16:54", "arrival_at_lescalier": "18:00"},
+            {"arrival_at_reduit": "17:34", "arrival_at_lescalier": "18:40"},
+            {"arrival_at_reduit": "18:04", "arrival_at_lescalier": "19:10"}
+          ],
+          "sundays_public_holidays": [
+            {"arrival_at_reduit": "06:44", "arrival_at_lescalier": "07:50"},
+            {"arrival_at_reduit": "07:44", "arrival_at_lescalier": "08:50"},
+            {"arrival_at_reduit": "08:44", "arrival_at_lescalier": "09:50"},
+            {"arrival_at_reduit": "09:44", "arrival_at_lescalier": "10:50"},
+            {"arrival_at_reduit": "10:44", "arrival_at_lescalier": "11:50"},
+            {"arrival_at_reduit": "11:44", "arrival_at_lescalier": "12:50"},
+            {"arrival_at_reduit": "12:44", "arrival_at_lescalier": "13:50"},
+            {"arrival_at_reduit": "13:44", "arrival_at_lescalier": "14:50"},
+            {"arrival_at_reduit": "14:44", "arrival_at_lescalier": "15:50"},
+            {"arrival_at_reduit": "15:44", "arrival_at_lescalier": "16:50"},
+            {"arrival_at_reduit": "16:44", "arrival_at_lescalier": "17:50"},
+            {"arrival_at_reduit": "17:44", "arrival_at_lescalier": "18:50"},
+            {"arrival_at_reduit": "18:44", "arrival_at_lescalier": "19:50"}
+          ]
+        }
+      },
+      {
+        "location_name": "At L'Escalier (going to Réduit)",
+        "bus_route": "200",
+        "schedules": {
+          "weekdays": [
+            {"departure_from_lescalier": "05:30", "arrival_at_reduit": "06:50"},
+            {"departure_from_lescalier": "05:52", "arrival_at_reduit": "07:12"},
+            {"departure_from_lescalier": "06:14", "arrival_at_reduit": "07:34"},
+            {"departure_from_lescalier": "06:36", "arrival_at_reduit": "07:56"},
+            {"departure_from_lescalier": "06:58", "arrival_at_reduit": "08:18"},
+            {"departure_from_lescalier": "07:20", "arrival_at_reduit": "08:40"},
+            {"departure_from_lescalier": "07:42", "arrival_at_reduit": "09:02"},
+            {"departure_from_lescalier": "08:04", "arrival_at_reduit": "09:24"},
+            {"departure_from_lescalier": "08:26", "arrival_at_reduit": "09:46"},
+            {"departure_from_lescalier": "09:14", "arrival_at_reduit": "10:34"},
+            {"departure_from_lescalier": "10:02", "arrival_at_reduit": "11:22"},
+            {"departure_from_lescalier": "10:50", "arrival_at_reduit": "12:10"},
+            {"departure_from_lescalier": "11:38", "arrival_at_reduit": "12:58"},
+            {"departure_from_lescalier": "12:26", "arrival_at_reduit": "13:46"},
+            {"departure_from_lescalier": "13:14", "arrival_at_reduit": "14:34"},
+            {"departure_from_lescalier": "14:02", "arrival_at_reduit": "15:22"},
+            {"departure_from_lescalier": "14:50", "arrival_at_reduit": "16:10"},
+            {"departure_from_lescalier": "15:38", "arrival_at_reduit": "16:58"},
+            {"departure_from_lescalier": "16:26", "arrival_at_reduit": "17:46"},
+            {"departure_from_lescalier": "17:18", "arrival_at_reduit": "18:38"}
+          ],
+          "saturdays": [
+            {"departure_from_lescalier": "05:30", "arrival_at_reduit": "06:50"},
+            {"departure_from_lescalier": "06:18", "arrival_at_reduit": "07:38"},
+            {"departure_from_lescalier": "07:06", "arrival_at_reduit": "08:26"},
+            {"departure_from_lescalier": "07:54", "arrival_at_reduit": "09:14"},
+            {"departure_from_lescalier": "08:42", "arrival_at_reduit": "10:02"},
+            {"departure_from_lescalier": "09:30", "arrival_at_reduit": "10:50"},
+            {"departure_from_lescalier": "10:18", "arrival_at_reduit": "11:38"},
+            {"departure_from_lescalier": "11:06", "arrival_at_reduit": "12:26"},
+            {"departure_from_lescalier": "11:54", "arrival_at_reduit": "13:14"},
+            {"departure_from_lescalier": "12:42", "arrival_at_reduit": "14:02"},
+            {"departure_from_lescalier": "13:30", "arrival_at_reduit": "14:50"},
+            {"departure_from_lescalier": "14:18", "arrival_at_reduit": "15:38"},
+            {"departure_from_lescalier": "15:06", "arrival_at_reduit": "16:26"},
+            {"departure_from_lescalier": "15:54", "arrival_at_reduit": "17:14"},
+            {"departure_from_lescalier": "16:42", "arrival_at_reduit": "18:02"},
+            {"departure_from_lescalier": "17:18", "arrival_at_reduit": "18:38"}
+          ],
+          "sundays_public_holidays": [
+            {"departure_from_lescalier": "06:00", "arrival_at_reduit": "07:20"},
+            {"departure_from_lescalier": "07:00", "arrival_at_reduit": "08:20"},
+            {"departure_from_lescalier": "08:00", "arrival_at_reduit": "09:20"},
+            {"departure_from_lescalier": "09:00", "arrival_at_reduit": "10:20"},
+            {"departure_from_lescalier": "10:00", "arrival_at_reduit": "11:20"},
+            {"departure_from_lescalier": "11:00", "arrival_at_reduit": "12:20"},
+            {"departure_from_lescalier": "12:00", "arrival_at_reduit": "13:20"},
+            {"departure_from_lescalier": "13:00", "arrival_at_reduit": "14:20"},
+            {"departure_from_lescalier": "14:00", "arrival_at_reduit": "15:20"},
+            {"departure_from_lescalier": "15:00", "arrival_at_reduit": "16:20"},
+            {"departure_from_lescalier": "16:00", "arrival_at_reduit": "17:20"},
+            {"departure_from_lescalier": "17:00", "arrival_at_reduit": "18:20"},
+            {"departure_from_lescalier": "17:00", "arrival_at_reduit": "18:20"}
+          ]
+        }
+      },
+      {
+        "location_name": "At Curepipe (going to L'Escalier)",
+        "bus_route": "10A",
+        "schedules": {
+          "weekdays_and_saturdays": [
+            {"departure_from_curepipe": "06:00", "arrival_at_lescalier": "06:40"},
+            {"departure_from_curepipe": "06:45", "arrival_at_lescalier": "07:25"},
+            {"departure_from_curepipe": "07:30", "arrival_at_lescalier": "08:10"},
+            {"departure_from_curepipe": "08:15", "arrival_at_lescalier": "08:55"},
+            {"departure_from_curepipe": "09:00", "arrival_at_lescalier": "09:40"},
+            {"departure_from_curepipe": "09:45", "arrival_at_lescalier": "10:25"},
+            {"departure_from_curepipe": "10:30", "arrival_at_lescalier": "11:10"},
+            {"departure_from_curepipe": "11:15", "arrival_at_lescalier": "11:55"},
+            {"departure_from_curepipe": "12:00", "arrival_at_lescalier": "12:40"},
+            {"departure_from_curepipe": "12:45", "arrival_at_lescalier": "13:25"},
+            {"departure_from_curepipe": "13:30", "arrival_at_lescalier": "14:10"},
+            {"departure_from_curepipe": "14:15", "arrival_at_lescalier": "14:55"},
+            {"departure_from_curepipe": "15:00", "arrival_at_lescalier": "15:40"},
+            {"departure_from_curepipe": "15:45", "arrival_at_lescalier": "16:25"},
+            {"departure_from_curepipe": "16:30", "arrival_at_lescalier": "17:10"},
+            {"departure_from_curepipe": "17:15", "arrival_at_lescalier": "17:55"},
+            {"departure_from_curepipe": "18:00", "arrival_at_lescalier": "18:40"}
+          ]
+        }
+      },
+      {
+        "location_name": "At L'Escalier (going to Curepipe)",
+        "bus_route": "10A",
+        "schedules": {
+          "weekdays_and_saturdays": [
+            {"departure_from_lescalier": "05:30", "arrival_at_curepipe": "06:10"},
+            {"departure_from_lescalier": "06:15", "arrival_at_curepipe": "06:55"},
+            {"departure_from_lescalier": "07:00", "arrival_at_curepipe": "07:40"},
+            {"departure_from_lescalier": "07:45", "arrival_at_curepipe": "08:25"},
+            {"departure_from_lescalier": "08:30", "arrival_at_curepipe": "09:10"},
+            {"departure_from_lescalier": "09:15", "arrival_at_curepipe": "09:55"},
+            {"departure_from_lescalier": "10:00", "arrival_at_curepipe": "10:40"},
+            {"departure_from_lescalier": "10:45", "arrival_at_curepipe": "11:25"},
+            {"departure_from_lescalier": "11:30", "arrival_at_curepipe": "12:10"},
+            {"departure_from_lescalier": "12:15", "arrival_at_curepipe": "12:55"},
+            {"departure_from_lescalier": "13:00", "arrival_at_curepipe": "13:40"},
+            {"departure_from_lescalier": "13:45", "arrival_at_curepipe": "14:25"},
+            {"departure_from_lescalier": "14:30", "arrival_at_curepipe": "15:10"},
+            {"departure_from_lescalier": "15:15", "arrival_at_curepipe": "15:55"},
+            {"departure_from_lescalier": "16:00", "arrival_at_curepipe": "16:40"},
+            {"departure_from_lescalier": "16:45", "arrival_at_curepipe": "17:25"},
+            {"departure_from_lescalier": "17:30", "arrival_at_curepipe": "18:10"}
+          ]
+        }
+      }
+    ]
+  }
+}

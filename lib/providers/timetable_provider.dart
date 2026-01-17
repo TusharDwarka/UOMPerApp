@@ -21,17 +21,49 @@ class TimetableProvider extends ChangeNotifier {
 
   List<AcademicTask> _tasks = [];
   List<AcademicTask> get tasks => _tasks;
+  
+  // Computed properties for Dashboard
+  List<AcademicTask> get pendingTasks => _tasks.where((t) => !t.isCompleted).toList();
+  List<AcademicTask> get completedTasks => _tasks.where((t) => t.isCompleted).toList();
 
   Future<void> loadSessions() async {
     final isar = await isarService.db;
+    
+    // FETCH in parallel to speed up?
+    // Actually Isar is fast enough, but let's be clean.
     _userSessions = await isar.classSessions.filter().isUserEqualTo(true).findAll();
     _friendSessions = await isar.classSessions.filter().isUserEqualTo(false).findAll();
-    
-    // Load Tasks too
-    _tasks = await isar.academicTasks.where().findAll();
+    _tasks = await isar.academicTasks.where().sortByDueDateDesc().findAll(); // Sort by default
     
     _calculateCommonFreeTime();
     notifyListeners();
+  }
+
+  // --- Task Management via Provider (Centralized) ---
+  
+  Future<void> addTask(String title, String subject, String type, DateTime due) async {
+     final isar = await isarService.db;
+     final newTask = AcademicTask(
+       title: title, 
+       subject: subject, 
+       type: type, 
+       dueDate: due, 
+       isCompleted: false
+     );
+     await isar.writeTxn(() async => await isar.academicTasks.put(newTask));
+     await loadSessions(); 
+  }
+
+  Future<void> updateTask(AcademicTask task) async {
+     final isar = await isarService.db;
+     await isar.writeTxn(() async => await isar.academicTasks.put(task));
+     await loadSessions();
+  }
+
+  Future<void> deleteTask(int id) async {
+     final isar = await isarService.db;
+     await isar.writeTxn(() async => await isar.academicTasks.delete(id));
+     await loadSessions();
   }
 
   Future<void> addSession(ClassSession session) async {

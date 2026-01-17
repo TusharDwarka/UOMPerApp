@@ -5,6 +5,7 @@ import '../providers/timetable_provider.dart';
 import '../services/bus_service.dart'; // import if needed
 import 'planning_screen.dart';
 import '../models/class_session.dart';
+import '../models/academic_task.dart';
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
@@ -112,9 +113,9 @@ class _DashboardTabState extends State<DashboardTab> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildStatusCard(todayClasses.length.toString(), "Classes", primaryBlue, true),
-                      _buildStatusCard("0", "Pending", textDark, false), // Placeholder for assignments
-                      _buildStatusCard("0", "Done", textDark, false),
+                      _buildStatusCard(timetable.tasks.length.toString(), "All Tasks", primaryBlue, false), // Or 'Classes' if preferred to keep classes
+                      _buildStatusCard(timetable.pendingTasks.length.toString(), "Pending", textDark, false),
+                      _buildStatusCard(timetable.completedTasks.length.toString(), "Done", const Color(0xFF4CAF50), timetable.completedTasks.isNotEmpty),
                     ],
                   ),
 
@@ -182,7 +183,11 @@ class _DashboardTabState extends State<DashboardTab> {
                           width: double.infinity,
                           child: ElevatedButton(
                             onPressed: () {
-                               Navigator.push(context, MaterialPageRoute(builder: (_) => const PlanningScreen()));
+                               if (nextClass != null) {
+                                 _showClassDetailsSheet(context, nextClass);
+                               } else {
+                                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No upcoming classes to view!")));
+                               }
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
@@ -192,7 +197,7 @@ class _DashboardTabState extends State<DashboardTab> {
                               elevation: 0,
                               textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
                             ),
-                            child: const Text("View Class Details"),
+                            child: const Text("View Class Details"), // Or "Interact" / "Options"
                           ),
                         )
                       ],
@@ -200,6 +205,18 @@ class _DashboardTabState extends State<DashboardTab> {
                   ),
 
                   const SizedBox(height: 34),
+                  
+                  if (timetable.pendingTasks.isNotEmpty) ...[
+                     Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Next Deadline", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1D1E))),
+                        ],
+                     ),
+                     const SizedBox(height: 16),
+                     _buildDeadlineCard(timetable.pendingTasks.first), // They are sorted by date in provider
+                     const SizedBox(height: 34),
+                  ],
 
                   // Today's Schedule Header
                   Row(
@@ -340,6 +357,132 @@ class _DashboardTabState extends State<DashboardTab> {
             child: Icon(Icons.more_horiz, color: textColor.withOpacity(0.7), size: 18),
           )
         ],
+      ),
+    );
+  }
+
+  Widget _buildDeadlineCard(dynamic task) {
+    // task is AcademicTask
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.redAccent.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+           Container(
+             padding: const EdgeInsets.all(12),
+             decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), shape: BoxShape.circle),
+             child: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+           ),
+           const SizedBox(width: 16),
+           Expanded(
+             child: Column(
+               crossAxisAlignment: CrossAxisAlignment.start,
+               children: [
+                 Text(task.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                 const SizedBox(height: 4),
+                 Text("Due: ${DateFormat('MMM d, h:mm a').format(task.dueDate)}", style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500)),
+               ],
+             )
+           ),
+           Container(
+             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
+             child: Text(task.subject, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
+           )
+        ],
+      ),
+    );
+  }
+
+  void _showClassDetailsSheet(BuildContext context, ClassSession session) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+            ),
+            const SizedBox(height: 20),
+            Text(session.subject, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            Text("${session.startTime} - ${session.endTime} • ${session.room}", style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+            const SizedBox(height: 30),
+            
+            const Text("Quick Actions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 15),
+            
+            Row(
+              children: [
+                Expanded(
+                  child: _buildActionButton(
+                    icon: Icons.assignment_add, 
+                    label: "Add Homework", 
+                    color: Colors.blueAccent,
+                    onTap: () {
+                      Navigator.pop(context);
+                      // Add task for this subject
+                      Provider.of<TimetableProvider>(context, listen: false).addTask(
+                        "Homework for ${session.subject}", 
+                        session.subject, 
+                        "Assignment", 
+                        DateTime.now().add(const Duration(days: 7))
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Homework added to Board!")));
+                    }
+                  ),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: _buildActionButton(
+                    icon: Icons.notification_add_rounded, 
+                    label: "Set Reminder", 
+                    color: Colors.orangeAccent,
+                    onTap: () {
+                       Navigator.pop(context);
+                       // Just a mock for now
+                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Reminder set for 15 min before!")));
+                    }
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 40),
+          ],
+        ),
+      )
+    );
+  }
+
+  Widget _buildActionButton({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.3))
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 8),
+            Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold))
+          ],
+        ),
       ),
     );
   }
