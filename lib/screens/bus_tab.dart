@@ -139,12 +139,12 @@ class _BusTabState extends State<BusTab> {
     // ... Curepipe routes can be added later or user can add them
   ];
 
-  int _expandedIndex = -1; // -1 means none expanded
+  int _expandedIndex = -1; 
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50], // Minimalist background
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -156,161 +156,258 @@ class _BusTabState extends State<BusTab> {
         itemCount: _locations.length,
         separatorBuilder: (c, i) => const SizedBox(height: 16),
         itemBuilder: (context, index) {
-          final loc = _locations[index];
-          final isExpanded = _expandedIndex == index;
-          
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: isExpanded 
-                ? [BoxShadow(color: Colors.blue.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 8))]
-                : [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-              border: isExpanded ? Border.all(color: Colors.blueAccent.withOpacity(0.3)) : null,
-            ),
-            child: Column(
-              children: [
-                // Header (Click to expand)
-                InkWell(
-                  onTap: () {
-                    setState(() {
-                      _expandedIndex = isExpanded ? -1 : index;
-                    });
-                  },
-                  borderRadius: BorderRadius.circular(20),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(color: isExpanded ? Colors.blueAccent : Colors.grey[100], borderRadius: BorderRadius.circular(14)),
-                          child: Icon(Icons.directions_bus_rounded, color: isExpanded ? Colors.white : Colors.black87),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(loc["bus_route"]!, style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-                              const SizedBox(height: 4),
-                              Text(loc["location_name"]!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
-                            ],
-                          ),
-                        ),
-                        Icon(isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, color: Colors.grey)
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Expanded Content (Schedule)
-                if (isExpanded)
-                  _buildScheduleView(loc["schedules"])
-              ],
-            ),
+          return BusRouteCard(
+            data: _locations[index],
+            isExpanded: _expandedIndex == index,
+            onExpand: () {
+               setState(() {
+                 _expandedIndex = (_expandedIndex == index) ? -1 : index;
+               });
+            },
           );
         },
       ),
     );
   }
+}
 
-  Widget _buildScheduleView(Map<String, dynamic> schedules) {
-    // Determine day type
-    final now = DateTime.now();
-    final day = DateFormat('EEEE').format(now);
-    List<dynamic> todaysSchedule = [];
-    String dayLabel = "";
+class BusRouteCard extends StatefulWidget {
+  final Map<String, dynamic> data;
+  final bool isExpanded;
+  final VoidCallback onExpand;
 
-    if (day == "Saturday") {
-      todaysSchedule = schedules["saturdays"] ?? [];
-      dayLabel = "Saturday Schedule";
-    } else if (day == "Sunday") {
-      todaysSchedule = schedules["sundays_public_holidays"] ?? [];
-      dayLabel = "Sunday/Holiday Schedule";
-    } else {
-      todaysSchedule = schedules["weekdays"] ?? [];
-      dayLabel = "Weekday Schedule";
+  const BusRouteCard({super.key, required this.data, required this.isExpanded, required this.onExpand});
+
+  @override
+  State<BusRouteCard> createState() => _BusRouteCardState();
+}
+
+class _BusRouteCardState extends State<BusRouteCard> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  
+  @override
+  void initState() {
+    super.initState();
+    // Default to current day: 0=Mon-Fri, 1=Sat, 2=Sun
+    int initialIndex = 0;
+    final weekday = DateTime.now().weekday;
+    if (weekday == 7) initialIndex = 2; // Sunday
+    else if (weekday == 6) initialIndex = 1; // Saturday
+    else initialIndex = 0; // Weekday
+
+    _tabController = TabController(length: 3, vsync: this, initialIndex: initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: widget.isExpanded 
+          ? [BoxShadow(color: Colors.blue.withOpacity(0.12), blurRadius: 24, offset: const Offset(0, 8))]
+          : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        border: widget.isExpanded ? Border.all(color: Colors.blueAccent.withOpacity(0.4), width: 1.5) : Border.all(color: Colors.transparent),
+      ),
+      child: Column(
+        children: [
+          // Header
+          InkWell(
+            onTap: widget.onExpand,
+            borderRadius: BorderRadius.circular(24),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: widget.isExpanded ? Colors.blueAccent : Colors.grey[50], 
+                      borderRadius: BorderRadius.circular(18)
+                    ),
+                    child: Icon(Icons.directions_bus_filled_rounded, color: widget.isExpanded ? Colors.white : Colors.blueGrey, size: 26),
+                  ),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                         Container(
+                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                           decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(6)),
+                           child: Text("Bus ${widget.data['bus_route']}", style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.w800, fontSize: 11)),
+                         ),
+                         const SizedBox(height: 6),
+                         Text(widget.data['location_name'], style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Colors.black87, height: 1.2)),
+                      ],
+                    ),
+                  ),
+                  Icon(widget.isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, color: Colors.grey[400])
+                ],
+              ),
+            ),
+          ),
+
+          // Content
+          if (widget.isExpanded) ...[
+            Container(height: 1, color: Colors.grey[100]),
+            // Tabs
+            Container(
+              height: 45,
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                indicator: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.white,
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]
+                ),
+                labelColor: Colors.blue[800],
+                unselectedLabelColor: Colors.grey[600],
+                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                tabs: const [
+                  Tab(text: "Weekdays"),
+                  Tab(text: "Saturday"),
+                  Tab(text: "Sunday"),
+                ],
+              ),
+            ),
+            
+            // Tab View (using AnimatedBuilder to rebuild on tab change or just setState)
+            // But TabBarView has size issues in Column. Use AnimatedBuilder on controller.
+            AnimatedBuilder(
+              animation: _tabController,
+              builder: (context, _) {
+                 final index = _tabController.index;
+                 final schedules = widget.data['schedules'];
+                 List<dynamic> list = [];
+                 if (index == 0) list = schedules['weekdays'] ?? [];
+                 else if (index == 1) list = schedules['saturdays'] ?? [];
+                 else list = schedules['sundays_public_holidays'] ?? [];
+                 
+                 // Check if this is TODAY relative to real time to verify "Next Bus" logic
+                 // Only highlight "Next Bus" if the selected tab matches TODAY's real day.
+                 final now = DateTime.now();
+                 final weekday = now.weekday;
+                 bool isTodayTab = false;
+                 if (weekday <= 5 && index == 0) isTodayTab = true;
+                 else if (weekday == 6 && index == 1) isTodayTab = true;
+                 else if (weekday == 7 && index == 2) isTodayTab = true;
+
+                 return _buildTimeGrid(list, isTodayTab);
+              }
+            ),
+            const SizedBox(height: 20),
+          ]
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimeGrid(List<dynamic> times, bool isTodayTab) {
+    if (times.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(20),
+        child: Text("No schedule available.", style: TextStyle(color: Colors.grey)),
+      );
     }
+    
+    // Find next bus for highlighting
+    final now = DateTime.now();
+    final currentMinutes = now.hour * 60 + now.minute;
+    String? nextBusTime;
 
-    // Find next bus
-    final timeFormat = DateFormat("HH:mm");
-    final currentTimeStr = timeFormat.format(now);
-    // Convert to minutes for comparison
-    int currentMinutes = _toMinutes(currentTimeStr);
-    
-    Map<String, dynamic>? nextBus;
-    String nextBusTime = "";
-    
-    for (var bus in todaysSchedule) {
-      // Keys might differ: "arrival_at_reduit" or "departure_from_lescalier"
-      // We assume the FIRST key is the start time of interest for sorting? 
-      // Or we check the "departure" key explicitly if possible, but the JSON uses varied keys.
-      // Let's just grab the first value as "time" for simplicity or try to parse keys.
-      String timeKey = bus.keys.firstWhere((k) => k != "bus_name", orElse: () => "");
-      String timeStr = bus[timeKey] ?? "00:00";
-      
-      if (_toMinutes(timeStr) > currentMinutes) {
-        nextBus = bus;
-        nextBusTime = timeStr;
-        break;
+    if (isTodayTab) {
+      for (var bus in times) {
+         // Flexible key extraction
+         String timeKey = bus.keys.firstWhere((k) => k != "bus_name", orElse: () => "");
+         String timeStr = bus[timeKey]?.toString() ?? "00:00";
+         if (_toMinutes(timeStr) > currentMinutes) {
+           nextBusTime = timeStr;
+           break;
+         }
       }
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        alignment: WrapAlignment.start,
+        children: times.map<Widget>((bus) {
+           String timeKey = bus.keys.firstWhere((k) => k != "bus_name", orElse: () => "");
+           String timeStr = bus[timeKey]?.toString() ?? "";
+           String? busName = bus["bus_name"];
+           
+           bool isNext = (timeStr == nextBusTime);
+           bool isPast = isTodayTab && (_toMinutes(timeStr) <= currentMinutes);
+
+           return _buildBusChip(timeStr, busName, isNext, isPast);
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildBusChip(String time, String? name, bool isNext, bool isPast) {
+    // Style
+    Color bg = Colors.white;
+    Color border = Colors.grey[200]!;
+    Color text = Colors.black87;
+
+    if (isNext) {
+      bg = const Color(0xFF2962FF); // Premium Blue
+      border = const Color(0xFF2962FF);
+      text = Colors.white;
+    } else if (isPast) {
+      bg = Colors.grey[50]!;
+      text = Colors.grey[400]!;
+    } else {
+      // Future but not next
+      border = Colors.blue.withOpacity(0.3);
+      text = Colors.blue[900]!;
+    }
+
+    return Container(
+      width: name != null ? 100 : 80, // Wider if has name
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+        boxShadow: isNext ? [BoxShadow(color: const Color(0xFF2962FF).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 4))] : null
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Divider(color: Colors.grey[200]),
-          const SizedBox(height: 10),
-          Row(
-             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-             children: [
-               Text(dayLabel, style: TextStyle(color: Colors.grey[500], fontWeight: FontWeight.bold, fontSize: 12)),
-               if (nextBus != null)
-                 Container(
-                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                   decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(8)),
-                   child: Text("Next: $nextBusTime", style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.bold, fontSize: 12)),
-                 )
-             ],
-          ),
-          const SizedBox(height: 15),
-          
-          // List of times (Horizontal scroll or wrapped)
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: todaysSchedule.map<Widget>((bus) {
-               String timeKey = bus.keys.firstWhere((k) => k != "bus_name", orElse: () => "");
-               String timeStr = bus[timeKey] ?? "";
-               bool isPast = _toMinutes(timeStr) < currentMinutes;
-               bool isNext = timeStr == nextBusTime;
-               
-               return Container(
-                 width: 80,
-                 padding: const EdgeInsets.symmetric(vertical: 10),
-                 decoration: BoxDecoration(
-                   color: isNext ? Colors.blueAccent : (isPast ? Colors.grey[100] : Colors.white),
-                   borderRadius: BorderRadius.circular(12),
-                   border: Border.all(color: isNext ? Colors.blueAccent : Colors.grey[300]!),
-                 ),
-                 child: Column(
-                   children: [
-                     Text(timeStr, style: TextStyle(
-                       fontWeight: FontWeight.bold, 
-                       color: isNext ? Colors.white : (isPast ? Colors.grey : Colors.black87)
-                     )),
-                     if (bus["bus_name"] != null)
-                       Text(bus["bus_name"], style: TextStyle(fontSize: 9, color: isNext ? Colors.white70 : Colors.grey))
-                   ],
-                 ),
-               );
-            }).toList(),
-          )
+          Text(time, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: text)),
+          if (name != null) ...[
+             const SizedBox(height: 4),
+             Container(
+               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+               decoration: BoxDecoration(
+                 color: isNext ? Colors.white.withOpacity(0.2) : Colors.orange.withOpacity(0.1),
+                 borderRadius: BorderRadius.circular(8)
+               ),
+               child: Text(
+                 name, 
+                 textAlign: TextAlign.center,
+                 maxLines: 1, overflow: TextOverflow.ellipsis,
+                 style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isNext ? Colors.white : Colors.amber[900])
+               ),
+             )
+          ]
         ],
       ),
     );
