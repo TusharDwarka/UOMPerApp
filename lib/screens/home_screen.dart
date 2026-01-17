@@ -3,6 +3,7 @@ import 'dashboard_tab.dart';
 import 'schedule_tab.dart';
 import 'academic_tab.dart';
 import 'bus_tab.dart';
+import 'todo_board_tab.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,8 +18,9 @@ class _HomeScreenState extends State<HomeScreen> {
   static const List<Widget> _pages = <Widget>[
     DashboardTab(),
     ScheduleTab(),
-    AcademicTab(), // Formerly Calendar/Notes
-    BusTab(), // Transport
+    AcademicTab(), 
+    BusTab(), 
+    TodoBoardTab(), // 5th Tab
   ];
 
   void _onItemTapped(int index) {
@@ -67,12 +69,16 @@ class _HomeScreenState extends State<HomeScreen> {
               label: 'Schedule',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_month_rounded),
-              label: 'Academic',
+              icon: Icon(Icons.calendar_month_rounded), // Reverted back to Calendar for clarity as 3rd tab
+              label: 'Calendar',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.directions_bus_filled_rounded),
               label: 'Transport',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.assignment_turned_in_rounded), // Board Icon
+              label: 'Board',
             ),
           ],
         ),

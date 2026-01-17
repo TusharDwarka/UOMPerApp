@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:isar_community/isar.dart';
 import '../models/class_session.dart';
+import '../models/academic_task.dart';
 import '../services/isar_service.dart';
 
 class TimetableProvider extends ChangeNotifier {
@@ -18,10 +19,16 @@ class TimetableProvider extends ChangeNotifier {
   List<ClassSession> get friendSessions => _friendSessions;
   Map<String, List<String>> get commonFreeTime => _commonFreeTime;
 
+  List<AcademicTask> _tasks = [];
+  List<AcademicTask> get tasks => _tasks;
+
   Future<void> loadSessions() async {
     final isar = await isarService.db;
     _userSessions = await isar.classSessions.filter().isUserEqualTo(true).findAll();
     _friendSessions = await isar.classSessions.filter().isUserEqualTo(false).findAll();
+    
+    // Load Tasks too
+    _tasks = await isar.academicTasks.where().findAll();
     
     _calculateCommonFreeTime();
     notifyListeners();

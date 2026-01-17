@@ -282,6 +282,19 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
                                 // Events
                                 ...events.map((event) => _buildEventBlock(event)).toList(),
+
+                                // TASKS from Academic/To-Do Tab
+                                ...timetable.tasks.where((t) => isSameDay(t.dueDate, _selectedDate)).map((task) {
+                                  // For tasks, we need a time. If user didn't specify time (just date), maybe show at top or default?
+                                  // For now let's assume tasks are "due" at a time, or we just put them in a dedicated slot
+                                  // If the task has no time component in UI yet, we can't place it on the grid accurately.
+                                  // HOWEVER, the user asked "added to the TIMETABLE SECTION".
+                                  // Let's check AcademicTask. It has `dueDate`. 
+                                  // Isar DateTime includes time.
+                                  
+                                  // Let's render them.
+                                  return _buildTaskBlock(task);
+                                }).toList(),
                                 
                                 // Current Time Line (Red)
                                 if (DateFormat('EEEE').format(DateTime.now()) == DateFormat('EEEE').format(_selectedDate))
@@ -302,6 +315,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
     );
   }
 
+  // Reuse header...
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -355,12 +369,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
                  icon: const Icon(Icons.cloud_download_outlined, color: Colors.blueGrey),
                  tooltip: "Import Timetable",
                  onPressed: () {
-                   // Import Timetable Trigger
-                   final startOfSemester = DateTime(2026, 1, 19); // 19 Jan 2026
-                   
-                   // JSON DATA (Hardcoded as requested for "Use that file")
-                   // In a real app we might read file, but for now passing the structure
-                   // We need to pass the Map.
+                   final startOfSemester = DateTime(2026, 1, 19); 
                    final jsonMap = {
                       "timetable": {
                         "Monday": [
@@ -416,7 +425,6 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
   Widget _buildWeekStrip() {
     final now = DateTime.now();
-    // Generate dates: 3 days back + 3 days forward to center today roughly or just next 7 days
     final weekDates = List.generate(7, (index) => now.add(Duration(days: index))); 
 
     return Container(
@@ -444,7 +452,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
                   onTap: () => setState(() => _selectedDate = date),
                   child: Container(
                     margin: const EdgeInsets.only(right: 20),
-                    padding: const EdgeInsets.all(12), // Touch area
+                    padding: const EdgeInsets.all(12), 
                     decoration: isSelected 
                       ? BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(12))
                       : null,
@@ -461,6 +469,57 @@ class _ScheduleTabState extends State<ScheduleTab> {
             ),
           )
         ],
+      ),
+    );
+  }
+
+  Widget _buildTaskBlock(dynamic task) {
+    // Assuming task is AcademicTask
+    // If user didn't set time, we might default to 8am or use the stored DateTime time
+    // Isar DateTime usually keeps time.
+    final time = task.dueDate;
+    final startMinutes = time.hour * 60 + time.minute;
+    final startOffset = startMinutes - (_startHour * 60);
+
+    // Assume tasks take 1 hour block for visualization
+    final duration = 60; 
+
+    if (startOffset < 0) return const SizedBox(); // Before 7am not shown
+
+    final top = (startOffset / 60) * _hourHeight;
+    final height = (duration / 60) * _hourHeight;
+
+    return Positioned(
+      top: top,
+      left: 60, // Indent to distinguish from classes? Or mix in?
+      right: 24,
+      height: height - 10,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: Colors.redAccent, width: 2), // Red border for deadlines
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(color: Colors.redAccent.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
+          ]
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text("DUE: ${task.title}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.redAccent)),
+                  Text(task.subject, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                ],
+              ),
+            )
+          ],
+        ),
       ),
     );
   }
