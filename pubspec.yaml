@@ -33,6 +33,26 @@ dev_dependencies:
   flutter_lints: ^2.0.3
   build_runner: ^2.4.6
   isar_community_generator: ^3.2.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.0
+
+flutter_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/branding/icon.png"
+  adaptive_icon_background: "#1A237E" # Deep Indigo background for adaptive
+  adaptive_icon_foreground: "assets/branding/icon.png"
+
+flutter_native_splash:
+  color: "#ffffff"
+  image: "assets/branding/splash.png"
+  android_12:
+    image: "assets/branding/splash.png"
+    color: "#ffffff"
+    icon_background_color: "#ffffff"
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/
+
