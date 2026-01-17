@@ -1,0 +1,182 @@
+{
+    "timetable": {
+      "Monday": [
+        {
+          "day": "Monday",
+          "startTime": "08:30",
+          "endTime": "10:30",
+          "moduleCode": "ICDT 1202Y(1)",
+          "moduleName": "LECTURE",
+          "location": "Room 1.16",
+          "group": "A & B",
+          "mode": "CAMPUS",
+          "weeks": "1,3,5,7,9,11"
+        },
+        {
+          "day": "Monday",
+          "startTime": "10:30",
+          "endTime": "12:30",
+          "moduleCode": "ICDT 1016Y(1)",
+          "moduleName": "LECTURE",
+          "location": "Room 1.16",
+          "group": "A & B",
+          "mode": "CAMPUS",
+          "weeks": "1,3,5,7,9,11"
+        }
+      ],
+      "Tuesday": [
+        {
+          "day": "Tuesday",
+          "startTime": "08:30",
+          "endTime": "12:30",
+          "moduleCode": "ICDT 1201Y(1)",
+          "moduleName": "LAB",
+          "location": "CITS FoA Lab 2B",
+          "group": "A1",
+          "mode": "CAMPUS"
+        },
+        {
+          "day": "Tuesday",
+          "startTime": "12:30",
+          "endTime": "16:30",
+          "moduleCode": "ICDT 1206Y(1)",
+          "moduleName": "LAB(A1)",
+          "location": "CITS FoA Lab 2B",
+          "group": "A2",
+          "mode": "CAMPUS"
+        }
+      ],
+      "Wednesday": [
+        {
+          "day": "Wednesday",
+          "startTime": "08:30",
+          "endTime": "10:30",
+          "moduleCode": "ICT 1207 Y",
+          "moduleName": "TUTORIAL",
+          "location": "Room 2.10",
+          "group": "A1",
+          "mode": "CAMPUS",
+          "weeks": "1,3,5,7,9,11"
+        },
+        {
+          "day": "Wednesday",
+          "startTime": "11:30",
+          "endTime": "15:30",
+          "moduleCode": "ICDT 1202Y(1)",
+          "moduleName": "LAB",
+          "location": "ETB Lab",
+          "group": "A1",
+          "mode": "CAMPUS"
+        }
+      ],
+      "Thursday": [
+        {
+          "day": "Thursday",
+          "startTime": "08:30",
+          "endTime": "10:30",
+          "moduleCode": "ICT 1207 Y",
+          "moduleName": "LECTURE",
+          "location": "Room 1.16",
+          "group": "A & B",
+          "mode": "CAMPUS",
+          "weeks": "1,3,5,7,9,11"
+        },
+        {
+          "day": "Thursday",
+          "startTime": "10:30",
+          "endTime": "12:30",
+          "moduleCode": "ICT 1206Y",
+          "moduleName": "LECTURE",
+          "location": "Room 1.16",
+          "group": "A & B",
+          "mode": "CAMPUS",
+          "weeks": "1,3,5,7,9,11"
+        },
+        {
+          "day": "Thursday",
+          "startTime": "12:30",
+          "endTime": "15:00",
+          "moduleCode": "ICT 1208Y(1)",
+          "moduleName": "TUTORIAL",
+          "location": "Room 1.16",
+          "group": "B1",
+          "mode": "CAMPUS",
+          "weeks": "1,3,5,7,9,11"
+        }
+      ],
+      "Friday": [
+        {
+          "day": "Friday",
+          "startTime": "08:30",
+          "endTime": "10:30",
+          "moduleCode": "ICDT 1201Y(1)",
+          "moduleName": "LECTURE",
+          "location": "Room 1.16",
+          "group": "A & B",
+          "mode": "CAMPUS",
+          "weeks": "1,3,5,7,9,11"
+        },
+        {
+          "day": "Friday",
+          "startTime": "10:30",
+          "endTime": "12:30",
+          "moduleCode": "ICT 1208Y(1)",
+          "moduleName": "LECTURE",
+          "location": "Room 1.16",
+          "group": "A & B",
+          "mode": "CAMPUS",
+          "weeks": "1,3,5,7,9,11"
+        },
+        {
+          "day": "Friday",
+          "startTime": "12:30",
+          "endTime": "15:00",
+          "moduleCode": "ICT 1208Y(1)",
+          "moduleName": "TUTORIAL",
+          "location": "Room 1.15",
+          "group": "A2",
+          "mode": "CAMPUS",
+          "weeks": "1,3,5,7,9,11"
+        }
+      ],
+      "Saturday": []
+    },
+    "modules": [
+      {
+        "moduleCode": "ICDT 1016Y(1)",
+        "moduleName": "Communication and Business Skills for IT",
+        "resourcePerson": "Mr. Chutoo Anwar Rashid / Mrs. Durgahee Bibi Sehnaaz Begum",
+        "email": "a.chutoo@uom.ac.mu / b.durgahee@uom.ac.mu"
+      },
+      {
+        "moduleCode": "ICDT 1201Y(1)",
+        "moduleName": "Computer Programming",
+        "resourcePerson": "Dr. Pudaruth Sameerchand / Mrs. Ramnarain-Seetohul Vidasha / Mr. Sathan Selvanaden",
+        "email": "s.pudaruth@uom.ac.mu / v.seetohul@uom.ac.mu / s.sathan@uom.ac.mu"
+      },
+      {
+        "moduleCode": "ICT 1206Y(1)",
+        "moduleName": "Computer Organisation and Architecture",
+        "resourcePerson": "Dr. Doomun Mohammad Razvi / Dr. Sonah Bikash",
+        "email": "r.doomun@uom.ac.mu / bsonah@uom.ac.mu"
+      },
+      {
+        "moduleCode": "ICT 1208Y(1)",
+        "moduleName": "Software Engineering Principles",
+        "resourcePerson": "Dr. Mungur Avinash Utam",
+        "email": "a.mungur@uom.ac.mu"
+      },
+      {
+        "moduleCode": "ICT 1207(1)",
+        "moduleName": "Computational Mathematics",
+        "resourcePerson": "Dr. Pavaday Narainsamy",
+        "email": "n.pavaday@uom.ac.mu"
+      },
+      {
+        "moduleCode": "ICDT 1202Y(1)",
+        "moduleName": "Database Systems",
+        "resourcePerson": "Mrs. Cheerkoot-Jalim Sudha",
+        "email": "s.cheerkoot@uom.ac.mu"
+      }
+    ]
+  }

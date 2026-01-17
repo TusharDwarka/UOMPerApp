@@ -11,14 +11,23 @@ class TimetableProvider extends ChangeNotifier {
   List<ClassSession> _userSessions = [];
   List<ClassSession> _friendSessions = [];
   
-  // A map of day -> list of free time strings (e.g., "Monday" -> ["08:00 - 09:30", "12:30 - 13:00"])
-  Map<String, List<String>> _commonFreeTime = {};
+  Map<String, List<CommonFreeSlot>> _commonFreeTime = {};
+  Map<String, List<CommonFreeSlot>> get commonFreeTime => _commonFreeTime;
 
-  TimetableProvider(this.isarService);
+  // Getters
+  // If swapped, return Friend sessions as "User" sessions (Main view)
+  List<ClassSession> get userSessions => _isSwapped ? _friendSessions : _userSessions;
+  
+  // If swapped, return User sessions as "Friend" sessions (Ghost view)
+  List<ClassSession> get friendSessions => _isSwapped ? _userSessions : _friendSessions;
+  
+  bool _isSwapped = false;
+  bool get isSwapped => _isSwapped;
 
-  List<ClassSession> get userSessions => _userSessions;
-  List<ClassSession> get friendSessions => _friendSessions;
-  Map<String, List<String>> get commonFreeTime => _commonFreeTime;
+  void togglePerspective() {
+    _isSwapped = !_isSwapped;
+    notifyListeners();
+  }
 
   List<AcademicTask> _tasks = [];
   List<AcademicTask> get tasks => _tasks;
@@ -27,21 +36,18 @@ class TimetableProvider extends ChangeNotifier {
   List<AcademicTask> get pendingTasks => _tasks.where((t) => !t.isCompleted).toList();
   List<AcademicTask> get completedTasks => _tasks.where((t) => t.isCompleted).toList();
 
+  TimetableProvider(this.isarService);
+
   Future<void> loadSessions() async {
     final isar = await isarService.db;
-    
-    // FETCH in parallel to speed up?
-    // Actually Isar is fast enough, but let's be clean.
     _userSessions = await isar.classSessions.filter().isUserEqualTo(true).findAll();
     _friendSessions = await isar.classSessions.filter().isUserEqualTo(false).findAll();
-    _tasks = await isar.academicTasks.where().sortByDueDateDesc().findAll(); // Sort by default
-    
+    _tasks = await isar.academicTasks.where().sortByDueDateDesc().findAll();
     _calculateCommonFreeTime();
     notifyListeners();
   }
 
-  // --- Helper Methods to reduce UI logic ---
-  
+  // Helpers
   bool isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
@@ -56,13 +62,23 @@ class TimetableProvider extends ChangeNotifier {
        }
     }).toList();
   }
-
+  
   List<AcademicTask> getTasksForDay(DateTime date) {
     return _tasks.where((t) => isSameDay(t.dueDate, date)).toList();
   }
 
-  // --- Task Management via Provider (Centralized) ---
-  
+  // Friend Helpers
+  List<ClassSession> getFriendEventsForDay(DateTime date) {
+    final dayName = DateFormat('EEEE').format(date);
+    return _friendSessions.where((s) => s.day == dayName).toList();
+  }
+
+  List<CommonFreeSlot> getFreeSlotsForDay(DateTime date) {
+    final dayName = DateFormat('EEEE').format(date);
+    return _commonFreeTime[dayName] ?? [];
+  }
+
+  // Task Management
   Future<void> addTask(String title, String subject, String type, DateTime due) async {
      final isar = await isarService.db;
      final newTask = AcademicTask(
@@ -97,6 +113,7 @@ class TimetableProvider extends ChangeNotifier {
      await loadSessions();
   }
 
+  // Session Management
   Future<void> addSession(ClassSession session) async {
     final isar = await isarService.db;
     await isar.writeTxn(() async {
@@ -104,7 +121,7 @@ class TimetableProvider extends ChangeNotifier {
     });
     await loadSessions();
   }
-
+  
   Future<void> deleteSession(int id) async {
     final isar = await isarService.db;
     await isar.writeTxn(() async {
@@ -113,136 +130,120 @@ class TimetableProvider extends ChangeNotifier {
     await loadSessions();
   }
 
-  // Import Semester Logic
-  Future<void> importSemester(Map<String, dynamic> json, DateTime startOfWeek1) async {
-    final isar = await isarService.db;
-    final timetable = json['timetable'] as Map<String, dynamic>;
-    final faceToFaceWeeks = [1, 2, 3, 6, 10];
-    final totalWeeks = 10;
-    
-    await isar.writeTxn(() async {
-      // Loop through 10 weeks
-      for (int week = 1; week <= totalWeeks; week++) {
-        // Calculate the Monday of this week
-        final weekMonday = startOfWeek1.add(Duration(days: (week - 1) * 7));
-        
-        // Loop through days in the JSON template
-        timetable.forEach((dayName, sessions) {
-          final sessionsList = sessions as List<dynamic>;
-          
-          for (var s in sessionsList) {
-             // Determine Mode/Location
-             bool isF2F = faceToFaceWeeks.contains(week);
-             String room = s['location'] ?? 'Unknown';
-             String mode = s['mode'] ?? 'CAMPUS'; // "CAMPUS" or "ONLINE"
-             
-             if (mode == "ONLINE") {
-               room = "Online";
-             } else {
-               if (!isF2F) {
-                 room = "Online";
-               }
-             }
+  // Friend Load
+  Future<void> loadFriendTimetable() async {
+     // Hardcoded CSS1Y1 data as requested
+     final json = {
+        "timetable": {
+          "Monday": [
+            {"day": "Monday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICDT 1202Y(1)", "moduleName": "LECTURE", "location": "Room 1.16", "mode": "CAMPUS"},
+            {"day": "Monday", "startTime": "10:30", "endTime": "12:30", "moduleCode": "ICDT 1016Y(1)", "moduleName": "LECTURE", "location": "Room 1.16", "mode": "CAMPUS"}
+          ],
+          "Tuesday": [
+            {"day": "Tuesday", "startTime": "08:30", "endTime": "12:30", "moduleCode": "ICDT 1201Y(1)", "moduleName": "LAB", "location": "CITS FoA Lab 2B", "mode": "CAMPUS"},
+            {"day": "Tuesday", "startTime": "12:30", "endTime": "16:30", "moduleCode": "ICDT 1206Y(1)", "moduleName": "LAB(A1)", "location": "CITS FoA Lab 2B", "mode": "CAMPUS"}
+          ],
+          "Wednesday": [
+            {"day": "Wednesday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICT 1207 Y", "moduleName": "TUTORIAL", "location": "Room 2.10", "mode": "CAMPUS"},
+            {"day": "Wednesday", "startTime": "11:30", "endTime": "15:30", "moduleCode": "ICDT 1202Y(1)", "moduleName": "LAB", "location": "ETB Lab", "mode": "CAMPUS"}
+          ],
+          "Thursday": [
+            {"day": "Thursday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICT 1207 Y", "moduleName": "LECTURE", "location": "Room 1.16", "mode": "CAMPUS"},
+            {"day": "Thursday", "startTime": "10:30", "endTime": "12:30", "moduleCode": "ICT 1206Y", "moduleName": "LECTURE", "location": "Room 1.16", "mode": "CAMPUS"},
+            {"day": "Thursday", "startTime": "12:30", "endTime": "15:00", "moduleCode": "ICT 1208Y(1)", "moduleName": "TUTORIAL", "location": "Room 1.16", "mode": "CAMPUS"}
+          ],
+          "Friday": [
+            {"day": "Friday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICDT 1201Y(1)", "moduleName": "LECTURE", "location": "Room 1.16", "mode": "CAMPUS"},
+            {"day": "Friday", "startTime": "10:30", "endTime": "12:30", "moduleCode": "ICT 1208Y(1)", "moduleName": "LECTURE", "location": "Room 1.16", "mode": "CAMPUS"},
+            {"day": "Friday", "startTime": "12:30", "endTime": "15:00", "moduleCode": "ICT 1208Y(1)", "moduleName": "TUTORIAL", "location": "Room 1.15", "mode": "CAMPUS"}
+          ]
+        }
+     };
 
-             // Calculate specific date
-             int dayOffset = _getDayOffset(dayName);
-             final specificDate = weekMonday.add(Duration(days: dayOffset));
-             
-             // Create Session for this SPECIFIC date
-             final session = ClassSession(
+     final isar = await isarService.db;
+     await isar.writeTxn(() async {
+       // Clear old friend sessions
+       await isar.classSessions.filter().isUserEqualTo(false).deleteAll();
+       
+       // Import new
+       final timetable = json['timetable'] as Map<String, dynamic>;
+       timetable.forEach((day, sessions) {
+         for (var s in sessions as List<dynamic>) {
+            final session = ClassSession(
                subject: s['moduleName'],
                startTime: s['startTime'],
                endTime: s['endTime'],
-               day: dayName,
-               room: room,
+               day: day,
+               room: s['location'],
                moduleCode: s['moduleCode'] ?? '',
-               isUser: true,
-               specificDate: specificDate
-             );
-             
-             isar.classSessions.put(session);
-          }
-        });
-      }
-    });
-    await loadSessions();
+               isUser: false, // Compares as Friend
+            );
+            isar.classSessions.put(session);
+         }
+       });
+     });
+     
+     await loadSessions();
   }
-
-  int _getDayOffset(String day) {
-    switch (day) {
-      case 'Monday': return 0;
-      case 'Tuesday': return 1;
-      case 'Wednesday': return 2;
-      case 'Thursday': return 3;
-      case 'Friday': return 4;
-      case 'Saturday': return 5;
-      case 'Sunday': return 6;
-      default: return 0;
-    }
-  }
-
-  // --- Logic for Free Time Comparison ---
 
   void _calculateCommonFreeTime() {
     _commonFreeTime.clear();
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
     
+    // Bounds: 8:00 (480) to 16:00 (960)
+    final timeBounds = _TimeInterval(start: 480, end: 960);
+    
     for (var day in days) {
-      // Get all intervals for this day
-      final dailyUserSessions = _userSessions.where((s) => s.day == day).toList();
-      final dailyFriendSessions = _friendSessions.where((s) => s.day == day).toList();
+      final dailyUser = _userSessions.where((s) => s.day == day).toList();
+      final dailyFriend = _friendSessions.where((s) => s.day == day).toList();
       
-      final busyIntervals = <_TimeInterval>[];
+      final busy = <_TimeInterval>[];
+      for (var s in [...dailyUser, ...dailyFriend]) {
+        busy.add(_TimeInterval(start: _timeToMinutes(s.startTime), end: _timeToMinutes(s.endTime)));
+      }
+      busy.sort((a,b) => a.start.compareTo(b.start));
       
-      for (var s in [...dailyUserSessions, ...dailyFriendSessions]) {
-        busyIntervals.add(_TimeInterval(
-          start: _timeToMinutes(s.startTime),
-          end: _timeToMinutes(s.endTime),
-        ));
-      }
-
-      // Sort by start time
-      busyIntervals.sort((a, b) => a.start.compareTo(b.start));
-
-      // Merge overlapping intervals
-      final mergedIntervals = <_TimeInterval>[];
-      if (busyIntervals.isNotEmpty) {
-        var current = busyIntervals.first;
-        for (var i = 1; i < busyIntervals.length; i++) {
-          if (busyIntervals[i].start < current.end) {
-            // Overlop or adjacent
-            current.end = busyIntervals[i].end > current.end ? busyIntervals[i].end : current.end;
-          } else {
-            mergedIntervals.add(current);
-            current = busyIntervals[i];
-          }
+      // Merge
+      final merged = <_TimeInterval>[];
+      if (busy.isNotEmpty) {
+        var current = busy.first;
+        for (var i = 1; i < busy.length; i++) {
+           if (busy[i].start < current.end) {
+             current.end = busy[i].end > current.end ? busy[i].end : current.end;
+           } else {
+             merged.add(current);
+             current = busy[i];
+           }
         }
-        mergedIntervals.add(current);
+        merged.add(current);
       }
-
-      // Find gaps between 08:00 (480) and 16:00 (960)
-      final freeSlots = <String>[];
-      int currentPointer = 480; // 8:00 AM
-      const endOfDay = 960;     // 4:00 PM
-
-      for (var interval in mergedIntervals) {
-        if (interval.start > currentPointer) {
-          // Found a gap
-          freeSlots.add("${_minutesToTime(currentPointer)} - ${_minutesToTime(interval.start)}");
-        }
-        currentPointer = interval.end > currentPointer ? interval.end : currentPointer;
+      
+      // Invert for Free Time
+      final freeSlots = <CommonFreeSlot>[];
+      int pointer = timeBounds.start;
+      
+      for (var block in merged) {
+         if (block.start > pointer) {
+           // Gap found
+           freeSlots.add(CommonFreeSlot(start: pointer, end: block.start));
+         }
+         pointer = block.end > pointer ? block.end : pointer;
       }
-
-      if (currentPointer < endOfDay) {
-        freeSlots.add("${_minutesToTime(currentPointer)} - ${_minutesToTime(endOfDay)}");
+      
+      if (pointer < timeBounds.end) {
+        freeSlots.add(CommonFreeSlot(start: pointer, end: timeBounds.end));
       }
-
-      if (freeSlots.isNotEmpty) {
-        _commonFreeTime[day] = freeSlots;
+      
+      // Filter out tiny slots (< 30 mins)
+      final validSlots = freeSlots.where((s) => (s.end - s.start) >= 30).toList();
+      
+      if (validSlots.isNotEmpty) {
+        _commonFreeTime[day] = validSlots;
       }
     }
   }
 
+  // Time Utility
   int _timeToMinutes(String time) {
     try {
       final parts = time.split(':');
@@ -251,11 +252,19 @@ class TimetableProvider extends ChangeNotifier {
       return 0;
     }
   }
+} // End of Class
 
-  String _minutesToTime(int minutes) {
-    final h = (minutes ~/ 60).toString().padLeft(2, '0');
-    final m = (minutes % 60).toString().padLeft(2, '0');
-    return "$h:$m";
+class CommonFreeSlot {
+  final int start; // minutes from midnight
+  final int end;   // minutes from midnight
+  CommonFreeSlot({required this.start, required this.end});
+  
+  String get label => "${_minToTime(start)} - ${_minToTime(end)}";
+  
+  static String _minToTime(int m) {
+    final h = (m ~/ 60).toString().padLeft(2, '0');
+    final min = (m % 60).toString().padLeft(2, '0');
+    return "$h:$min";
   }
 }
 
