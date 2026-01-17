@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/academic_task.dart';
 import '../services/isar_service.dart';
+import '../providers/timetable_provider.dart'; // Added
 
 class AcademicTab extends StatefulWidget {
   const AcademicTab({super.key});
@@ -227,6 +228,114 @@ class _AcademicTabState extends State<AcademicTab> {
 
   @override
   Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          title: const Text('Academic Hub', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          bottom: const TabBar(
+            labelColor: Color(0xFF2962FF),
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: Color(0xFF2962FF),
+            tabs: [
+              Tab(text: "Planner"),
+              Tab(text: "Attendance Survival"),
+            ],
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.add_circle_outline, color: Color(0xFF2962FF), size: 28),
+              onPressed: () => _showAddEditTaskDialog(),
+            )
+          ],
+        ),
+        body: TabBarView(
+          children: [
+            _buildTaskPlanner(),
+            _buildAttendanceTracker(),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildAttendanceTracker() {
+    return Consumer<TimetableProvider>(
+      builder: (context, timetable, _) {
+        // Get unique subjects
+        final subjects = timetable.userSessions.map((s) => s.subject).toSet().toList();
+        
+        if (subjects.isEmpty) {
+          return const Center(child: Text("No courses found. Check your schedule setup."));
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(20),
+          itemCount: subjects.length,
+          itemBuilder: (context, index) {
+             final subject = subjects[index];
+             final stats = timetable.getAttendanceStats(subject);
+             final int lives = stats['lives'];
+             final int maxLives = stats['maxLives'];
+             final String status = stats['status'];
+
+             return Container(
+               margin: const EdgeInsets.only(bottom: 16),
+               padding: const EdgeInsets.all(20),
+               decoration: BoxDecoration(
+                 color: Colors.white,
+                 borderRadius: BorderRadius.circular(20),
+                 boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                 border: Border.all(color: lives <= 1 ? Colors.red.withOpacity(0.5) : Colors.transparent)
+               ),
+               child: Column(
+                 crossAxisAlignment: CrossAxisAlignment.start,
+                 children: [
+                   Text(subject, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                   const SizedBox(height: 10),
+                   Row(
+                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                     children: [
+                       Expanded(
+                         child: Wrap(
+                           spacing: 4,
+                           children: List.generate(maxLives, (i) {
+                             if (i < lives) {
+                               return const Icon(Icons.favorite, color: Colors.pinkAccent);
+                             } else {
+                               return const Icon(Icons.heart_broken_sharp, color: Colors.grey);
+                             }
+                           }),
+                         ),
+                       ),
+                       Container(
+                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                         decoration: BoxDecoration(
+                           color: lives <= 1 ? Colors.red.withOpacity(0.1) : Colors.green.withOpacity(0.1),
+                           borderRadius: BorderRadius.circular(8)
+                         ),
+                         child: Text(status.toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: lives <= 1 ? Colors.red : Colors.green)),
+                       )
+                     ],
+                   ),
+                   const SizedBox(height: 8),
+                   if (lives > 0)
+                     Text("You can safely skip $lives more classes.", style: TextStyle(color: Colors.grey[600], fontSize: 13))
+                   else 
+                     const Text("ATTENDANCE CRITICAL. DO NOT SKIP.", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13))
+                 ],
+               ),
+             );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildTaskPlanner() {
     // Filter tasks for "Today's Priorities" (if selected date is today) or just show selected day tasks
     final selectedTasks = _getEventsForDay(_selectedDay ?? DateTime.now());
     
@@ -235,129 +344,62 @@ class _AcademicTabState extends State<AcademicTab> {
       final diff = t.dueDate.difference(DateTime.now()).inDays;
       return diff >= 0 && diff <= 3 && !t.isCompleted;
     }).toList();
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('Academic Hub', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: Color(0xFF2962FF), size: 28),
-            onPressed: () => _showAddEditTaskDialog(),
-          )
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. Calendar View
-            TableCalendar<AcademicTask>(
-              firstDay: DateTime.utc(2020, 10, 16),
-              lastDay: DateTime.utc(2030, 3, 14),
-              focusedDay: _focusedDay,
-              calendarFormat: _calendarFormat,
-              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-              onDaySelected: (selectedDay, focusedDay) {
-                setState(() {
-                  _selectedDay = selectedDay;
-                  _focusedDay = focusedDay;
-                });
-              },
-              onFormatChanged: (format) {
-               if (_calendarFormat != format) setState(() => _calendarFormat = format);
-              },
-              onPageChanged: (focusedDay) => _focusedDay = focusedDay,
-              eventLoader: _getEventsForDay,
-              calendarStyle: CalendarStyle(
-                markerDecoration: const BoxDecoration(color: Color(0xFFFF1744), shape: BoxShape.circle),
-                selectedDecoration: const BoxDecoration(color: Color(0xFF2962FF), shape: BoxShape.circle),
-                todayDecoration: BoxDecoration(color: const Color(0xFF2962FF).withOpacity(0.5), shape: BoxShape.circle),
-              ),
-              headerStyle: const HeaderStyle(formatButtonVisible: false, titleCentered: true),
+    
+    return Column(
+        children: [
+          // 1. Calendar View
+          TableCalendar<AcademicTask>(
+            firstDay: DateTime.utc(2020, 10, 16),
+            lastDay: DateTime.utc(2030, 3, 14),
+            focusedDay: _focusedDay,
+            calendarFormat: _calendarFormat,
+            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+            onDaySelected: (selectedDay, focusedDay) {
+              setState(() {
+                _selectedDay = selectedDay;
+                _focusedDay = focusedDay; 
+              });
+            },
+            onFormatChanged: (format) {
+             if (_calendarFormat != format) setState(() => _calendarFormat = format);
+            },
+            onPageChanged: (focusedDay) => _focusedDay = focusedDay,
+            eventLoader: _getEventsForDay,
+            calendarStyle: CalendarStyle(
+              markerDecoration: const BoxDecoration(color: Color(0xFFFF1744), shape: BoxShape.circle),
+              selectedDecoration: const BoxDecoration(color: Color(0xFF2962FF), shape: BoxShape.circle),
+              todayDecoration: BoxDecoration(color: const Color(0xFF2962FF).withOpacity(0.5), shape: BoxShape.circle),
             ),
-            
-            const SizedBox(height: 20),
-            
-            // 2. Selected Day Tasks
+            headerStyle: const HeaderStyle(formatButtonVisible: false, titleCentered: true),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // 2. Selected Day Tasks
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              isSameDay(_selectedDay, DateTime.now()) ? "Today's Priorities" : "Tasks for ${DateFormat('MMM d').format(_selectedDay!)}", 
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)
+            ),
+          ),
+          const SizedBox(height: 10),
+          
+          if (selectedTasks.isEmpty)
             Padding(
+              padding: const EdgeInsets.all(20),
+              child: Center(child: Text("No tasks due this day.", style: TextStyle(color: Colors.grey[400]))),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                isSameDay(_selectedDay, DateTime.now()) ? "Today's Priorities" : "Tasks for ${DateFormat('MMM d').format(_selectedDay!)}", 
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)
-              ),
+              itemCount: selectedTasks.length,
+              itemBuilder: (context, index) {
+                return _buildTaskCard(selectedTasks[index]);
+              },
             ),
-            const SizedBox(height: 10),
-            
-            if (selectedTasks.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Center(child: Text("No tasks due this day.", style: TextStyle(color: Colors.grey[400]))),
-              )
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                itemCount: selectedTasks.length,
-                itemBuilder: (context, index) {
-                  final task = selectedTasks[index];
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey[200]!),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))
-                      ]
-                    ),
-                    child: Row(
-                      children: [
-                        // Type Indicator
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: _getTypeColor(task.type).withOpacity(0.1),
-                            shape: BoxShape.circle
-                          ),
-                          child: Icon(_getTypeIcon(task.type), color: _getTypeColor(task.type), size: 20),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => _showAddEditTaskDialog(taskToEdit: task),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(task.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                const SizedBox(height: 4),
-                                Text(task.subject, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Checkbox(
-                          value: task.isCompleted, 
-                          activeColor: const Color(0xFF2962FF),
-                          onChanged: (val) async {
-                            final isarService = IsarService();
-                            final isar = await isarService.db;
-                            await isar.writeTxn(() async {
-                              task.isCompleted = val!;
-                              await isar.academicTasks.put(task);
-                            });
-                             _loadTasks();
-                          }
-                        )
-                      ],
-                    ),
-                  );
-                },
-              ),
               
             // 3. Upcoming / Priority Section (if displaying today)
              if (isSameDay(_selectedDay, DateTime.now()) && priorityTasks.isNotEmpty) ...[
@@ -406,10 +448,55 @@ class _AcademicTabState extends State<AcademicTab> {
                    },
                  ),
                ),
-               const SizedBox(height: 30),
-             ]
-          ],
-        ),
+                const SizedBox(height: 30),
+              ]
+           ],
+    );
+  }
+
+  Widget _buildTaskCard(AcademicTask task) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[200]!),
+        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]
+      ),
+      child: Row(
+        children: [
+          Container(
+             padding: const EdgeInsets.all(12),
+             decoration: BoxDecoration(color: _getTypeColor(task.type).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+             child: Icon(
+               _getTypeIcon(task.type), 
+               color: _getTypeColor(task.type)
+             ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(task.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text("${task.subject} • ${DateFormat('HH:mm').format(task.dueDate)}", style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+              ],
+            ),
+          ),
+          Checkbox(
+            value: task.isCompleted, 
+            activeColor: const Color(0xFF2962FF),
+            onChanged: (val) async {
+               // Update
+               final isarService = IsarService();
+               final isar = await isarService.db;
+               task.isCompleted = val!;
+               await isar.writeTxn(() async => await isar.academicTasks.put(task));
+               _loadTasks();
+            }
+          )
+        ],
       ),
     );
   }

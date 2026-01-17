@@ -441,6 +441,27 @@ class _ScheduleTabState extends State<ScheduleTab> {
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor),
                     ),
                   ),
+                  if (!isGhost) 
+                    GestureDetector(
+                      onTap: () {
+                        Provider.of<TimetableProvider>(context, listen: false).toggleAttendance(event.subject, _selectedDate);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        // Use Consumer to rebuild just this icon? Or rely on parent rebuild (the whole schedule rebuilds on notifyListeners)
+                        // Parent uses Consumer, so it will rebuild.
+                        child: Builder(
+                          builder: (c) {
+                             final isPresent = Provider.of<TimetableProvider>(c).isPresent(event.subject, _selectedDate);
+                             return Icon(
+                               isPresent ? Icons.check_circle : Icons.cancel,
+                               color: isPresent ? Colors.green : Colors.red,
+                               size: 16,
+                             );
+                          }
+                        ),
+                      ),
+                    )
                 ],
               ),
               if (height > 40) ...[

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/isar_service.dart';
 import 'providers/timetable_provider.dart';
-import 'providers/attendance_provider.dart';
+
 import 'providers/note_provider.dart';
 import 'screens/home_screen.dart';
 
@@ -20,9 +20,7 @@ void main() async {
         ChangeNotifierProvider(
           create: (_) => TimetableProvider(isarService),
         ),
-        ChangeNotifierProvider(
-          create: (_) => AttendanceProvider(isarService),
-        ),
+
         ChangeNotifierProvider(
           create: (_) => NoteProvider(isarService),
         ),

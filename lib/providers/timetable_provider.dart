@@ -3,16 +3,110 @@ import 'package:intl/intl.dart'; // Added for DateFormat
 import 'package:isar_community/isar.dart';
 import '../models/class_session.dart';
 import '../models/academic_task.dart';
+import '../models/attendance_record.dart'; // Added
 import '../services/isar_service.dart';
 
 class TimetableProvider extends ChangeNotifier {
   final IsarService isarService;
   
+  // Restored Fields
   List<ClassSession> _userSessions = [];
   List<ClassSession> _friendSessions = [];
-  
   Map<String, List<CommonFreeSlot>> _commonFreeTime = {};
-  Map<String, List<CommonFreeSlot>> get commonFreeTime => _commonFreeTime;
+  
+  // Attendance
+  List<AttendanceRecord> _attendanceRecords = [];
+  
+  Future<void> loadAttendance() async {
+    final isar = await isarService.db;
+    _attendanceRecords = await isar.attendanceRecords.where().findAll();
+    notifyListeners();
+  }
+
+  bool isPresent(String subject, DateTime date) {
+    // If no record exists, assume present by default (or we can assume 'unknown')
+    // For this tracker, let's assume 'unknown' but visually default to green?
+    // Actually, distinct records are better.
+    final record = _attendanceRecords.firstWhere(
+      (r) => r.subjectName == subject && isSameDay(r.date, date),
+      orElse: () => AttendanceRecord()..isPresent = true // Default to Present
+    );
+    return record.isPresent;
+  }
+
+  Future<void> toggleAttendance(String subject, DateTime date) async {
+    final isar = await isarService.db;
+    
+    // Find existing - filter by subject and date
+    final existing = await isar.attendanceRecords.filter()
+        .subjectNameEqualTo(subject)
+        .and()
+        .dateEqualTo(date)
+        .findFirst();
+
+    if (existing != null) {
+       existing.isPresent = !existing.isPresent;
+       await isar.writeTxn(() async => await isar.attendanceRecords.put(existing));
+    } else {
+      // Create new "Absent" record (since default was Present)
+      // Actually, if we toggle from "Default Present" -> "Absent"
+      final newRecord = AttendanceRecord()
+        ..subjectName = subject
+        ..date = date
+        ..isPresent = false;
+      await isar.writeTxn(() async => await isar.attendanceRecords.put(newRecord));
+    }
+    
+    await loadAttendance();
+  }
+
+  // "Creative" Stats Calculation
+  // Returns { 'lives': int, 'maxLives': int, 'status': String }
+  Map<String, dynamic> getAttendanceStats(String subject) {
+    // 1. Calculate Frequency per week from timetable
+    final weeklyFrequency = _userSessions.where((s) => s.subject == subject).length;
+    if (weeklyFrequency == 0) return {'lives': 0, 'maxLives': 0, 'status': 'No Data'};
+
+    // 2. Estimate Total Semester Classes (approx 15 weeks)
+    const int totalWeeks = 15;
+    final int totalClasses = totalWeeks * weeklyFrequency;
+    
+    // 3. Max allowable skips (25%)
+    final int maxSkips = (totalClasses * 0.25).floor();
+
+    // 4. Count current absences
+    final absences = _attendanceRecords
+        .where((r) => r.subjectName == subject && !r.isPresent)
+        .length;
+
+    // Lives left
+    int lives = maxSkips - absences;
+    
+    String status = "Safe";
+    if (lives <= 0) status = "CRITICAL";
+    else if (lives <= 2) status = "Warning";
+
+    return {
+      'lives': lives,
+      'maxLives': maxSkips, // Initial hearts
+      'absences': absences,
+      'status': status
+    };
+  }
+
+  Future<void> loadSessions() async {
+    final isar = await isarService.db;
+    _userSessions = await isar.classSessions.filter().isUserEqualTo(true).findAll();
+    _friendSessions = await isar.classSessions.filter().isUserEqualTo(false).findAll();
+    _tasks = await isar.academicTasks.where().sortByDueDateDesc().findAll();
+    
+    // Load Attendance too
+    await loadAttendance();
+    
+    _calculateCommonFreeTime();
+    notifyListeners();
+  }
+
 
   // Getters
   // If swapped, return Friend sessions as "User" sessions (Main view)
@@ -45,14 +139,7 @@ class TimetableProvider extends ChangeNotifier {
 
   TimetableProvider(this.isarService);
 
-  Future<void> loadSessions() async {
-    final isar = await isarService.db;
-    _userSessions = await isar.classSessions.filter().isUserEqualTo(true).findAll();
-    _friendSessions = await isar.classSessions.filter().isUserEqualTo(false).findAll();
-    _tasks = await isar.academicTasks.where().sortByDueDateDesc().findAll();
-    _calculateCommonFreeTime();
-    notifyListeners();
-  }
+
 
   // Helpers
   bool isSameDay(DateTime a, DateTime b) {

@@ -17,35 +17,20 @@ const AttendanceRecordSchema = CollectionSchema(
   name: r'AttendanceRecord',
   id: 3264724351450497341,
   properties: {
-    r'attendedSessions': PropertySchema(
+    r'date': PropertySchema(
       id: 0,
-      name: r'attendedSessions',
-      type: IsarType.long,
+      name: r'date',
+      type: IsarType.dateTime,
     ),
-    r'classesToSkip': PropertySchema(
+    r'isPresent': PropertySchema(
       id: 1,
-      name: r'classesToSkip',
-      type: IsarType.long,
-    ),
-    r'isBelowThreshold': PropertySchema(
-      id: 2,
-      name: r'isBelowThreshold',
+      name: r'isPresent',
       type: IsarType.bool,
     ),
-    r'moduleCode': PropertySchema(
-      id: 3,
-      name: r'moduleCode',
+    r'subjectName': PropertySchema(
+      id: 2,
+      name: r'subjectName',
       type: IsarType.string,
-    ),
-    r'percentage': PropertySchema(
-      id: 4,
-      name: r'percentage',
-      type: IsarType.double,
-    ),
-    r'totalSessions': PropertySchema(
-      id: 5,
-      name: r'totalSessions',
-      type: IsarType.long,
     )
   },
   estimateSize: _attendanceRecordEstimateSize,
@@ -54,14 +39,14 @@ const AttendanceRecordSchema = CollectionSchema(
   deserializeProp: _attendanceRecordDeserializeProp,
   idName: r'id',
   indexes: {
-    r'moduleCode': IndexSchema(
-      id: -4649366853241320215,
-      name: r'moduleCode',
-      unique: true,
-      replace: true,
+    r'subjectName': IndexSchema(
+      id: 2303509258035435498,
+      name: r'subjectName',
+      unique: false,
+      replace: false,
       properties: [
         IndexPropertySchema(
-          name: r'moduleCode',
+          name: r'subjectName',
           type: IndexType.hash,
           caseSensitive: true,
         )
@@ -82,7 +67,7 @@ int _attendanceRecordEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
-  bytesCount += 3 + object.moduleCode.length * 3;
+  bytesCount += 3 + object.subjectName.length * 3;
   return bytesCount;
 }
 
@@ -92,12 +77,9 @@ void _attendanceRecordSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeLong(offsets[0], object.attendedSessions);
-  writer.writeLong(offsets[1], object.classesToSkip);
-  writer.writeBool(offsets[2], object.isBelowThreshold);
-  writer.writeString(offsets[3], object.moduleCode);
-  writer.writeDouble(offsets[4], object.percentage);
-  writer.writeLong(offsets[5], object.totalSessions);
+  writer.writeDateTime(offsets[0], object.date);
+  writer.writeBool(offsets[1], object.isPresent);
+  writer.writeString(offsets[2], object.subjectName);
 }
 
 AttendanceRecord _attendanceRecordDeserialize(
@@ -106,12 +88,11 @@ AttendanceRecord _attendanceRecordDeserialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  final object = AttendanceRecord(
-    attendedSessions: reader.readLongOrNull(offsets[0]) ?? 0,
-    moduleCode: reader.readStringOrNull(offsets[3]) ?? '',
-    totalSessions: reader.readLongOrNull(offsets[5]) ?? 0,
-  );
+  final object = AttendanceRecord();
   object.id = id;
+  object.date = reader.readDateTime(offsets[0]);
+  object.isPresent = reader.readBool(offsets[1]);
+  object.subjectName = reader.readString(offsets[2]);
   return object;
 }
 
@@ -123,17 +104,11 @@ P _attendanceRecordDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readLongOrNull(offset) ?? 0) as P;
+      return (reader.readDateTime(offset)) as P;
     case 1:
-      return (reader.readLong(offset)) as P;
-    case 2:
       return (reader.readBool(offset)) as P;
-    case 3:
-      return (reader.readStringOrNull(offset) ?? '') as P;
-    case 4:
-      return (reader.readDouble(offset)) as P;
-    case 5:
-      return (reader.readLongOrNull(offset) ?? 0) as P;
+    case 2:
+      return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -152,68 +127,20 @@ void _attendanceRecordAttach(
   object.id = id;
 }
 
-extension AttendanceRecordByIndex on IsarCollection<AttendanceRecord> {
-  Future<AttendanceRecord?> getByModuleCode(String moduleCode) {
-    return getByIndex(r'moduleCode', [moduleCode]);
-  }
-
-  AttendanceRecord? getByModuleCodeSync(String moduleCode) {
-    return getByIndexSync(r'moduleCode', [moduleCode]);
-  }
-
-  Future<bool> deleteByModuleCode(String moduleCode) {
-    return deleteByIndex(r'moduleCode', [moduleCode]);
-  }
-
-  bool deleteByModuleCodeSync(String moduleCode) {
-    return deleteByIndexSync(r'moduleCode', [moduleCode]);
-  }
-
-  Future<List<AttendanceRecord?>> getAllByModuleCode(
-      List<String> moduleCodeValues) {
-    final values = moduleCodeValues.map((e) => [e]).toList();
-    return getAllByIndex(r'moduleCode', values);
-  }
-
-  List<AttendanceRecord?> getAllByModuleCodeSync(
-      List<String> moduleCodeValues) {
-    final values = moduleCodeValues.map((e) => [e]).toList();
-    return getAllByIndexSync(r'moduleCode', values);
-  }
-
-  Future<int> deleteAllByModuleCode(List<String> moduleCodeValues) {
-    final values = moduleCodeValues.map((e) => [e]).toList();
-    return deleteAllByIndex(r'moduleCode', values);
-  }
-
-  int deleteAllByModuleCodeSync(List<String> moduleCodeValues) {
-    final values = moduleCodeValues.map((e) => [e]).toList();
-    return deleteAllByIndexSync(r'moduleCode', values);
-  }
-
-  Future<Id> putByModuleCode(AttendanceRecord object) {
-    return putByIndex(r'moduleCode', object);
-  }
-
-  Id putByModuleCodeSync(AttendanceRecord object, {bool saveLinks = true}) {
-    return putByIndexSync(r'moduleCode', object, saveLinks: saveLinks);
-  }
-
-  Future<List<Id>> putAllByModuleCode(List<AttendanceRecord> objects) {
-    return putAllByIndex(r'moduleCode', objects);
-  }
-
-  List<Id> putAllByModuleCodeSync(List<AttendanceRecord> objects,
-      {bool saveLinks = true}) {
-    return putAllByIndexSync(r'moduleCode', objects, saveLinks: saveLinks);
-  }
-}
-
 extension AttendanceRecordQueryWhereSort
     on QueryBuilder<AttendanceRecord, AttendanceRecord, QWhere> {
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterWhere>
+      anySubjectName() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'subjectName'),
+      );
     });
   }
 }
@@ -288,44 +215,44 @@ extension AttendanceRecordQueryWhere
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterWhereClause>
-      moduleCodeEqualTo(String moduleCode) {
+      subjectNameEqualTo(String subjectName) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(IndexWhereClause.equalTo(
-        indexName: r'moduleCode',
-        value: [moduleCode],
+        indexName: r'subjectName',
+        value: [subjectName],
       ));
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterWhereClause>
-      moduleCodeNotEqualTo(String moduleCode) {
+      subjectNameNotEqualTo(String subjectName) {
     return QueryBuilder.apply(this, (query) {
       if (query.whereSort == Sort.asc) {
         return query
             .addWhereClause(IndexWhereClause.between(
-              indexName: r'moduleCode',
+              indexName: r'subjectName',
               lower: [],
-              upper: [moduleCode],
+              upper: [subjectName],
               includeUpper: false,
             ))
             .addWhereClause(IndexWhereClause.between(
-              indexName: r'moduleCode',
-              lower: [moduleCode],
+              indexName: r'subjectName',
+              lower: [subjectName],
               includeLower: false,
               upper: [],
             ));
       } else {
         return query
             .addWhereClause(IndexWhereClause.between(
-              indexName: r'moduleCode',
-              lower: [moduleCode],
+              indexName: r'subjectName',
+              lower: [subjectName],
               includeLower: false,
               upper: [],
             ))
             .addWhereClause(IndexWhereClause.between(
-              indexName: r'moduleCode',
+              indexName: r'subjectName',
               lower: [],
-              upper: [moduleCode],
+              upper: [subjectName],
               includeUpper: false,
             ));
       }
@@ -336,109 +263,53 @@ extension AttendanceRecordQueryWhere
 extension AttendanceRecordQueryFilter
     on QueryBuilder<AttendanceRecord, AttendanceRecord, QFilterCondition> {
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      attendedSessionsEqualTo(int value) {
+      dateEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'attendedSessions',
+        property: r'date',
         value: value,
       ));
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      attendedSessionsGreaterThan(
-    int value, {
+      dateGreaterThan(
+    DateTime value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
-        property: r'attendedSessions',
+        property: r'date',
         value: value,
       ));
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      attendedSessionsLessThan(
-    int value, {
+      dateLessThan(
+    DateTime value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
-        property: r'attendedSessions',
+        property: r'date',
         value: value,
       ));
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      attendedSessionsBetween(
-    int lower,
-    int upper, {
+      dateBetween(
+    DateTime lower,
+    DateTime upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
-        property: r'attendedSessions',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      classesToSkipEqualTo(int value) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'classesToSkip',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      classesToSkipGreaterThan(
-    int value, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'classesToSkip',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      classesToSkipLessThan(
-    int value, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'classesToSkip',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      classesToSkipBetween(
-    int lower,
-    int upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'classesToSkip',
+        property: r'date',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -504,23 +375,23 @@ extension AttendanceRecordQueryFilter
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      isBelowThresholdEqualTo(bool value) {
+      isPresentEqualTo(bool value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'isBelowThreshold',
+        property: r'isPresent',
         value: value,
       ));
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      moduleCodeEqualTo(
+      subjectNameEqualTo(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'moduleCode',
+        property: r'subjectName',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -528,7 +399,7 @@ extension AttendanceRecordQueryFilter
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      moduleCodeGreaterThan(
+      subjectNameGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
@@ -536,7 +407,7 @@ extension AttendanceRecordQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
-        property: r'moduleCode',
+        property: r'subjectName',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -544,7 +415,7 @@ extension AttendanceRecordQueryFilter
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      moduleCodeLessThan(
+      subjectNameLessThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
@@ -552,7 +423,7 @@ extension AttendanceRecordQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
-        property: r'moduleCode',
+        property: r'subjectName',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -560,7 +431,7 @@ extension AttendanceRecordQueryFilter
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      moduleCodeBetween(
+      subjectNameBetween(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -569,7 +440,7 @@ extension AttendanceRecordQueryFilter
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
-        property: r'moduleCode',
+        property: r'subjectName',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -580,13 +451,13 @@ extension AttendanceRecordQueryFilter
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      moduleCodeStartsWith(
+      subjectNameStartsWith(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'moduleCode',
+        property: r'subjectName',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -594,13 +465,13 @@ extension AttendanceRecordQueryFilter
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      moduleCodeEndsWith(
+      subjectNameEndsWith(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'moduleCode',
+        property: r'subjectName',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -608,10 +479,10 @@ extension AttendanceRecordQueryFilter
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      moduleCodeContains(String value, {bool caseSensitive = true}) {
+      subjectNameContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.contains(
-        property: r'moduleCode',
+        property: r'subjectName',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -619,10 +490,10 @@ extension AttendanceRecordQueryFilter
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      moduleCodeMatches(String pattern, {bool caseSensitive = true}) {
+      subjectNameMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.matches(
-        property: r'moduleCode',
+        property: r'subjectName',
         wildcard: pattern,
         caseSensitive: caseSensitive,
       ));
@@ -630,143 +501,21 @@ extension AttendanceRecordQueryFilter
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      moduleCodeIsEmpty() {
+      subjectNameIsEmpty() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'moduleCode',
+        property: r'subjectName',
         value: '',
       ));
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      moduleCodeIsNotEmpty() {
+      subjectNameIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'moduleCode',
+        property: r'subjectName',
         value: '',
-      ));
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      percentageEqualTo(
-    double value, {
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'percentage',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      percentageGreaterThan(
-    double value, {
-    bool include = false,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'percentage',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      percentageLessThan(
-    double value, {
-    bool include = false,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'percentage',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      percentageBetween(
-    double lower,
-    double upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'percentage',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      totalSessionsEqualTo(int value) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'totalSessions',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      totalSessionsGreaterThan(
-    int value, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'totalSessions',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      totalSessionsLessThan(
-    int value, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'totalSessions',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterFilterCondition>
-      totalSessionsBetween(
-    int lower,
-    int upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'totalSessions',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
       ));
     });
   }
@@ -780,118 +529,60 @@ extension AttendanceRecordQueryLinks
 
 extension AttendanceRecordQuerySortBy
     on QueryBuilder<AttendanceRecord, AttendanceRecord, QSortBy> {
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      sortByAttendedSessions() {
+  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy> sortByDate() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'attendedSessions', Sort.asc);
+      return query.addSortBy(r'date', Sort.asc);
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      sortByAttendedSessionsDesc() {
+      sortByDateDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'attendedSessions', Sort.desc);
+      return query.addSortBy(r'date', Sort.desc);
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      sortByClassesToSkip() {
+      sortByIsPresent() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'classesToSkip', Sort.asc);
+      return query.addSortBy(r'isPresent', Sort.asc);
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      sortByClassesToSkipDesc() {
+      sortByIsPresentDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'classesToSkip', Sort.desc);
+      return query.addSortBy(r'isPresent', Sort.desc);
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      sortByIsBelowThreshold() {
+      sortBySubjectName() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'isBelowThreshold', Sort.asc);
+      return query.addSortBy(r'subjectName', Sort.asc);
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      sortByIsBelowThresholdDesc() {
+      sortBySubjectNameDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'isBelowThreshold', Sort.desc);
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      sortByModuleCode() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'moduleCode', Sort.asc);
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      sortByModuleCodeDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'moduleCode', Sort.desc);
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      sortByPercentage() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'percentage', Sort.asc);
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      sortByPercentageDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'percentage', Sort.desc);
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      sortByTotalSessions() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'totalSessions', Sort.asc);
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      sortByTotalSessionsDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'totalSessions', Sort.desc);
+      return query.addSortBy(r'subjectName', Sort.desc);
     });
   }
 }
 
 extension AttendanceRecordQuerySortThenBy
     on QueryBuilder<AttendanceRecord, AttendanceRecord, QSortThenBy> {
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      thenByAttendedSessions() {
+  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy> thenByDate() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'attendedSessions', Sort.asc);
+      return query.addSortBy(r'date', Sort.asc);
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      thenByAttendedSessionsDesc() {
+      thenByDateDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'attendedSessions', Sort.desc);
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      thenByClassesToSkip() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'classesToSkip', Sort.asc);
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      thenByClassesToSkipDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'classesToSkip', Sort.desc);
+      return query.addSortBy(r'date', Sort.desc);
     });
   }
 
@@ -909,103 +600,53 @@ extension AttendanceRecordQuerySortThenBy
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      thenByIsBelowThreshold() {
+      thenByIsPresent() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'isBelowThreshold', Sort.asc);
+      return query.addSortBy(r'isPresent', Sort.asc);
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      thenByIsBelowThresholdDesc() {
+      thenByIsPresentDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'isBelowThreshold', Sort.desc);
+      return query.addSortBy(r'isPresent', Sort.desc);
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      thenByModuleCode() {
+      thenBySubjectName() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'moduleCode', Sort.asc);
+      return query.addSortBy(r'subjectName', Sort.asc);
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      thenByModuleCodeDesc() {
+      thenBySubjectNameDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'moduleCode', Sort.desc);
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      thenByPercentage() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'percentage', Sort.asc);
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      thenByPercentageDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'percentage', Sort.desc);
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      thenByTotalSessions() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'totalSessions', Sort.asc);
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterSortBy>
-      thenByTotalSessionsDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'totalSessions', Sort.desc);
+      return query.addSortBy(r'subjectName', Sort.desc);
     });
   }
 }
 
 extension AttendanceRecordQueryWhereDistinct
     on QueryBuilder<AttendanceRecord, AttendanceRecord, QDistinct> {
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QDistinct>
-      distinctByAttendedSessions() {
+  QueryBuilder<AttendanceRecord, AttendanceRecord, QDistinct> distinctByDate() {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'attendedSessions');
+      return query.addDistinctBy(r'date');
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QDistinct>
-      distinctByClassesToSkip() {
+      distinctByIsPresent() {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'classesToSkip');
+      return query.addDistinctBy(r'isPresent');
     });
   }
 
   QueryBuilder<AttendanceRecord, AttendanceRecord, QDistinct>
-      distinctByIsBelowThreshold() {
+      distinctBySubjectName({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'isBelowThreshold');
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QDistinct>
-      distinctByModuleCode({bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'moduleCode', caseSensitive: caseSensitive);
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QDistinct>
-      distinctByPercentage() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'percentage');
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QDistinct>
-      distinctByTotalSessions() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'totalSessions');
+      return query.addDistinctBy(r'subjectName', caseSensitive: caseSensitive);
     });
   }
 }
@@ -1018,45 +659,22 @@ extension AttendanceRecordQueryProperty
     });
   }
 
-  QueryBuilder<AttendanceRecord, int, QQueryOperations>
-      attendedSessionsProperty() {
+  QueryBuilder<AttendanceRecord, DateTime, QQueryOperations> dateProperty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'attendedSessions');
+      return query.addPropertyName(r'date');
     });
   }
 
-  QueryBuilder<AttendanceRecord, int, QQueryOperations>
-      classesToSkipProperty() {
+  QueryBuilder<AttendanceRecord, bool, QQueryOperations> isPresentProperty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'classesToSkip');
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, bool, QQueryOperations>
-      isBelowThresholdProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'isBelowThreshold');
+      return query.addPropertyName(r'isPresent');
     });
   }
 
   QueryBuilder<AttendanceRecord, String, QQueryOperations>
-      moduleCodeProperty() {
+      subjectNameProperty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'moduleCode');
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, double, QQueryOperations>
-      percentageProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'percentage');
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, int, QQueryOperations>
-      totalSessionsProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'totalSessions');
+      return query.addPropertyName(r'subjectName');
     });
   }
 }
