@@ -479,64 +479,57 @@ class _ScheduleTabState extends State<ScheduleTab> {
     final height = (duration / 60) * _hourHeight;
 
     // Stylistic Logic based on Subject Hash
-    // 1. Solid Pastels (Green, Purple, Red)
-    // 2. Outlined/Translucent (Yellow/Orange)
-    // Reference Image has: Green filled, Yellow filled, Purple filled, Red filled.
-    // They are light pastels but distinct.
-
-    final colorOption = event.subject.hashCode.abs() % 4;
-    
-    // Exact colors from reference image approx
-    // Green: #9CCC65 (approx)
-    // Yellow: #FFD600 (approx)
-    // Purple: #B39DDB (approx) - actually more vibrant violet
-    // Red/Pink: #FF8A80
+    // Expanded Palette for more specific subject colors
+    // VIVID / ELECTRIC Colors as requested
+    final colorOption = event.subject.hashCode.abs() % 10;
     
     final colors = [
-      const Color(0xFFC5E1A5), // Light Green (Matte)
-      const Color(0xFFFFE082), // Light Amber (Matte)
-      const Color(0xFFCE93D8), // Light Purple (Matte)
-      const Color(0xFFFFAB91), // Light Deep Orange (Matte)
+      const Color(0xFF2979FF), // 0. Electric Blue
+      const Color(0xFFFF1744), // 1. Vivid Red
+      const Color(0xFFD500F9), // 2. Neon Purple
+      const Color(0xFFFF9100), // 3. Bright Orange
+      const Color(0xFF00E676), // 4. Intense Green
+      const Color(0xFFFF4081), // 5. Hot Pink
+      const Color(0xFFFFEA00), // 6. Cyber Yellow
+      const Color(0xFF00B8D4), // 7. Cyan / Aqua
+      const Color(0xFF3D5AFE), // 8. Royal Indigo
+      const Color(0xFFC6FF00), // 9. Lime Punch
     ];
     
-    // Darker text colors for contrast on pastels
-    final textColors = [
-      const Color(0xFF33691E), // Dark Green
-      const Color(0xFFBF360C), // Dark Orange/Brown
-      const Color(0xFF4A148C), // Dark Purple
-      const Color(0xFFB71C1C), // Dark Red
-    ];
+    // Define which indices need DARK text (Light backgrounds: Yellow, Lime, Cyan, Orange, Green)
+    final darkTextIndices = [3, 4, 6, 7, 9]; 
 
     final bgColor = colors[colorOption];
-    final textColor = textColors[colorOption];
-    final iconColor = textColor.withOpacity(0.7);
+    final isDarkText = darkTextIndices.contains(colorOption);
+    final textColor = isDarkText ? const Color(0xFF263238) : Colors.white;
+    final iconBorderColor = isDarkText ? Colors.black.withOpacity(0.1) : Colors.white.withOpacity(0.3);
+    final iconColor = isDarkText ? Colors.black87 : Colors.white;
 
     return Positioned(
       top: top,
       left: 10,
       right: 24,
-      height: height - 6, // larger gap
+      height: height - 6, 
       child: GestureDetector(
         onTap: () => _showAddSessionDialog(sessionToEdit: event),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(24), // Very rounded corners like image
-            // No shadow or very subtle
+            borderRadius: BorderRadius.circular(24),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center, // Center vertically
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Icon with square/circle bg (outlined in image)
+              // Icon with square/circle bg
               Container(
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white.withOpacity(0.5), width: 1.5),
-                  borderRadius: BorderRadius.circular(12), // Squircle
+                  border: Border.all(color: iconBorderColor, width: 1.5),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(Icons.class_outlined, color: Colors.white, size: 18),
+                child: Icon(Icons.class_outlined, color: iconColor, size: 18),
               ),
               const SizedBox(width: 14),
               
@@ -550,16 +543,13 @@ class _ScheduleTabState extends State<ScheduleTab> {
                       event.subject,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: 'Inter', // Assuming standard font
-                        color: Colors.white, // Actually white text looks good on these pastels? 
-                        // Wait, reference image has WHITE text on Green/Purple/Red.
-                        // But Yellow has DARK text.
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: textColor,
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                      ).copyWith(color: (colorOption == 1) ? const Color(0xFF5D4037) : Colors.white),
+                      ),
                     ),
-                    // If height permits, show room
                     if (height > 50)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
@@ -567,7 +557,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
                           event.room,
                           style: TextStyle(
                             fontSize: 13,
-                            color: (colorOption == 1) ? const Color(0xFF5D4037).withOpacity(0.7) : Colors.white.withOpacity(0.8),
+                            color: textColor.withOpacity(0.8),
                             fontWeight: FontWeight.w500
                           ),
                         ),
@@ -577,7 +567,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
               ),
               
               // Three dots icon
-              Icon(Icons.more_horiz, color: (colorOption == 1) ? const Color(0xFF5D4037).withOpacity(0.5) : Colors.white.withOpacity(0.6), size: 20)
+              Icon(Icons.more_horiz, color: textColor.withOpacity(0.6), size: 20)
             ],
           ),
         ),
