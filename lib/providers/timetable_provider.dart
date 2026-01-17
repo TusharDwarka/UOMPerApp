@@ -60,6 +60,33 @@ class TimetableProvider extends ChangeNotifier {
     await loadAttendance();
   }
 
+  Future<void> setAttendance(String subject, DateTime date, bool isPresent) async {
+    final isar = await isarService.db;
+    
+    // Find existing
+    final existing = await isar.attendanceRecords.filter()
+        .subjectNameEqualTo(subject)
+        .and()
+        .dateEqualTo(date)
+        .findFirst();
+
+    await isar.writeTxn(() async {
+      if (existing != null) {
+        existing.isPresent = isPresent;
+        await isar.attendanceRecords.put(existing);
+      } else {
+        final newRecord = AttendanceRecord()
+          ..subjectName = subject
+          ..date = date
+          ..isPresent = isPresent;
+        await isar.attendanceRecords.put(newRecord);
+      }
+    });
+    
+    await loadAttendance();
+    notifyListeners();
+  }
+
   // "Creative" Stats Calculation
   // Returns { 'lives': int, 'maxLives': int, 'status': String }
   Map<String, dynamic> getAttendanceStats(String subject) {
@@ -148,14 +175,58 @@ class TimetableProvider extends ChangeNotifier {
 
   List<ClassSession> getEventsForDay(DateTime date) {
     final dayName = DateFormat('EEEE').format(date);
-    return _userSessions.where((s) {
-       if (s.specificDate != null) {
-         return isSameDay(s.specificDate!, date);
-       } else {
-         return s.day == dayName;
-       }
-    }).toList();
+    return userSessions.where((s) => s.day == dayName).toList();
   }
+  
+  // New: Get specific classes for today (or specific date) to aid UI
+  List<ClassSession> getClassesForDate(DateTime date) {
+    return getEventsForDay(date);
+  }
+
+  // New: Generate past dates for a subject to allow marking retroactive attendance
+  // We assume a semester length of ~15 weeks, scanning back from today.
+  List<DateTime> getPastClassDates(String subject) {
+    // Find missing logic: We need to know WHICH days of the week this subject occurs.
+    final sessions = _userSessions.where((s) => s.subject == subject).toList();
+    if (sessions.isEmpty) return [];
+    
+    final validDays = sessions.map((s) => s.day).toSet(); // e.g. {"Monday", "Wednesday"}
+    
+    List<DateTime> dates = [];
+    // Scan back 15 weeks
+    DateTime current = DateTime.now();
+    // Normalize to start of today to avoid time issues
+    current = DateTime(current.year, current.month, current.day);
+
+    for (int i = 0; i < 15 * 7; i++) {
+       final d = current.subtract(Duration(days: i));
+       final dayName = DateFormat('EEEE').format(d);
+       
+       if (validDays.contains(dayName)) {
+         dates.add(d);
+       }
+    }
+    return dates;
+  }
+  
+  // Check if attendance is marked for a specific date/subject
+  AttendanceRecord? getAttendanceRecord(String subject, DateTime date) {
+    // We need exact date matching at 00:00:00 usually. 
+    // The date passed in should be normalized.
+    final normalized = DateTime(date.year, date.month, date.day);
+    
+    try {
+      return _attendanceRecords.firstWhere(
+        (r) => r.subjectName == subject && 
+               r.date.year == normalized.year && 
+               r.date.month == normalized.month && 
+               r.date.day == normalized.day
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
   
   List<AcademicTask> getTasksForDay(DateTime date) {
     return _tasks.where((t) => isSameDay(t.dueDate, date)).toList();

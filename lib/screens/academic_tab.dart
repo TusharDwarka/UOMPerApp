@@ -265,73 +265,177 @@ class _AcademicTabState extends State<AcademicTab> {
   Widget _buildAttendanceTracker() {
     return Consumer<TimetableProvider>(
       builder: (context, timetable, _) {
-        // Get unique subjects
         final subjects = timetable.userSessions.map((s) => s.subject).toSet().toList();
         
+        // 1. Today's Classes
+        final todayClasses = timetable.getClassesForDate(DateTime.now());
+        final todaySubjects = todayClasses.map((s) => s.subject).toSet().toList();
+
         if (subjects.isEmpty) {
           return const Center(child: Text("No courses found. Check your schedule setup."));
         }
 
-        return ListView.builder(
+        return ListView(
           padding: const EdgeInsets.all(20),
-          itemCount: subjects.length,
-          itemBuilder: (context, index) {
-             final subject = subjects[index];
-             final stats = timetable.getAttendanceStats(subject);
-             final int lives = stats['lives'];
-             final int maxLives = stats['maxLives'];
-             final String status = stats['status'];
+          children: [
+            // --- Section 1: Today's Roll Call ---
+            if (todaySubjects.isNotEmpty) ...[
+               const Text("Today's Roll Call", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A237E))),
+               const SizedBox(height: 10),
+               ...todaySubjects.map((subject) {
+                  final record = timetable.getAttendanceRecord(subject, DateTime.now());
+                  final hasRecord = record != null;
+                  final isPresent = record?.isPresent ?? false;
 
-             return Container(
-               margin: const EdgeInsets.only(bottom: 16),
-               padding: const EdgeInsets.all(20),
-               decoration: BoxDecoration(
-                 color: Colors.white,
-                 borderRadius: BorderRadius.circular(20),
-                 boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
-                 border: Border.all(color: lives <= 1 ? Colors.red.withOpacity(0.5) : Colors.transparent)
-               ),
-               child: Column(
-                 crossAxisAlignment: CrossAxisAlignment.start,
-                 children: [
-                   Text(subject, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                   const SizedBox(height: 10),
-                   Row(
-                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      title: Text(subject, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      subtitle: Text(
+                        hasRecord ? (isPresent ? "Marked Present" : "Marked Absent") : "Not marked yet", 
+                        style: TextStyle(color: hasRecord ? (isPresent ? Colors.green : Colors.red) : Colors.grey)
+                      ),
+                      trailing: Transform.scale(
+                        scale: 0.9,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.check_circle),
+                              color: hasRecord && isPresent ? Colors.green : Colors.grey[300],
+                              iconSize: 32,
+                              onPressed: () {
+                                 timetable.setAttendance(subject, DateTime.now(), true);
+                              }, 
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.cancel),
+                              color: hasRecord && !isPresent ? Colors.red : Colors.grey[300],
+                              iconSize: 32,
+                              onPressed: () {
+                                 timetable.setAttendance(subject, DateTime.now(), false);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+               }),
+               const Divider(height: 40),
+            ],
+
+            // --- Section 2: Survival Stats ---
+            const Text("Semester Survival", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A237E))),
+            const SizedBox(height: 15),
+            
+            ...subjects.map((subject) {
+               final stats = timetable.getAttendanceStats(subject);
+               final int lives = stats['lives'];
+               final int maxLives = stats['maxLives'];
+               final int absences = stats['absences'];
+               final String status = stats['status'];
+
+               // Cap visible hearts
+               final visibleHearts = lives > 8 ? 8 : (lives < 0 ? 0 : lives);
+               final hasMoreHearts = lives > 8;
+
+               return Card(
+                 elevation: 2,
+                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                 margin: const EdgeInsets.only(bottom: 20),
+                 child: Theme(
+                   data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                   child: ExpansionTile(
+                     tilePadding: const EdgeInsets.all(20),
+                     title: Column(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       children: [
+                         Row(
+                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                           children: [
+                             Expanded(child: Text(subject, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                             Container(
+                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                               decoration: BoxDecoration(
+                                 color: lives <= 1 ? Colors.red.withOpacity(0.1) : Colors.green.withOpacity(0.1),
+                                 borderRadius: BorderRadius.circular(8)
+                               ),
+                               child: Text(status.toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: lives <= 1 ? Colors.red : Colors.green)),
+                             )
+                           ],
+                        ),
+                        const SizedBox(height: 10),
+                         Row(
+                           crossAxisAlignment: CrossAxisAlignment.center,
+                           children: [
+                             Wrap(
+                               spacing: 4,
+                               children: [
+                                 ...List.generate(visibleHearts, (i) => const Icon(Icons.favorite, color: Colors.pinkAccent, size: 20)),
+                                 if (hasMoreHearts) Text(" +${lives - 8}", style: const TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold))
+                               ]
+                             ),
+                             if (lives <= 0) const Text(" 0 Lives Left", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                           ],
+                         ),
+                         const SizedBox(height: 6),
+                         Text("Skipped $absences / $maxLives allowed", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                       ],
+                     ),
                      children: [
-                       Expanded(
-                         child: Wrap(
-                           spacing: 4,
-                           children: List.generate(maxLives, (i) {
-                             if (i < lives) {
-                               return const Icon(Icons.favorite, color: Colors.pinkAccent);
-                             } else {
-                               return const Icon(Icons.heart_broken_sharp, color: Colors.grey);
-                             }
-                           }),
+                       const Divider(),
+                       Padding(
+                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 15),
+                         child: Column(
+                           crossAxisAlignment: CrossAxisAlignment.start,
+                           children: [
+                             Text("Attendance History", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[800])),
+                             const SizedBox(height: 10),
+                             ...timetable.getPastClassDates(subject).map((date) {
+                                final r = timetable.getAttendanceRecord(subject, date);
+                                final isPresent = r?.isPresent ?? false;
+                                final hasRecord = r != null;
+                                
+                                return InkWell(
+                                  onTap: () {
+                                     // Toggle logic for history list item short-check
+                                     timetable.setAttendance(subject, date, !isPresent);
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    child: Row(
+                                      children: [
+                                        Text(DateFormat('MMM d (EEE)').format(date), style: const TextStyle(fontSize: 14)),
+                                        const Spacer(),
+                                        if (!hasRecord) 
+                                           Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)), child: const Text("?", style: TextStyle(fontSize: 12)))
+                                        else 
+                                           Icon(isPresent ? Icons.check : Icons.close, color: isPresent ? Colors.green : Colors.red, size: 18)
+                                      ],
+                                    ),
+                                  ),
+                                );
+                             }).toList(),
+                             if (timetable.getPastClassDates(subject).isEmpty)
+                               const Padding(padding: EdgeInsets.all(8.0), child: Text("No past classes found.", style: TextStyle(color: Colors.grey)))
+                           ],
                          ),
-                       ),
-                       Container(
-                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                         decoration: BoxDecoration(
-                           color: lives <= 1 ? Colors.red.withOpacity(0.1) : Colors.green.withOpacity(0.1),
-                           borderRadius: BorderRadius.circular(8)
-                         ),
-                         child: Text(status.toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: lives <= 1 ? Colors.red : Colors.green)),
                        )
                      ],
                    ),
-                   const SizedBox(height: 8),
-                   if (lives > 0)
-                     Text("You can safely skip $lives more classes.", style: TextStyle(color: Colors.grey[600], fontSize: 13))
-                   else 
-                     const Text("ATTENDANCE CRITICAL. DO NOT SKIP.", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13))
-                 ],
-               ),
-             );
-          },
+                 ),
+               );
+            })
+          ],
         );
-      },
+      }
     );
   }
 
