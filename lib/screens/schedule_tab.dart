@@ -110,7 +110,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
                                    Container(
                                      height: 60, 
                                      decoration: BoxDecoration(
-                                       border: Border(top: BorderSide(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100]!))
+                                       border: Border(top: BorderSide(color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300]!)) // Increased visibility
                                      ),
                                    )
                                ],
@@ -120,7 +120,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
                              ..._buildAllEvents(constraints.maxWidth, timetable, isDark),
                              
                              // Current Time Indicator (Visual Polish)
-                             // _buildCurrentTimeLine(isDark), 
+                             _buildCurrentTimeLine(isDark), 
                            ],
                          );
                       }
@@ -141,6 +141,25 @@ class _ScheduleTabState extends State<ScheduleTab> {
             foregroundColor: Colors.white,
           )
         : null,
+    );
+  }
+
+  Widget _buildCurrentTimeLine(bool isDark) {
+    // Calculate current time position
+    final now = DateTime.now();
+    if (now.hour < 8 || now.hour > 20) return const SizedBox();
+    
+    final minutes = (now.hour * 60) + now.minute;
+    final top = (minutes - 480).toDouble();
+    
+    return Positioned(
+      top: top, left: 0, right: 0,
+      child: Row(
+        children: [
+          CircleAvatar(radius: 4, backgroundColor: isDark ? Colors.redAccent : Colors.red),
+          Expanded(child: Container(height: 2, color: isDark ? Colors.redAccent : Colors.red)),
+        ],
+      ),
     );
   }
 
@@ -240,7 +259,6 @@ class _ScheduleTabState extends State<ScheduleTab> {
   List<Widget> _buildAllEvents(double width, TimetableProvider timetable, bool isDark) {
     // 1. Check Date Bounds (Jan 19 2026)
     final semesterStart = DateTime(2026, 1, 19);
-    final semesterEnd = semesterStart.add(const Duration(days: 7 * 15)); // Approx 15 weeks
     
     if (_selectedDate.isBefore(semesterStart)) {
        return [
@@ -272,56 +290,114 @@ class _ScheduleTabState extends State<ScheduleTab> {
        }
     }
     
-    // 3. Free to Meet Logic (Only if NOT comparing, to avoid clutter)
-    // Find gaps between 08:00 and 16:00
-    if (!_isCompareMode && events.isNotEmpty) {
-       // Sort events by start time
-       events.sort((a, b) => a.startTime.compareTo(b.startTime));
+    // 3. Free to Meet Logic (Enabled ONLY in Compare Mode)
+    // Constraint: Both must have at least one "On Campus" class (Room != "Online")
+    // Constraint: Check availability 08:00 - 17:30
+    
+    if (_isCompareMode && events.isNotEmpty && friendEvents.isNotEmpty) {
+       // 3.1 Check On-Campus Presence
+       bool userOnCampus = events.any((e) => !e.room.toLowerCase().contains('online'));
+       bool friendOnCampus = friendEvents.any((e) => !e.room.toLowerCase().contains('online'));
        
-       int lastEndMinutes = 8 * 60; // 08:00
-       
-       for (var event in events) {
-         final partsStart = event.startTime.split(':');
-         final startMinutes = int.parse(partsStart[0]) * 60 + int.parse(partsStart[1]);
-         final partsEnd = event.endTime.split(':');
-         final endMinutes = int.parse(partsEnd[0]) * 60 + int.parse(partsEnd[1]);
-         
-         if (startMinutes - lastEndMinutes >= 60) { // At least 60 mins free
-            // Add Free Block
-            double top = (lastEndMinutes - 480).toDouble();
-            double height = (startMinutes - lastEndMinutes).toDouble();
-            
-            children.add(Positioned(
-              top: top, left: 0, width: width - 16, height: height - 2,
-              child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 2),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.green.withOpacity(0.1) : Colors.green[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green.withOpacity(0.3))
-                ),
-                alignment: Alignment.center,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.check_circle, size: 16, color: Colors.green),
-                    const SizedBox(width: 8),
-                    Text(
-                      "FREE TO MEET (${_formatMin(lastEndMinutes)} - ${_formatMin(startMinutes)})",
-                      style: TextStyle(color: isDark ? Colors.green[300] : Colors.green[800], fontWeight: FontWeight.bold, fontSize: 12)
-                    )
-                  ],
-                ),
-              ),
-            ));
-         }
-         if (endMinutes > lastEndMinutes) lastEndMinutes = endMinutes;
+       if (userOnCampus && friendOnCampus) {
+          // 3.2 Collect All Busy Intervals
+          List<({int start, int end})> busyIntervals = [];
+          
+          final allEvents = [...events, ...friendEvents];
+          for (var e in allEvents) {
+             final s = e.startTime.split(':');
+             final start = int.parse(s[0]) * 60 + int.parse(s[1]);
+             final eStr = e.endTime.split(':');
+             final end = int.parse(eStr[0]) * 60 + int.parse(eStr[1]);
+             busyIntervals.add((start: start, end: end));
+          }
+          
+          // 3.3 Sort and Merge
+          busyIntervals.sort((a,b) => a.start.compareTo(b.start));
+          
+          List<({int start, int end})> merged = [];
+          if (busyIntervals.isNotEmpty) {
+             var current = busyIntervals[0];
+             for (int i = 1; i < busyIntervals.length; i++) {
+                if (busyIntervals[i].start < current.end) {
+                   // Overlap or Abutting, merge
+                   current = (start: current.start, end: busyIntervals[i].end > current.end ? busyIntervals[i].end : current.end);
+                } else {
+                   merged.add(current);
+                   current = busyIntervals[i];
+                }
+             }
+             merged.add(current);
+          }
+          
+          // 3.4 Find Gaps (08:00 to 17:30)
+          int startOfDay = 8 * 60; // 480
+          int endOfDay = 17 * 60 + 30; // 1050
+          
+          int scanPtr = startOfDay;
+          
+          for (var block in merged) {
+             if (block.start > scanPtr) {
+                // Found Gap
+                _addFreeBlock(children, scanPtr, block.start, width, isDark);
+             }
+             // Advance pointer
+             if (block.end > scanPtr) scanPtr = block.end;
+          }
+          
+          // Tail Gap
+          if (scanPtr < endOfDay) {
+             _addFreeBlock(children, scanPtr, endOfDay, width, isDark);
+          }
        }
     }
     
     return children;
   }
   
+  void _addFreeBlock(List<Widget> children, int startMin, int endMin, double totalWidth, bool isDark) {
+    if (endMin - startMin < 30) return; // Ignore small gaps < 30 mins
+    
+    double top = (startMin - 480).toDouble();
+    double height = (endMin - startMin).toDouble();
+    
+    children.add(Positioned(
+      top: top, 
+      left: 0, 
+      right: 0, 
+      height: height - 2,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 10), // Wider to look better
+        decoration: BoxDecoration(
+          color: isDark ? Colors.green.withOpacity(0.15) : Colors.green[50], // Subtle green
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.green.withOpacity(0.5), width: 1, style: BorderStyle.solid),
+          // Add dashed pattern or stripes? Keep it simple for now.
+        ),
+        alignment: Alignment.center,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+               Icon(Icons.handshake_rounded, size: 16, color: isDark ? Colors.green[300] : Colors.green[700]),
+               const SizedBox(width: 6),
+               Text(
+                 "FREE TO MEET  ${_formatMin(startMin)} - ${_formatMin(endMin)}",
+                 style: TextStyle(
+                   color: isDark ? Colors.green[300] : Colors.green[900], 
+                   fontWeight: FontWeight.bold, 
+                   fontSize: 12,
+                   letterSpacing: 0.5
+                 )
+               )
+            ],
+          ),
+        ),
+      ),
+    ));
+  }
+
   String _formatMin(int minutes) {
     final h = (minutes / 60).floor().toString().padLeft(2, '0');
     final m = (minutes % 60).toString().padLeft(2, '0');
@@ -337,7 +413,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
      // 8:00 AM is 480 minutes.
      // Offset: (startMinutes - 480) * (60px / 60min) -> 1 px per minute.
      double top = (startMinutes - 480).toDouble();
-     double height = (endMinutes - startMinutes).toDouble(); // 1 min = 1 px? Height of hour is 60. So yes.
+     double height = (endMinutes - startMinutes).toDouble(); // 1 min = 1 px
      
      if (top < 0) return const SizedBox(); // Before 8am
      
@@ -377,38 +453,38 @@ class _ScheduleTabState extends State<ScheduleTab> {
        top: top,
        left: left,
        width: width,
-       height: height - 2,
+       height: height - 1, // Slight gap
        child: GestureDetector(
          onTap: () => _showAddSessionDialog(sessionToEdit: isGhost ? null : event),
          child: Container(
-           padding: const EdgeInsets.all(8), // Reduced padding
+           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), // Reduced padding
            decoration: BoxDecoration(
              color: bgColor,
-             borderRadius: BorderRadius.circular(8), // Slightly tighter radius
-             border: Border(left: BorderSide(color: accentColor, width: 4))
+             borderRadius: BorderRadius.circular(8), 
+             border: Border(left: BorderSide(color: accentColor, width: 3))
            ),
            child: Column(
              crossAxisAlignment: CrossAxisAlignment.start,
-             mainAxisSize: MainAxisSize.min, // Important
+             mainAxisSize: MainAxisSize.min,
              children: [
-               // Use Flexible to prevent overflow
                Flexible(
                  child: Text(
                    event.subject, 
                    maxLines: 1, 
                    overflow: TextOverflow.ellipsis, 
-                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)
+                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor)
                  ),
                ),
-               if (height > 40) ...[ // Only show times if height permits
-                 const SizedBox(height: 2),
-                 Text("${event.startTime} - ${event.endTime}", style: TextStyle(fontSize: 10, color: isDark ? Colors.white70 : Colors.black54)),
+               if (height > 35) ...[ 
+                 const SizedBox(height: 1),
+                 Text("${event.startTime} - ${event.endTime}", style: TextStyle(fontSize: 9, color: isDark ? Colors.white70 : Colors.black54)),
+                 if (height > 50)
                  Flexible(
                    child: Text(
                      event.room, 
                      maxLines: 1, 
                      overflow: TextOverflow.ellipsis, 
-                     style: TextStyle(fontSize: 10, color: isDark ? Colors.white70 : Colors.black54)
+                     style: TextStyle(fontSize: 9, color: isDark ? Colors.white70 : Colors.black54)
                    )
                  ),
                ]
@@ -430,6 +506,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
       height: 90,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(), // Added bounce/friction
         itemCount: daysToShow.length,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemBuilder: (context, index) {

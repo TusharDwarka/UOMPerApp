@@ -79,6 +79,7 @@ class _AcademicTabState extends State<AcademicTab> {
 
   void _showAddEditTaskDialog({AcademicTask? taskToEdit}) {
     final formKey = GlobalKey<FormState>();
+    final isDark = Theme.of(context).brightness == Brightness.dark; // Check theme
     final isEditing = taskToEdit != null;
     String title = taskToEdit?.title ?? '';
     String subject = taskToEdit?.subject ?? 'General';
@@ -89,7 +90,7 @@ class _AcademicTabState extends State<AcademicTab> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white, // Dark bg
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return StatefulBuilder(
@@ -108,7 +109,7 @@ class _AcademicTabState extends State<AcademicTab> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(isEditing ? "Edit Task" : "Add Homework/Task", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                          Text(isEditing ? "Edit Task" : "Add Homework/Task", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
                           if (isEditing)
                             IconButton(
                               icon: const Icon(Icons.delete, color: Colors.red),
@@ -126,10 +127,12 @@ class _AcademicTabState extends State<AcademicTab> {
                       
                       TextFormField(
                         initialValue: title,
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black),
                         decoration: InputDecoration(
                           labelText: "Task Title",
+                          labelStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[600]),
                           filled: true,
-                          fillColor: Colors.grey[100],
+                          fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
                         ),
                         validator: (v) => v!.isEmpty ? "Required" : null,
@@ -140,25 +143,29 @@ class _AcademicTabState extends State<AcademicTab> {
                       
                       TextFormField(
                         initialValue: subject,
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black),
                         decoration: InputDecoration(
                           labelText: "Subject (e.g. Mobile Computing)",
+                          labelStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[600]),
                           filled: true,
-                          fillColor: Colors.grey[100],
+                          fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
                         ),
-                        onChanged: (v) => subject = v, // update local var
+                        onChanged: (v) => subject = v, 
                         onSaved: (v) => subject = v!,
                       ),
                       const SizedBox(height: 15),
                       
                       DropdownButtonFormField<String>(
                         value: type,
-                        items: ["Assignment", "Exam", "Note", "Project"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                        items: ["Assignment", "Exam", "Note", "Project"].map((e) => DropdownMenuItem(value: e, child: Text(e, style: TextStyle(color: isDark ? Colors.white : Colors.black)))).toList(),
                         onChanged: (v) => setSheetState(() => type = v!),
+                        dropdownColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
                         decoration: InputDecoration(
                           labelText: "Type",
+                          labelStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[600]),
                           filled: true,
-                          fillColor: Colors.grey[100],
+                          fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
                         ),
                       ),
@@ -170,22 +177,56 @@ class _AcademicTabState extends State<AcademicTab> {
                           Expanded(
                             child: OutlinedButton.icon(
                               onPressed: () async {
-                                final d = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
+                                final d = await showDatePicker(
+                                  context: context, 
+                                  initialDate: selectedDate, 
+                                  firstDate: DateTime(2020), 
+                                  lastDate: DateTime(2030),
+                                  builder: (context, child) => Theme(
+                                    data: isDark 
+                                      ? ThemeData.dark().copyWith(
+                                          colorScheme: const ColorScheme.dark(primary: Color(0xFF2962FF), onPrimary: Colors.white, surface: Color(0xFF1E1E1E), onSurface: Colors.white),
+                                          dialogBackgroundColor: const Color(0xFF1E1E1E)
+                                        )
+                                      : ThemeData.light(),
+                                    child: child!,
+                                  ),
+                                );
                                 if (d!=null) setSheetState(() => selectedDate = d);
                               }, 
-                              icon: const Icon(Icons.calendar_today), 
-                              label: Text(DateFormat('MMM dd').format(selectedDate))
+                              icon: Icon(Icons.calendar_today, color: isDark ? Colors.blue[200] : const Color(0xFF2962FF)), 
+                              label: Text(DateFormat('MMM dd').format(selectedDate), style: TextStyle(color: isDark ? Colors.white : const Color(0xFF2962FF))),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: isDark ? Colors.white24 : Colors.grey[300]!),
+                                padding: const EdgeInsets.symmetric(vertical: 12)
+                              )
                             )
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: OutlinedButton.icon(
                               onPressed: () async {
-                                final t = await showTimePicker(context: context, initialTime: selectedTime);
+                                final t = await showTimePicker(
+                                  context: context, 
+                                  initialTime: selectedTime,
+                                  builder: (context, child) => Theme(
+                                    data: isDark 
+                                      ? ThemeData.dark().copyWith(
+                                          colorScheme: const ColorScheme.dark(primary: Color(0xFF2962FF), onPrimary: Colors.white, surface: Color(0xFF1E1E1E), onSurface: Colors.white),
+                                          timePickerTheme: const TimePickerThemeData(backgroundColor: Color(0xFF1E1E1E))
+                                        )
+                                      : ThemeData.light(),
+                                    child: child!,
+                                  ),
+                                );
                                 if (t!=null) setSheetState(() => selectedTime = t);
                               }, 
-                              icon: const Icon(Icons.access_time), 
-                              label: Text(selectedTime.format(context))
+                              icon: Icon(Icons.access_time, color: isDark ? Colors.blue[200] : const Color(0xFF2962FF)), 
+                              label: Text(selectedTime.format(context), style: TextStyle(color: isDark ? Colors.white : const Color(0xFF2962FF))),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: isDark ? Colors.white24 : Colors.grey[300]!),
+                                padding: const EdgeInsets.symmetric(vertical: 12)
+                              )
                             )
                           ),
                         ],
