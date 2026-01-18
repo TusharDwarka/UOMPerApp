@@ -89,21 +89,11 @@ class TimetableProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // "Creative" Stats Calculation
-  // Returns { 'lives': int, 'maxLives': int, 'status': String }
+  // Stats: 10 Skips Allowed PER MODULE
   Map<String, dynamic> getAttendanceStats(String subject) {
-    // 1. Calculate Frequency per week from timetable
-    final weeklyFrequency = _userSessions.where((s) => s.subject == subject).length;
-    if (weeklyFrequency == 0) return {'lives': 0, 'maxLives': 0, 'status': 'No Data'};
+    const int maxSkips = 10;
 
-    // 2. Estimate Total Semester Classes (approx 15 weeks)
-    const int totalWeeks = 15;
-    final int totalClasses = totalWeeks * weeklyFrequency;
-    
-    // 3. Max allowable skips (25%)
-    final int maxSkips = (totalClasses * 0.25).floor();
-
-    // 4. Count current absences
+    // Count current absences
     final absences = _attendanceRecords
         .where((r) => r.subjectName == subject && !r.isPresent)
         .length;
@@ -112,17 +102,22 @@ class TimetableProvider extends ChangeNotifier {
     int lives = maxSkips - absences;
     
     String status = "Safe";
-    if (lives <= 0) status = "CRITICAL";
-    else if (lives <= 2) status = "Warning";
+    if (lives <= 0) status = "CRITICAL"; // 0 lives means you used all 10 allowed skips? Or 0 means you have 0 skips left? 
+    // "10 class missed in total not more" -> 10 lives. 
+    // 0 absences = 10 lives. 10 absences = 0 lives. 
+    // If lives < 0 ... technically eliminated?
+    
+    if (lives <= 0) status = "ELIMINATED";
+    else if (lives <= 3) status = "Warning";
 
     return {
-      'lives': lives,
-      'maxLives': maxSkips, // Initial hearts
+      'lives': lives > 0 ? lives : 0,
+      'maxLives': maxSkips, // 10
       'absences': absences,
       'status': status
     };
   }
-
+  
   Future<void> loadSessions() async {
     final isar = await isarService.db;
     _userSessions = await isar.classSessions.filter().isUserEqualTo(true).findAll();
@@ -277,35 +272,36 @@ class TimetableProvider extends ChangeNotifier {
     return getEventsForDay(date);
   }
 
-  // New: Generate past dates for a subject to allow marking retroactive attendance
-  // We assume a semester length of ~15 weeks, scanning back from today.
+  // Calculate past/valid dates from Semester Start (Jan 19, 2026) going forward
   List<DateTime> getPastClassDates(String subject) {
-    // Find missing logic: We need to know WHICH days of the week this subject occurs.
-    final sessions = _userSessions.where((s) => s.subject == subject).toList();
+    final sessions = userSessions.where((s) => s.subject == subject).toList(); // Use userSessions getter to respect View
     if (sessions.isEmpty) return [];
     
-    final validDays = sessions.map((s) => s.day).toSet(); // e.g. {"Monday", "Wednesday"}
+    final validDays = sessions.map((s) => s.day).toSet(); 
     
     List<DateTime> dates = [];
-    // Scan back 15 weeks
-    DateTime current = DateTime.now();
-    // Normalize to start of today to avoid time issues
-    current = DateTime(current.year, current.month, current.day);
-
-    for (int i = 0; i < 15 * 7; i++) {
-       final d = current.subtract(Duration(days: i));
-       final dayName = DateFormat('EEEE').format(d);
+    DateTime iterator = _semesterStart; // Jan 19
+    DateTime today = DateTime.now();
+    // Normalize today to Midnight
+    today = DateTime(today.year, today.month, today.day);
+    
+    // Iterate forward until Today
+    while (iterator.isBefore(today) || isSameDay(iterator, today)) {
+       final dayName = DateFormat('EEEE').format(iterator);
        
        if (validDays.contains(dayName)) {
-         // Also check if the session was active that week!
-         // We need at least one session on that day that was active.
-         bool isActive = sessions.any((s) => s.day == dayName && _shouldShowSession(s, d));
+         // Check if session active this week
+         // We must find IF there is a session for this subject on this day that is active
+         bool isActive = sessions.any((s) => s.day == dayName && _shouldShowSession(s, iterator));
          if (isActive) {
-           dates.add(d);
+           dates.add(iterator);
          }
        }
+       iterator = iterator.add(const Duration(days: 1));
     }
-    return dates;
+    
+    // Sort recent first
+    return dates.reversed.toList();
   }
   
   // Check if attendance is marked for a specific date/subject

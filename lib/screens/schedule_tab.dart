@@ -466,15 +466,29 @@ class _ScheduleTabState extends State<ScheduleTab> {
                            ),
                          ],
                        )
-                     : Container(
-                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                         decoration: BoxDecoration(
-                           color: (isPresent! ? Colors.green : Colors.red).withOpacity(0.9),
-                           borderRadius: BorderRadius.circular(4)
-                         ),
-                         child: Text(
-                           isPresent ? "IN" : "OUT", 
-                           style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)
+                     : GestureDetector(
+                         onTap: () {
+                           // Allow retoggling / correcting mistake
+                           provider?.setAttendance(event.subject, _selectedDate, !(isPresent ?? false));
+                         },
+                         child: Container(
+                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                           decoration: BoxDecoration(
+                             color: (isPresent! ? Colors.green : Colors.red).withOpacity(0.9),
+                             borderRadius: BorderRadius.circular(4),
+                             border: Border.all(color: Colors.white.withOpacity(0.5), width: 1)
+                           ),
+                           child: Row(
+                             mainAxisSize: MainAxisSize.min,
+                             children: [
+                               Text(
+                                 isPresent ? "IN" : "OUT", 
+                                 style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)
+                               ),
+                               const SizedBox(width: 2),
+                               const Icon(Icons.refresh, size: 8, color: Colors.white70) // Visual hint that it's clickable
+                             ],
+                           ),
                          ),
                        ),
                  )

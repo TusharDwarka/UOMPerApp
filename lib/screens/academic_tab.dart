@@ -311,12 +311,6 @@ class _AcademicTabState extends State<AcademicTab> {
         final todayClasses = timetable.getClassesForDate(DateTime.now());
         final todaySubjects = todayClasses.map((s) => s.subject).toSet().toList();
 
-        // Global Stats
-        final globalStats = timetable.getGlobalSurvivalStats();
-        final int lives = globalStats['lives'];
-        final int maxLives = globalStats['maxLives']; // 10
-        final String status = globalStats['status'];
-
         if (subjects.isEmpty) {
           return Center(child: Text("No courses found. Check your schedule setup.", style: TextStyle(color: isDark ? Colors.grey : Colors.black)));
         }
@@ -324,58 +318,6 @@ class _AcademicTabState extends State<AcademicTab> {
         return ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // --- Global Survival Header ---
-            Container(
-              padding: const EdgeInsets.all(24),
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: lives > 3 
-                    ? [const Color(0xFF00C853), const Color(0xFF69F0AE)] 
-                    : [const Color(0xFFD32F2F), const Color(0xFFFF5252)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight
-                ),
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(color: (lives > 3 ? Colors.green : Colors.red).withOpacity(0.4), blurRadius: 15, offset: const Offset(0, 8))
-                ]
-              ),
-              child: Column(
-                children: [
-                   Row(
-                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                     children: [
-                       const Text("SEMESTER SURVIVAL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1.2)),
-                       Container(
-                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                         decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
-                         child: Text(status.toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                       )
-                     ],
-                   ),
-                   const SizedBox(height: 20),
-                   // Hearts Row
-                   Wrap(
-                     alignment: WrapAlignment.center,
-                     spacing: 8,
-                     runSpacing: 8,
-                     children: List.generate(maxLives, (index) {
-                        if (index < lives) {
-                          return const Icon(Icons.favorite, color: Colors.white, size: 28);
-                        } else {
-                          return Icon(Icons.favorite_border, color: Colors.white.withOpacity(0.5), size: 28);
-                        }
-                     }),
-                   ),
-                   const SizedBox(height: 16),
-                   Text("$lives Lives Remaining", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                   const SizedBox(height: 4),
-                   const Text("Don't let it hit zero.", style: TextStyle(color: Colors.white70, fontSize: 14)),
-                ],
-              ),
-            ),
-
             // --- Section 1: Today's Roll Call ---
             if (todaySubjects.isNotEmpty) ...[
                Text("Today's Roll Call", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1E1E2C))),
@@ -421,13 +363,26 @@ class _AcademicTabState extends State<AcademicTab> {
             ],
 
             // --- Section 2: Subject Details ---
-            Text("Attendance Log", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1E1E2C))),
+            Text("Module Survival Tracking", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1E1E2C))),
             const SizedBox(height: 12),
             
             ...subjects.map((subject) {
-               final subjectStats = timetable.getSubjectStats(subject);
-               final int absences = subjectStats['absences'];
+               final stats = timetable.getAttendanceStats(subject);
+               final int lives = stats['lives'];
+               final int maxLives = stats['maxLives'];
+               final int absences = stats['absences'];
                
+               // Visual Hearts
+               List<Widget> hearts = [];
+               int heartsToShow = lives > 10 ? 10 : (lives < 0 ? 0 : lives);
+               for(int i=0; i<maxLives; i++) {
+                 if (i < heartsToShow) {
+                   hearts.add(const Icon(Icons.favorite, color: Colors.pinkAccent, size: 16));
+                 } else {
+                   hearts.add(Icon(Icons.favorite_border, color: isDark ? Colors.white24 : Colors.grey[300], size: 16));
+                 }
+               }
+
                return Card(
                  elevation: 0,
                  color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
@@ -438,7 +393,15 @@ class _AcademicTabState extends State<AcademicTab> {
                    child: ExpansionTile(
                      collapsedIconColor: isDark ? Colors.grey : Colors.grey[600],
                      title: Text(subject, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
-                     subtitle: Text("$absences Missed Classes", style: TextStyle(color: absences > 0 ? Colors.redAccent : Colors.green, fontSize: 13, fontWeight: FontWeight.bold)),
+                     subtitle: Column(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       children: [
+                         const SizedBox(height: 6),
+                         Wrap(spacing: 4, runSpacing: 4, children: hearts),
+                         const SizedBox(height: 6),
+                         Text("$lives / $maxLives Lives Remaining", style: TextStyle(color: lives <= 2 ? Colors.red : (lives <= 5 ? Colors.orange : Colors.green), fontSize: 13, fontWeight: FontWeight.bold)),
+                       ],
+                     ),
                      children: [
                        Divider(color: isDark ? Colors.white10 : Colors.grey[100]),
                        Padding(
