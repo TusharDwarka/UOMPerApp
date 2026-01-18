@@ -1,16 +1,48 @@
-# uom_per_app
+# UOM Personal Student App 🎓
 
-A new Flutter project.
+A comprehensive mobile companion designed for University of Mauritius students to manage their academic life, track attendance, and coordinate schedules with friends.
 
-## Getting Started
+## ✨ Key Features
 
-This project is a starting point for a Flutter application.
+### 📅 Advanced Schedule Management
+- **Smart Timetable**: Automatically detects the current week and adjusts for Online vs. Campus weeks.
+- **Compare Schedules**: The flagship **"Free to Meet"** feature allows you to compare your timetable (e.g., Data Science) with a friend's (e.g., Computer Science).
+- **Intelligent Gap Detection**: When comparing, the app automatically highlights common free slots (min 30 mins) directly on the grid—but **only if both of you are on campus** that day!
 
-A few resources to get you started if this is your first Flutter project:
+### ❤️ Attendance Survival Mode
+- **Gamified Tracking**: Treat your attendance like a game! You start with 10 "Lives" per module.
+- **Visual Feedback**: Hearts dissipate as you miss classes.
+- **Log History**: Correct mistakes or view your attendance history for any module.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+### 📝 Academic Hub & Planner
+- **Task Management**: Track assignments, tests, and projects.
+- **Deadline Awareness**: Visual urgency indicators (Red for <= 3 days, Orange for <= 7 days).
+- **Class Quick Actions**: Add homework directly from your schedule view.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### 🚌 Campus Utilities
+- **Bus Schedule**: Integrated bus timings for easy commute planning.
+- **Dark Mode**: Fully supported beautiful dark theme for late-night studying.
+
+## 🚀 Getting Started
+
+1.  **Prerequisites**: Ensure you have [Flutter](https://flutter.dev/docs/get-started/install) installed.
+2.  **Clone the Repo**:
+    ```bash
+    git clone https://github.com/yourusername/uom-per-app.git
+    cd uom-per-app
+    ```
+3.  **Install Dependencies**:
+    ```bash
+    flutter pub get
+    ```
+4.  **Run the App**:
+    ```bash
+    flutter run
+    ```
+    *(Use `flutter run --release` for a faster, optimized experience)*
+
+## 🛠 Tech Stack
+-   **Framework**: Flutter
+-   **State Management**: Provider
+-   **Database**: Isar (High performance NoSQL)
+-   **UI**: Material 3 Design
