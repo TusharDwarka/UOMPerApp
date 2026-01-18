@@ -13,7 +13,7 @@ class NotesTab extends StatefulWidget {
 }
 
 class _NotesTabState extends State<NotesTab> {
-  String _searchQuery = "";
+  final ValueNotifier<String> _searchQueryNotifier = ValueNotifier("");
   final TextEditingController _searchController = TextEditingController();
   
   // Creative Colors (Pastel / Soft Material)
@@ -36,33 +36,43 @@ class _NotesTabState extends State<NotesTab> {
     });
   }
 
-  List<Note> _filterNotes(List<Note> notes) {
-    if (_searchQuery.isEmpty) return notes;
+  @override
+  void dispose() {
+    _searchQueryNotifier.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<Note> _filterNotes(List<Note> notes, String query) {
+    if (query.isEmpty) return notes;
     return notes.where((n) {
-      return n.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-             n.content.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-             n.subject.toLowerCase().contains(_searchQuery.toLowerCase());
+      return n.title.toLowerCase().contains(query.toLowerCase()) ||
+             n.content.toLowerCase().contains(query.toLowerCase()) ||
+             n.subject.toLowerCase().contains(query.toLowerCase());
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      resizeToAvoidBottomInset: false, 
       appBar: AppBar(
-        title: const Text("Creative Notes", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 24)),
-        backgroundColor: Colors.white,
+        title: Text("Creative Notes", style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 24)),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.black87),
+            icon: Icon(Icons.refresh, color: isDark ? Colors.white : Colors.black87),
             onPressed: () => Provider.of<NoteProvider>(context, listen: false).loadNotes(),
           )
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showNoteEditor(),
-        backgroundColor: Colors.black,
+        backgroundColor: isDark ? const Color(0xFF2962FF) : Colors.black,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text("New Note", style: TextStyle(color: Colors.white)),
       ),
@@ -71,40 +81,47 @@ class _NotesTabState extends State<NotesTab> {
           // Search Bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: "Search notes, subjects...",
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                filled: true,
-                fillColor: Colors.grey[100],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20)
+            child: RepaintBoundary(
+              child: TextField(
+                controller: _searchController,
+                style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                decoration: InputDecoration(
+                  hintText: "Search notes, subjects...",
+                  hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                  prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey),
+                  filled: true,
+                  fillColor: isDark ? Colors.white10 : Colors.grey[100],
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20)
+                ),
+                onChanged: (val) {
+                  _searchQueryNotifier.value = val; 
+                },
               ),
-              onChanged: (val) {
-                setState(() {
-                  _searchQuery = val;
-                });
-              },
             ),
           ),
           
           Expanded(
-            child: Consumer<NoteProvider>(
-              builder: (context, noteProvider, _) {
-                final filteredNotes = _filterNotes(noteProvider.notes);
-                
-                if (filteredNotes.isEmpty) {
-                  return Center(
-                    child: Text(
-                      "Empty Canvas", 
-                      style: TextStyle(color: Colors.grey[300], fontSize: 20, fontWeight: FontWeight.bold)
-                    )
-                  );
-                }
-                
-                return _buildMasonryGrid(filteredNotes);
-              },
+            child: ValueListenableBuilder<String>(
+              valueListenable: _searchQueryNotifier,
+              builder: (context, query, _) {
+                return Consumer<NoteProvider>(
+                  builder: (context, noteProvider, _) {
+                    final filteredNotes = _filterNotes(noteProvider.notes, query);
+                    
+                    if (filteredNotes.isEmpty) {
+                      return Center(
+                        child: Text(
+                          "Empty Canvas", 
+                          style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[300], fontSize: 20, fontWeight: FontWeight.bold)
+                        )
+                      );
+                    }
+                    
+                    return _buildMasonryGrid(filteredNotes);
+                  },
+                );
+              }
             ),
           ),
         ],
@@ -144,6 +161,8 @@ class _NotesTabState extends State<NotesTab> {
   }
 
   Widget _buildNoteCard(Note note) {
+    // Keep pastel colors as they are meant to be 'creative' notes
+    // Text on these pastels should remain black
     final color = _noteColors[note.colorIndex % _noteColors.length];
     
     return GestureDetector(
@@ -171,13 +190,13 @@ class _NotesTabState extends State<NotesTab> {
                 ),
                 child: Text(
                   note.subject.toUpperCase(), 
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1, color: Colors.black87),
                 ),
               ),
               
             Text(
               note.title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, height: 1.2),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, height: 1.2, color: Colors.black),
             ),
             const SizedBox(height: 8),
             Text(
@@ -198,10 +217,11 @@ class _NotesTabState extends State<NotesTab> {
   }
 
   void _showNoteEditor({Note? note}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
       builder: (context) => NoteEditorSheet(
         note: note,
@@ -236,10 +256,8 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
     _contentController = TextEditingController(text: widget.note?.content ?? '');
     _subjectController = TextEditingController(text: widget.note?.subject ?? 'General');
     
-    // Fix: Correctly initialize color index
     if (widget.note != null) {
       _selectedColorIndex = widget.note!.colorIndex;
-      // Safety check
       if (_selectedColorIndex >= widget.colors.length) _selectedColorIndex = 0;
     } else {
       _selectedColorIndex = Random().nextInt(widget.colors.length);
@@ -249,12 +267,13 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
   @override
   Widget build(BuildContext context) {
     final noteProvider = Provider.of<NoteProvider>(context, listen: false);
-    
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Padding(
-      padding: EdgeInsets.only(
+       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
         top: 20, left: 20, right: 20
-      ),
+      ), 
       child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.85, 
         child: Column(
@@ -263,7 +282,7 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                IconButton(icon: Icon(Icons.close, color: isDark ? Colors.white : Colors.black), onPressed: () => Navigator.pop(context)),
                 if (!_isNew)
                   IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.red), 
@@ -303,7 +322,7 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
             
             const SizedBox(height: 10),
             
-            // Color Picker Strip
+            // Color Picker Strip - Const where possible
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -321,7 +340,7 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
                       decoration: BoxDecoration(
                         color: widget.colors[index],
                         shape: BoxShape.circle,
-                        border: isSelected ? Border.all(color: Colors.black, width: 2) : Border.all(color: Colors.grey[300]!)
+                        border: isSelected ? Border.all(color: isDark ? Colors.white : Colors.black, width: 2) : Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!)
                       ),
                       child: isSelected ? const Icon(Icons.check, size: 16, color: Colors.black) : null,
                     ),
@@ -332,24 +351,30 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
             const SizedBox(height: 20),
 
             // Inputs
-            TextField(
-              controller: _titleController,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              decoration: const InputDecoration.collapsed(hintText: "Title"),
+            RepaintBoundary(
+              child: TextField(
+                controller: _titleController,
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
+                decoration: InputDecoration.collapsed(hintText: "Title", hintStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[400])),
+              ),
             ),
             const SizedBox(height: 10),
-            TextField(
-              controller: _subjectController,
-              style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w600),
-              decoration: const InputDecoration.collapsed(hintText: "Subject / Tag"),
+            RepaintBoundary(
+              child: TextField(
+                controller: _subjectController,
+                style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w600),
+                decoration: InputDecoration.collapsed(hintText: "Subject / Tag", hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[300])),
+              ),
             ),
             const Divider(height: 30),
             Expanded(
-              child: TextField(
-                controller: _contentController,
-                maxLines: null,
-                style: const TextStyle(fontSize: 18, height: 1.5),
-                decoration: const InputDecoration.collapsed(hintText: "Start writing..."),
+              child: RepaintBoundary(
+                child: TextField(
+                  controller: _contentController,
+                  maxLines: null,
+                  style: TextStyle(fontSize: 18, height: 1.5, color: isDark ? Colors.white : Colors.black),
+                  decoration: InputDecoration.collapsed(hintText: "Start writing...", hintStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[400])),
+                ),
               ),
             )
           ],

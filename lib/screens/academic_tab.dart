@@ -228,19 +228,20 @@ class _AcademicTabState extends State<AcademicTab> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          title: const Text('Academic Hub', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-          backgroundColor: Colors.white,
+          title: Text('Academic Hub', style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           elevation: 0,
-          bottom: const TabBar(
-            labelColor: Color(0xFF2962FF),
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: Color(0xFF2962FF),
-            tabs: [
+          bottom: TabBar(
+            labelColor: const Color(0xFF2962FF),
+            unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey,
+            indicatorColor: const Color(0xFF2962FF),
+            tabs: const [
               Tab(text: "Planner"),
               Tab(text: "Attendance Survival"),
             ],
@@ -254,15 +255,15 @@ class _AcademicTabState extends State<AcademicTab> {
         ),
         body: TabBarView(
           children: [
-            _buildTaskPlanner(),
-            _buildAttendanceTracker(),
+            _buildTaskPlanner(isDark),
+            _buildAttendanceTracker(isDark),
           ],
         ),
       ),
     );
   }
   
-  Widget _buildAttendanceTracker() {
+  Widget _buildAttendanceTracker(bool isDark) {
     return Consumer<TimetableProvider>(
       builder: (context, timetable, _) {
         final subjects = timetable.userSessions.map((s) => s.subject).toSet().toList();
@@ -272,7 +273,7 @@ class _AcademicTabState extends State<AcademicTab> {
         final todaySubjects = todayClasses.map((s) => s.subject).toSet().toList();
 
         if (subjects.isEmpty) {
-          return const Center(child: Text("No courses found. Check your schedule setup."));
+          return Center(child: Text("No courses found. Check your schedule setup.", style: TextStyle(color: isDark ? Colors.grey : Colors.black)));
         }
 
         return ListView(
@@ -280,7 +281,7 @@ class _AcademicTabState extends State<AcademicTab> {
           children: [
             // --- Section 1: Today's Roll Call ---
             if (todaySubjects.isNotEmpty) ...[
-               const Text("Today's Roll Call", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A237E))),
+               Text("Today's Roll Call", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1A237E))),
                const SizedBox(height: 10),
                ...todaySubjects.map((subject) {
                   final record = timetable.getAttendanceRecord(subject, DateTime.now());
@@ -290,13 +291,14 @@ class _AcademicTabState extends State<AcademicTab> {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+                      border: Border.all(color: isDark ? Colors.white10 : Colors.transparent),
                     ),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      title: Text(subject, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      title: Text(subject, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                       subtitle: Text(
                         hasRecord ? (isPresent ? "Marked Present" : "Marked Absent") : "Not marked yet", 
                         style: TextStyle(color: hasRecord ? (isPresent ? Colors.green : Colors.red) : Colors.grey)
@@ -308,7 +310,7 @@ class _AcademicTabState extends State<AcademicTab> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.check_circle),
-                              color: hasRecord && isPresent ? Colors.green : Colors.grey[300],
+                              color: hasRecord && isPresent ? Colors.green : (isDark ? Colors.grey[700] : Colors.grey[300]),
                               iconSize: 32,
                               onPressed: () {
                                  timetable.setAttendance(subject, DateTime.now(), true);
@@ -316,7 +318,7 @@ class _AcademicTabState extends State<AcademicTab> {
                             ),
                             IconButton(
                               icon: const Icon(Icons.cancel),
-                              color: hasRecord && !isPresent ? Colors.red : Colors.grey[300],
+                              color: hasRecord && !isPresent ? Colors.red : (isDark ? Colors.grey[700] : Colors.grey[300]),
                               iconSize: 32,
                               onPressed: () {
                                  timetable.setAttendance(subject, DateTime.now(), false);
@@ -328,11 +330,11 @@ class _AcademicTabState extends State<AcademicTab> {
                     ),
                   );
                }),
-               const Divider(height: 40),
+               Divider(height: 40, color: isDark ? Colors.grey[800] : Colors.grey[300]),
             ],
 
             // --- Section 2: Survival Stats ---
-            const Text("Semester Survival", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A237E))),
+            Text("Semester Survival", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1A237E))),
             const SizedBox(height: 15),
             
             ...subjects.map((subject) {
@@ -348,11 +350,14 @@ class _AcademicTabState extends State<AcademicTab> {
 
                return Card(
                  elevation: 2,
+                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                  margin: const EdgeInsets.only(bottom: 20),
                  child: Theme(
-                   data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                   data: Theme.of(context).copyWith(dividerColor: Colors.transparent, colorScheme: isDark ? const ColorScheme.dark() : const ColorScheme.light()),
                    child: ExpansionTile(
+                     collapsedIconColor: isDark ? Colors.grey : Colors.black54,
+                     iconColor: isDark ? Colors.white : Colors.black,
                      tilePadding: const EdgeInsets.all(20),
                      title: Column(
                        crossAxisAlignment: CrossAxisAlignment.start,
@@ -360,7 +365,7 @@ class _AcademicTabState extends State<AcademicTab> {
                          Row(
                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                            children: [
-                             Expanded(child: Text(subject, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                             Expanded(child: Text(subject, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))),
                              Container(
                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                decoration: BoxDecoration(
@@ -386,17 +391,17 @@ class _AcademicTabState extends State<AcademicTab> {
                            ],
                          ),
                          const SizedBox(height: 6),
-                         Text("Skipped $absences / $maxLives allowed", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                         Text("Skipped $absences / $maxLives allowed", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12)),
                        ],
                      ),
                      children: [
-                       const Divider(),
+                       Divider(color: isDark ? Colors.grey[800] : Colors.grey[200]),
                        Padding(
                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 15),
                          child: Column(
                            crossAxisAlignment: CrossAxisAlignment.start,
                            children: [
-                             Text("Attendance History", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[800])),
+                             Text("Attendance History", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.grey[300] : Colors.grey[800])),
                              const SizedBox(height: 10),
                              ...timetable.getPastClassDates(subject).map((date) {
                                 final r = timetable.getAttendanceRecord(subject, date);
@@ -412,10 +417,10 @@ class _AcademicTabState extends State<AcademicTab> {
                                     padding: const EdgeInsets.symmetric(vertical: 8),
                                     child: Row(
                                       children: [
-                                        Text(DateFormat('MMM d (EEE)').format(date), style: const TextStyle(fontSize: 14)),
+                                        Text(DateFormat('MMM d (EEE)').format(date), style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[300] : Colors.black87)),
                                         const Spacer(),
                                         if (!hasRecord) 
-                                           Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)), child: const Text("?", style: TextStyle(fontSize: 12)))
+                                           Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.grey[200], borderRadius: BorderRadius.circular(4)), child: Text("?", style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black)))
                                         else 
                                            Icon(isPresent ? Icons.check : Icons.close, color: isPresent ? Colors.green : Colors.red, size: 18)
                                       ],
@@ -439,7 +444,7 @@ class _AcademicTabState extends State<AcademicTab> {
     );
   }
 
-  Widget _buildTaskPlanner() {
+  Widget _buildTaskPlanner(bool isDark) {
     // Filter tasks for "Today's Priorities" (if selected date is today) or just show selected day tasks
     final selectedTasks = _getEventsForDay(_selectedDay ?? DateTime.now());
     
@@ -449,7 +454,7 @@ class _AcademicTabState extends State<AcademicTab> {
       return diff >= 0 && diff <= 3 && !t.isCompleted;
     }).toList();
     
-    return Column(
+    return ListView( // Changed to ListView to allow scrolling whole page
         children: [
           // 1. Calendar View
           TableCalendar<AcademicTask>(
@@ -470,11 +475,20 @@ class _AcademicTabState extends State<AcademicTab> {
             onPageChanged: (focusedDay) => _focusedDay = focusedDay,
             eventLoader: _getEventsForDay,
             calendarStyle: CalendarStyle(
+              defaultTextStyle: TextStyle(color: isDark ? Colors.white : Colors.black),
+              weekendTextStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+              outsideTextStyle: TextStyle(color: isDark ? Colors.grey[700] : Colors.grey[400]),
               markerDecoration: const BoxDecoration(color: Color(0xFFFF1744), shape: BoxShape.circle),
               selectedDecoration: const BoxDecoration(color: Color(0xFF2962FF), shape: BoxShape.circle),
               todayDecoration: BoxDecoration(color: const Color(0xFF2962FF).withOpacity(0.5), shape: BoxShape.circle),
             ),
-            headerStyle: const HeaderStyle(formatButtonVisible: false, titleCentered: true),
+            headerStyle: HeaderStyle(
+              formatButtonVisible: false, 
+              titleCentered: true,
+              titleTextStyle: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
+              leftChevronIcon: Icon(Icons.chevron_left, color: isDark ? Colors.white : Colors.black),
+              rightChevronIcon: Icon(Icons.chevron_right, color: isDark ? Colors.white : Colors.black),
+            ),
           ),
           
           const SizedBox(height: 20),
@@ -484,7 +498,7 @@ class _AcademicTabState extends State<AcademicTab> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Text(
               isSameDay(_selectedDay, DateTime.now()) ? "Today's Priorities" : "Tasks for ${DateFormat('MMM d').format(_selectedDay!)}", 
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)
             ),
           ),
           const SizedBox(height: 10),
@@ -501,16 +515,16 @@ class _AcademicTabState extends State<AcademicTab> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               itemCount: selectedTasks.length,
               itemBuilder: (context, index) {
-                return _buildTaskCard(selectedTasks[index]);
+                return _buildTaskCard(selectedTasks[index], isDark);
               },
             ),
               
             // 3. Upcoming / Priority Section (if displaying today)
              if (isSameDay(_selectedDay, DateTime.now()) && priorityTasks.isNotEmpty) ...[
                const SizedBox(height: 20),
-               const Padding(
-                 padding: EdgeInsets.symmetric(horizontal: 20),
-                 child: Text("Upcoming Deadlines (Next 3 Days)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.indigo)),
+               Padding(
+                 padding: const EdgeInsets.symmetric(horizontal: 20),
+                 child: Text("Upcoming Deadlines (Next 3 Days)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.indigoAccent : Colors.indigo)),
                ),
                const SizedBox(height: 10),
                // Horizontal list of urgent cards
@@ -558,15 +572,15 @@ class _AcademicTabState extends State<AcademicTab> {
     );
   }
 
-  Widget _buildTaskCard(AcademicTask task) {
+  Widget _buildTaskCard(AcademicTask task, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
-        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]
+        border: Border.all(color: isDark ? Colors.white10 : Colors.grey[200]!),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.05), blurRadius: 10, offset: const Offset(0, 4))]
       ),
       child: Row(
         children: [
@@ -583,14 +597,15 @@ class _AcademicTabState extends State<AcademicTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(task.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                Text("${task.subject} • ${DateFormat('HH:mm').format(task.dueDate)}", style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                Text(task.title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
+                Text("${task.subject} • ${DateFormat('HH:mm').format(task.dueDate)}", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
               ],
             ),
           ),
           Checkbox(
             value: task.isCompleted, 
             activeColor: const Color(0xFF2962FF),
+            side: BorderSide(color: isDark ? Colors.grey : Colors.black54),
             onChanged: (val) async {
                // Update
                final isarService = IsarService();

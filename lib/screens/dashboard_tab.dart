@@ -27,18 +27,22 @@ class _DashboardTabState extends State<DashboardTab> {
 
   @override
   Widget build(BuildContext context) {
-    // Premium Vibrant Colors
-    final primaryBlue = const Color(0xFF2962FF); // Stronger electric blue
-    final secondaryPurple = const Color(0xFF6200EA);
-    final softBg = Colors.white; 
-    const textDark = Color(0xFF1A1D1E);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
+    // Premium Vibrant Colors - Adapted
+    final primaryBlue = const Color(0xFF2962FF); 
+    // final secondaryPurple = const Color(0xFF6200EA); // Unused
+    
+    // Text Colors
+    final textPrimary = isDark ? Colors.white : const Color(0xFF1A1D1E);
+    final textSecondary = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return Scaffold(
-      backgroundColor: softBg,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Consumer<TimetableProvider>(
           builder: (context, timetable, child) {
-             final today = DateFormat('EEEE').format(DateTime.now()); // e.g., "Friday"
+             final today = DateFormat('EEEE').format(DateTime.now()); 
              final todayClasses = timetable.getEventsForDay(DateTime.now());
              
              // Sort by time
@@ -67,8 +71,6 @@ class _DashboardTabState extends State<DashboardTab> {
                  break;
                }
              }
-
-             // If currently in a class? (Optional logic, simpler for now)
              
             return SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
@@ -86,7 +88,7 @@ class _DashboardTabState extends State<DashboardTab> {
                             children: [
                               Text(
                                 DateFormat('MMMM d').format(DateTime.now()),
-                                style: TextStyle(color: Colors.grey[500], fontSize: 14, fontWeight: FontWeight.w600),
+                                style: TextStyle(color: textSecondary, fontSize: 14, fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(width: 8),
                               // Week Badge
@@ -102,13 +104,13 @@ class _DashboardTabState extends State<DashboardTab> {
                                      return Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: Colors.grey.withOpacity(0.1),
+                                          color: isDark ? Colors.white10 : Colors.grey.withOpacity(0.1),
                                           borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: Colors.grey.withOpacity(0.3))
+                                          border: Border.all(color: isDark ? Colors.white24 : Colors.grey.withOpacity(0.3))
                                         ),
                                         child: Text(
                                           "Starts in $diff days",
-                                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[700]),
+                                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: textSecondary),
                                         ),
                                      );
                                   }
@@ -117,19 +119,25 @@ class _DashboardTabState extends State<DashboardTab> {
                                   return Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: isOnline ? Colors.orange.withOpacity(0.1) : Colors.blue.withOpacity(0.1),
+                                      color: isOnline 
+                                          ? (isDark ? Colors.orange.withOpacity(0.2) : Colors.orange.withOpacity(0.1))
+                                          : (isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.withOpacity(0.1)),
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: isOnline ? Colors.orange.withOpacity(0.3) : Colors.blue.withOpacity(0.3),
+                                        color: isOnline 
+                                            ? (isDark ? Colors.orangeAccent : Colors.orange.withOpacity(0.3))
+                                            : (isDark ? Colors.blueAccent : Colors.blue.withOpacity(0.3)),
                                         width: 1
                                       )
                                     ),
                                     child: Text(
-                                      "Week $week • ${isOnline ? "Online" : "Campus"}", // Keep mode simple as requested
+                                      "Week $week • ${isOnline ? "Online" : "Campus"}", 
                                       style: TextStyle(
                                         fontSize: 10, 
                                         fontWeight: FontWeight.bold,
-                                        color: isOnline ? Colors.orange[800] : Colors.blue[800]
+                                        color: isOnline 
+                                            ? (isDark ? Colors.orangeAccent : Colors.orange[800])
+                                            : (isDark ? Colors.blueAccent : Colors.blue[800])
                                       ),
                                     ),
                                   );
@@ -138,15 +146,15 @@ class _DashboardTabState extends State<DashboardTab> {
                             ],
                           ),
                           const SizedBox(height: 4),
-                          const Text(
+                           Text(
                             "Hey, Student!",
-                            style: TextStyle(color: textDark, fontSize: 28, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: textPrimary, fontSize: 28, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
                       Container(
                         padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.grey[200]!)),
+                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: isDark ? Colors.white10 : Colors.grey[200]!)),
                         child: const CircleAvatar(
                           radius: 24,
                           backgroundColor: Color(0xFFE3F2FD),
@@ -158,26 +166,27 @@ class _DashboardTabState extends State<DashboardTab> {
                   
                   const SizedBox(height: 30),
 
-                  // Status Counters (Real Data: Total Classes Today)
+                  // Status Counters 
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildStatusCard(timetable.tasks.length.toString(), "All Tasks", primaryBlue, false), // Or 'Classes' if preferred to keep classes
-                      _buildStatusCard(timetable.pendingTasks.length.toString(), "Pending", textDark, false),
-                      _buildStatusCard(timetable.completedTasks.length.toString(), "Done", const Color(0xFF4CAF50), timetable.completedTasks.isNotEmpty),
+                      _buildStatusCard(timetable.tasks.length.toString(), "All Tasks", primaryBlue, false, isDark), 
+                      _buildStatusCard(timetable.pendingTasks.length.toString(), "Pending", textPrimary, false, isDark),
+                      _buildStatusCard(timetable.completedTasks.length.toString(), "Done", const Color(0xFF4CAF50), timetable.completedTasks.isNotEmpty, isDark),
                     ],
                   ),
 
                   const SizedBox(height: 30),
 
                   // Featured Card (Next Class)
-                  // Use a strictly defined container height to avoid layout shifts? No, auto is fine.
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(26),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [const Color(0xFF2979FF), const Color(0xFF1565C0)], // Material Blue A400 -> 800
+                        colors: isDark 
+                            ? [const Color(0xFF1565C0), const Color(0xFF0D47A1)]
+                            : [const Color(0xFF2979FF), const Color(0xFF1565C0)], 
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -246,7 +255,7 @@ class _DashboardTabState extends State<DashboardTab> {
                               elevation: 0,
                               textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
                             ),
-                            child: const Text("View Class Details"), // Or "Interact" / "Options"
+                            child: const Text("View Class Details"),
                           ),
                         )
                       ],
@@ -259,11 +268,11 @@ class _DashboardTabState extends State<DashboardTab> {
                      Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text("Next Deadline", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1D1E))),
+                           Text("Next Deadline", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textPrimary)),
                         ],
                      ),
                      const SizedBox(height: 16),
-                     _buildDeadlineCard(timetable.pendingTasks.first), // They are sorted by date in provider
+                     _buildDeadlineCard(timetable.pendingTasks.first, isDark: isDark),
                      const SizedBox(height: 34),
                   ],
 
@@ -271,10 +280,10 @@ class _DashboardTabState extends State<DashboardTab> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("Today's Schedule", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textDark)),
+                       Text("Today's Schedule", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textPrimary)),
                       TextButton(onPressed: () {
                          // Navigate to timetable?
-                      }, child: Text("See All", style: TextStyle(color: Colors.grey[500], fontSize: 16))),
+                      }, child: Text("See All", style: TextStyle(color: textSecondary, fontSize: 16))),
                     ],
                   ),
                   
@@ -285,12 +294,11 @@ class _DashboardTabState extends State<DashboardTab> {
                     Center(
                       child: Padding(
                         padding: const EdgeInsets.all(20.0),
-                        child: Text("No classes scheduled for $today.", style: TextStyle(color: Colors.grey[400])),
+                        child: Text("No classes scheduled for $today.", style: TextStyle(color: textSecondary)),
                       ),
                     )
                   else
                     ...todayClasses.map((session) {
-                       // Generate a consistent pastel color based on module name hash
                        final colorIndex = session.subject.hashCode.abs() % 4;
                        final colors = [
                          const Color(0xFF69F0AE), // Green
@@ -305,7 +313,7 @@ class _DashboardTabState extends State<DashboardTab> {
                          session.subject, 
                          session.room, 
                          bgColor, 
-                         Colors.black87
+                         isDark
                        );
                     }).toList(),
                 ],
@@ -317,20 +325,20 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildStatusCard(String count, String label, Color color, bool isActive) {
+  Widget _buildStatusCard(String count, String label, Color color, bool isActive, bool isDark) {
     return Expanded(
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 5), // spacing
         padding: const EdgeInsets.symmetric(vertical: 24),
         decoration: BoxDecoration(
-          color: isActive ? color : Colors.white,
+          color: isActive ? color : (isDark ? const Color(0xFF1E1E1E) : Colors.white),
           borderRadius: BorderRadius.circular(28),
           boxShadow: isActive ? [
              BoxShadow(color: color.withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 8))
           ] : [
-             BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)) // Subtle shadow for inactive
+             if(!isDark) BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))
           ],
-          border: isActive ? null : Border.all(color: Colors.grey.withOpacity(0.1)),
+          border: isActive ? null : Border.all(color: isDark ? Colors.white10 : Colors.grey.withOpacity(0.1)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -340,7 +348,7 @@ class _DashboardTabState extends State<DashboardTab> {
               style: TextStyle(
                 fontSize: 26, 
                 fontWeight: FontWeight.bold, 
-                color: isActive ? Colors.white : Colors.black87
+                color: isActive ? Colors.white : (isDark ? Colors.white : Colors.black87)
               ),
             ),
             const SizedBox(height: 6),
@@ -358,12 +366,13 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildScheduleItem(String time, String title, String subtitle, Color bgColor, Color textColor) {
+  Widget _buildScheduleItem(String time, String title, String subtitle, Color bgColor, bool isDark) {
+    final textColor = isDark ? Colors.white : Colors.black87;
     return Container(
       margin: const EdgeInsets.only(bottom: 18),
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: bgColor.withOpacity(0.25), 
+        color: isDark ? bgColor.withOpacity(0.15) : bgColor.withOpacity(0.25), 
         borderRadius: BorderRadius.circular(26),
       ),
       child: Row(
@@ -402,7 +411,7 @@ class _DashboardTabState extends State<DashboardTab> {
           // Action Icon
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.6), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: (isDark ? Colors.black : Colors.white).withOpacity(0.3), shape: BoxShape.circle),
             child: Icon(Icons.more_horiz, color: textColor.withOpacity(0.7), size: 18),
           )
         ],
@@ -410,12 +419,12 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildDeadlineCard(dynamic task) {
+  Widget _buildDeadlineCard(dynamic task, {bool isDark = false}) {
     // task is AcademicTask
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.redAccent.withOpacity(0.08),
+        color: Colors.redAccent.withOpacity(isDark ? 0.05 : 0.08),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
       ),
@@ -431,7 +440,7 @@ class _DashboardTabState extends State<DashboardTab> {
              child: Column(
                crossAxisAlignment: CrossAxisAlignment.start,
                children: [
-                 Text(task.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                 Text(task.title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                  const SizedBox(height: 4),
                  Text("Due: ${DateFormat('MMM d, h:mm a').format(task.dueDate)}", style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500)),
                ],
@@ -439,8 +448,8 @@ class _DashboardTabState extends State<DashboardTab> {
            ),
            Container(
              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
-             child: Text(task.subject, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
+             decoration: BoxDecoration(color: isDark ? const Color(0xFF1E1E1E) : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.white10 : Colors.grey[200]!)),
+             child: Text(task.subject, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.black54)),
            )
         ],
       ),
@@ -448,13 +457,14 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   void _showClassDetailsSheet(BuildContext context, ClassSession session) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
         ),
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -462,14 +472,14 @@ class _DashboardTabState extends State<DashboardTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
-              child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+              child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[600], borderRadius: BorderRadius.circular(2))),
             ),
             const SizedBox(height: 20),
-            Text(session.subject, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            Text("${session.startTime} - ${session.endTime} • ${session.room}", style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+            Text(session.subject, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+            Text("${session.startTime} - ${session.endTime} • ${session.room}", style: TextStyle(fontSize: 14, color: Colors.grey[500])),
             const SizedBox(height: 30),
             
-            const Text("Quick Actions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text("Quick Actions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
             const SizedBox(height: 15),
             
             Row(

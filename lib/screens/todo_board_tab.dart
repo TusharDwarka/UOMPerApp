@@ -33,10 +33,12 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
        ? TimeOfDay.fromDateTime(taskToEdit.dueDate) 
        : const TimeOfDay(hour: 23, minute: 59);
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).bottomSheetTheme.modalBackgroundColor,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
       builder: (context) {
         return StatefulBuilder(
@@ -53,7 +55,9 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(isEditing ? "Edit Task" : "Quick Add Task", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                      Text(isEditing ? "Edit Task" : "Quick Add Task", 
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.black)
+                      ),
                       if (isEditing)
                         IconButton(
                           icon: const Icon(Icons.delete_outline, color: Colors.red),
@@ -70,48 +74,71 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                   TextFormField(
                     initialValue: title,
                     autofocus: !isEditing,
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black),
                     decoration: InputDecoration(
                       hintText: "What needs to be done?",
+                      hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
                       filled: true, 
-                      fillColor: Colors.grey[100],
+                      fillColor: isDark ? const Color(0xFF2C2C2C) : Colors.grey[100],
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
                       prefixIcon: const Icon(Icons.edit_note, color: Colors.blueAccent)
                     ),
                     onChanged: (v) => title = v,
                   ),
+                  const SizedBox(height: 20),
+                  
+                  // Type Selector (Chips instead of Dropdown for better UX/Placement)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: ["Assignment", "Test", "Exam", "Project", "Other"].map((t) {
+                        final isSelected = type == t;
+                        Color chipColor = isDark ? const Color(0xFF2C2C2C) : Colors.grey[100]!;
+                        Color textColor = isDark ? Colors.white70 : Colors.black87;
+                        
+                        if (isSelected) {
+                          chipColor = Colors.blueAccent;
+                          textColor = Colors.white;
+                        }
+
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(t),
+                            selected: isSelected,
+                            selectedColor: Colors.blueAccent,
+                            backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.grey[100],
+                            labelStyle: TextStyle(color: textColor, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                            onSelected: (bool selected) {
+                              if (selected) setSheetState(() => type = t);
+                            },
+                            side: BorderSide.none,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), 
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
                   const SizedBox(height: 15),
 
-                  // Subject & Type Row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: type,
-                          items: ["Assignment", "Test", "Exam", "Project", "Other"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                          onChanged: (v) => setSheetState(() => type = v!),
-                          decoration: InputDecoration(
-                            labelText: "Type",
-                            filled: true, fillColor: Colors.grey[50],
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0)
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextFormField(
-                          initialValue: subject,
-                          decoration: InputDecoration(
-                            labelText: "Subject",
-                            filled: true, fillColor: Colors.grey[50],
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                            hintText: "e.g. Maths"
-                          ),
-                          onChanged: (v) => subject = v,
-                        ),
-                      ),
-                    ],
+                  // Subject Input
+                   TextFormField(
+                    initialValue: subject,
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                    decoration: InputDecoration(
+                      labelText: "Subject",
+                      labelStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                      filled: true, 
+                      fillColor: isDark ? const Color(0xFF2C2C2C) : Colors.grey[50], // Slightly different grey for differentiation
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      hintText: "e.g. Maths",
+                      hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400]),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14) 
+                    ),
+                    onChanged: (v) => subject = v,
                   ),
+
                   const SizedBox(height: 15),
 
                   // Date & Time Picker
@@ -125,12 +152,15 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-                            decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(12)),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[50],
+                              borderRadius: BorderRadius.circular(12)
+                            ),
                             child: Row(
                               children: [
                                 const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
                                 const SizedBox(width: 8),
-                                Text(DateFormat('MMM dd').format(selectedDate), style: const TextStyle(fontWeight: FontWeight.bold))
+                                Text(DateFormat('MMM dd').format(selectedDate), style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))
                               ],
                             ),
                           ),
@@ -145,12 +175,15 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-                            decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(12)),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[50],
+                              borderRadius: BorderRadius.circular(12)
+                            ),
                             child: Row(
                               children: [
                                 const Icon(Icons.access_time, size: 16, color: Colors.grey),
                                 const SizedBox(width: 8),
-                                Text(selectedTime.format(context), style: const TextStyle(fontWeight: FontWeight.bold))
+                                Text(selectedTime.format(context), style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))
                               ],
                             ),
                           ),
@@ -189,7 +222,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
+                        backgroundColor: isDark ? const Color(0xFF5C6BC0) : Colors.black,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
                       ),
@@ -212,14 +245,16 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
         final pending = timetable.pendingTasks;
         final completed = timetable.completedTasks;
 
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
         return Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           appBar: AppBar(
-            backgroundColor: Colors.white,
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             elevation: 0,
-            title: const Text("To-Do Board", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 26)),
+            title: Text("To-Do Board", style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.w900, fontSize: 26)),
             actions: [
-              IconButton(onPressed: () => _showAddEditSheet(), icon: const Icon(Icons.add_circle, color: Colors.black, size: 30))
+              IconButton(onPressed: () => _showAddEditSheet(), icon: Icon(Icons.add_circle, color: isDark ? Colors.white : Colors.black, size: 30))
             ],
           ),
           body: timetable.tasks.isEmpty 
@@ -227,7 +262,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.checklist_rounded, size: 80, color: Colors.grey[200]),
+                    Icon(Icons.checklist_rounded, size: 80, color: isDark ? Colors.white10 : Colors.grey[200]),
                     const SizedBox(height: 10),
                     Text("No tasks yet", style: TextStyle(color: Colors.grey[400], fontSize: 18, fontWeight: FontWeight.bold)),
                     Text("Tap + to add one", style: TextStyle(color: Colors.grey[400], fontSize: 14)),
@@ -237,17 +272,17 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
             : ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 children: [
-                  if (pending.isNotEmpty) ...[
+                   if (pending.isNotEmpty) ...[
                     const Text("UPCOMING", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 12)),
                     const SizedBox(height: 10),
-                    ...pending.map((t) => _buildTaskCard(t)),
+                    ...pending.map((t) => _buildTaskCard(t, isDark: isDark)),
                     const SizedBox(height: 20),
                   ],
                   
                   if (completed.isNotEmpty) ...[
                     const Text("COMPLETED", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 12)),
                     const SizedBox(height: 10),
-                    ...completed.map((t) => _buildTaskCard(t)),
+                    ...completed.map((t) => _buildTaskCard(t, isDark: isDark)),
                   ]
                 ],
               ),
@@ -256,7 +291,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
     );
   }
 
-  Widget _buildTaskCard(AcademicTask task) {
+  Widget _buildTaskCard(AcademicTask task, {bool isDark = false}) {
     Color typeColor;
     IconData typeIcon;
     switch(task.type) {
@@ -276,10 +311,12 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: task.isCompleted ? Colors.grey[50] : Colors.white,
+          color: task.isCompleted 
+             ? (isDark ? Colors.white.withOpacity(0.05) : Colors.grey[50]) 
+             : (isDark ? const Color(0xFF1E1E1E) : Colors.white),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: task.isCompleted ? Colors.grey[200]! : Colors.grey[100]!),
-          boxShadow: task.isCompleted ? [] : [
+          border: Border.all(color: isDark ? Colors.white10 : (task.isCompleted ? Colors.grey[200]! : Colors.grey[100]!)),
+          boxShadow: (task.isCompleted || isDark) ? [] : [
             BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))
           ]
         ),
@@ -331,7 +368,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text(task.title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, decoration: task.isCompleted ? TextDecoration.lineThrough : null, color: task.isCompleted ? Colors.grey : Colors.black87)),
+                  Text(task.title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, decoration: task.isCompleted ? TextDecoration.lineThrough : null, color: task.isCompleted ? Colors.grey : (isDark ? Colors.white : Colors.black87))),
                   const SizedBox(height: 4),
                   Text(DateFormat('MMM d, h:mm a').format(task.dueDate), style: TextStyle(color: Colors.grey[400], fontSize: 12, fontWeight: FontWeight.w500)),
                   ],

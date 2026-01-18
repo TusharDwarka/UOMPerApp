@@ -143,12 +143,13 @@ class _BusTabState extends State<BusTab> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
-        title: const Text("Bus Schedule", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 26, letterSpacing: -0.5)),
+        title: Text("Bus Schedule", style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.w900, fontSize: 26, letterSpacing: -0.5)),
         centerTitle: false,
       ),
       body: ListView.separated(
@@ -158,12 +159,6 @@ class _BusTabState extends State<BusTab> {
         itemBuilder: (context, index) {
           return BusRouteCard(
             data: _locations[index],
-            isExpanded: _expandedIndex == index,
-            onExpand: () {
-               setState(() {
-                 _expandedIndex = (_expandedIndex == index) ? -1 : index;
-               });
-            },
           );
         },
       ),
@@ -173,211 +168,241 @@ class _BusTabState extends State<BusTab> {
 
 class BusRouteCard extends StatefulWidget {
   final Map<String, dynamic> data;
-  final bool isExpanded;
-  final VoidCallback onExpand;
-
-  const BusRouteCard({super.key, required this.data, required this.isExpanded, required this.onExpand});
+  const BusRouteCard({super.key, required this.data});
 
   @override
   State<BusRouteCard> createState() => _BusRouteCardState();
 }
 
-class _BusRouteCardState extends State<BusRouteCard> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  
+class _BusRouteCardState extends State<BusRouteCard> {
+  bool _isExpanded = false;
+  int _selectedTabIndex = 0; // 0: Weekday, 1: Sat, 2: Sun
+
   @override
   void initState() {
     super.initState();
-    // Default to current day: 0=Mon-Fri, 1=Sat, 2=Sun
-    int initialIndex = 0;
     final weekday = DateTime.now().weekday;
-    if (weekday == 7) initialIndex = 2; // Sunday
-    else if (weekday == 6) initialIndex = 1; // Saturday
-    else initialIndex = 0; // Weekday
-
-    _tabController = TabController(length: 3, vsync: this, initialIndex: initialIndex);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+    if (weekday == 7) _selectedTabIndex = 2; // Sunday
+    else if (weekday == 6) _selectedTabIndex = 1; // Saturday
+    else _selectedTabIndex = 0; // Weekday
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF1565C0);
+    final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+
+    final locationName = widget.data['location_name'] ?? 'Unknown Location';
+    final busRoute = widget.data['bus_route'] ?? 'N/A';
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: widget.isExpanded 
-          ? [BoxShadow(color: Colors.blue.withOpacity(0.12), blurRadius: 24, offset: const Offset(0, 8))]
-          : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
-        border: widget.isExpanded ? Border.all(color: Colors.blueAccent.withOpacity(0.4), width: 1.5) : Border.all(color: Colors.transparent),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black.withOpacity(0.3) : const Color(0xFF1565C0).withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          )
+        ],
+        border: Border.all(color: isDark ? Colors.white10 : Colors.grey[100]!),
       ),
       child: Column(
         children: [
           // Header
           InkWell(
-            onTap: widget.onExpand,
-            borderRadius: BorderRadius.circular(24),
+            onTap: () => setState(() => _isExpanded = !_isExpanded),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24), bottom: Radius.circular(24)),
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(24),
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(14),
+                    width: 50, height: 50,
                     decoration: BoxDecoration(
-                      color: widget.isExpanded ? Colors.blueAccent : Colors.grey[50], 
-                      borderRadius: BorderRadius.circular(18)
+                      color: primaryColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Icon(Icons.directions_bus_filled_rounded, color: widget.isExpanded ? Colors.white : Colors.blueGrey, size: 26),
+                    child: Icon(Icons.directions_bus_filled_rounded, color: primaryColor, size: 28),
                   ),
-                  const SizedBox(width: 18),
+                  const SizedBox(width: 20),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                         Container(
-                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                           decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(6)),
-                           child: Text("Bus ${widget.data['bus_route']}", style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.w800, fontSize: 11)),
-                         ),
-                         const SizedBox(height: 6),
-                         Text(widget.data['location_name'], style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Colors.black87, height: 1.2)),
+                        Text(
+                          locationName,
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1A1D1E)),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                              child: Text(
+                                "Route $busRoute",
+                                style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
-                  Icon(widget.isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, color: Colors.grey[400])
+                  Icon(
+                    _isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                    color: isDark ? Colors.grey[400] : Colors.grey[400],
+                  )
                 ],
               ),
             ),
           ),
 
-          // Content
-          if (widget.isExpanded) ...[
-            Container(height: 1, color: Colors.grey[100]),
-            // Tabs
-            Container(
-              height: 45,
-              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TabBar(
-                controller: _tabController,
-                indicator: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: Colors.white,
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]
+          // Expanded Content
+          AnimatedCrossFade(
+            firstChild: const SizedBox(height: 0),
+            secondChild: Column(
+              children: [
+                Divider(height: 1, color: isDark ? Colors.grey[800] : Colors.grey[100]),
+                // Tabs
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Row(
+                    children: [
+                       _buildTabButton("Weekdays", 0, isDark),
+                       const SizedBox(width: 10),
+                       _buildTabButton("Sat", 1, isDark),
+                       const SizedBox(width: 10),
+                       _buildTabButton("Sun", 2, isDark),
+                    ],
+                  ),
                 ),
-                labelColor: Colors.blue[800],
-                unselectedLabelColor: Colors.grey[600],
-                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                tabs: const [
-                  Tab(text: "Weekdays"),
-                  Tab(text: "Saturday"),
-                  Tab(text: "Sunday"),
-                ],
-              ),
+                
+                // Content
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  child: _buildScheduleGrid(isDark),
+                ),
+              ],
             ),
-            
-            // Tab View (using AnimatedBuilder to rebuild on tab change or just setState)
-            // But TabBarView has size issues in Column. Use AnimatedBuilder on controller.
-            AnimatedBuilder(
-              animation: _tabController,
-              builder: (context, _) {
-                 final index = _tabController.index;
-                 final schedules = widget.data['schedules'];
-                 List<dynamic> list = [];
-                 if (index == 0) list = schedules['weekdays'] ?? [];
-                 else if (index == 1) list = schedules['saturdays'] ?? [];
-                 else list = schedules['sundays_public_holidays'] ?? [];
-                 
-                 // Check if this is TODAY relative to real time to verify "Next Bus" logic
-                 // Only highlight "Next Bus" if the selected tab matches TODAY's real day.
-                 final now = DateTime.now();
-                 final weekday = now.weekday;
-                 bool isTodayTab = false;
-                 if (weekday <= 5 && index == 0) isTodayTab = true;
-                 else if (weekday == 6 && index == 1) isTodayTab = true;
-                 else if (weekday == 7 && index == 2) isTodayTab = true;
-
-                 return _buildTimeGrid(list, isTodayTab);
-              }
-            ),
-            const SizedBox(height: 20),
-          ]
+            crossFadeState: _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 300),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildTimeGrid(List<dynamic> times, bool isTodayTab) {
-    if (times.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(20),
-        child: Text("No schedule available.", style: TextStyle(color: Colors.grey)),
-      );
-    }
+  Widget _buildTabButton(String label, int index, bool isDark) {
+    final isSelected = _selectedTabIndex == index;
+    final activeColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF2962FF);
     
-    // Find next bus for highlighting
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedTabIndex = index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? activeColor : (isDark ? Colors.grey[800] : Colors.grey[100]),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? Colors.white : (isDark ? Colors.grey[400] : Colors.grey[600]),
+              fontWeight: FontWeight.bold,
+              fontSize: 13
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScheduleGrid(bool isDark) {
+    final schedules = widget.data['schedules'];
+    List<dynamic> trips = []; // List of Maps
+    
+    if (_selectedTabIndex == 0) trips = schedules['weekdays'] ?? [];
+    else if (_selectedTabIndex == 1) trips = schedules['saturdays'] ?? [];
+    else trips = schedules['sundays_public_holidays'] ?? [];
+
+    if (trips.isEmpty) {
+      return Center(child: Text("No buses scheduled.", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey)));
+    }
+
+    // Time Check for Highlighting
     final now = DateTime.now();
     final currentMinutes = now.hour * 60 + now.minute;
     String? nextBusTime;
+    
+    // Determine if we should highlight (is it today?)
+    final weekday = now.weekday;
+    bool isTodayTab = false;
+    if (weekday <= 5 && _selectedTabIndex == 0) isTodayTab = true;
+    else if (weekday == 6 && _selectedTabIndex == 1) isTodayTab = true;
+    else if (weekday == 7 && _selectedTabIndex == 2) isTodayTab = true;
+
+    // Helper to get time string from trip map
+    String getTime(Map<String, dynamic> trip) {
+       // We'll take the first key that is not 'bus_name'
+       for (var key in trip.keys) {
+         if (key != 'bus_name') return trip[key].toString();
+       }
+       return "";
+    }
 
     if (isTodayTab) {
-      for (var bus in times) {
-         // Flexible key extraction
-         String timeKey = bus.keys.firstWhere((k) => k != "bus_name", orElse: () => "");
-         String timeStr = bus[timeKey]?.toString() ?? "00:00";
-         if (_toMinutes(timeStr) > currentMinutes) {
-           nextBusTime = timeStr;
+      for (var trip in trips) {
+         final tStr = getTime(trip);
+         if (tStr.isNotEmpty && _toMinutes(tStr) > currentMinutes) {
+           nextBusTime = tStr;
            break;
          }
       }
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        alignment: WrapAlignment.start,
-        children: times.map<Widget>((bus) {
-           String timeKey = bus.keys.firstWhere((k) => k != "bus_name", orElse: () => "");
-           String timeStr = bus[timeKey]?.toString() ?? "";
-           String? busName = bus["bus_name"];
-           
-           bool isNext = (timeStr == nextBusTime);
-           bool isPast = isTodayTab && (_toMinutes(timeStr) <= currentMinutes);
-
-           return _buildBusChip(timeStr, busName, isNext, isPast);
-        }).toList(),
-      ),
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: trips.map<Widget>((trip) {
+         final timeStr = getTime(trip);
+         final busName = trip['bus_name'];
+         
+         bool isNext = (timeStr == nextBusTime);
+         bool isPast = isTodayTab && (_toMinutes(timeStr) <= currentMinutes);
+         
+         return _buildBusChip(timeStr, busName, isNext, isPast, isDark);
+      }).toList(),
     );
   }
 
-  Widget _buildBusChip(String time, String? name, bool isNext, bool isPast) {
+  Widget _buildBusChip(String time, String? name, bool isNext, bool isPast, bool isDark) {
     // Style
-    Color bg = Colors.white;
-    Color border = Colors.grey[200]!;
-    Color text = Colors.black87;
+    Color bg;
+    Color border;
+    Color text;
 
     if (isNext) {
       bg = const Color(0xFF2962FF); // Premium Blue
       border = const Color(0xFF2962FF);
       text = Colors.white;
     } else if (isPast) {
-      bg = Colors.grey[50]!;
-      text = Colors.grey[400]!;
+      bg = isDark ? Colors.white.withOpacity(0.05) : Colors.grey[50]!;
+      border = isDark ? Colors.transparent : Colors.grey[200]!;
+      text = isDark ? Colors.grey[600]! : Colors.grey[400]!;
     } else {
-      // Future but not next
-      border = Colors.blue.withOpacity(0.3);
-      text = Colors.blue[900]!;
+      // Future
+      bg = isDark ? Colors.grey[800]! : Colors.white;
+      border = isDark ? Colors.white10 : Colors.grey[200]!;
+      text = isDark ? Colors.white : Colors.black87;
     }
 
     return Container(
@@ -397,7 +422,7 @@ class _BusRouteCardState extends State<BusRouteCard> with SingleTickerProviderSt
              Container(
                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                decoration: BoxDecoration(
-                 color: isNext ? Colors.white.withOpacity(0.2) : Colors.orange.withOpacity(0.1),
+                 color: isNext ? Colors.white.withOpacity(0.2) : (isDark ? Colors.amber.withOpacity(0.1) : Colors.orange.withOpacity(0.1)),
                  borderRadius: BorderRadius.circular(8)
                ),
                child: Text(

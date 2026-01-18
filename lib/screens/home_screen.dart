@@ -5,6 +5,7 @@ import 'academic_tab.dart';
 import 'bus_tab.dart';
 import 'todo_board_tab.dart';
 import 'notes_tab.dart';
+import 'settings_tab.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,8 +22,9 @@ class _HomeScreenState extends State<HomeScreen> {
     ScheduleTab(),
     AcademicTab(), 
     TodoBoardTab(),
-    NotesTab(), // New Notes Tab
+    NotesTab(),
     BusTab(),
+    SettingsTab(), // New Settings Tab
   ];
 
   void _onItemTapped(int index) {
@@ -33,16 +35,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Premium bottom bar colors
-    const activeColor = Color(0xFF0066FF);
-    const inactiveColor = Color(0xFF9E9E9E);
+    // Premium bottom bar colors - adapt to theme
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final activeColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF0066FF);
+    final inactiveColor = isDark ? Colors.grey[400] : const Color(0xFF9E9E9E);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: _pages[_selectedIndex],
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardColor,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
@@ -79,12 +82,16 @@ class _HomeScreenState extends State<HomeScreen> {
               label: 'Board',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.edit_note_rounded), // Notes Icon
+              icon: Icon(Icons.edit_note_rounded),
               label: 'Notes',
             ),
-            BottomNavigationBarItem(
+             BottomNavigationBarItem(
               icon: Icon(Icons.directions_bus_filled_rounded),
               label: 'Transport',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings_rounded),
+              label: 'Settings',
             ),
           ],
         ),

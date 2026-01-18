@@ -203,6 +203,15 @@ class TimetableProvider extends ChangeNotifier {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
+  String getWeekLabel(DateTime date) {
+    final w = getWeekNumber(date);
+    if (w == 0) return "Pre-Sem";
+    if (w > 15) return "Break";
+    
+    final online = isOnlineWeek(w);
+    return "Week $w${online ? ' (Online)' : ''}";
+  }
+
   List<ClassSession> getEventsForDay(DateTime date) {
     final dayName = DateFormat('EEEE').format(date);
     // Filter sessions by Day AND Week
