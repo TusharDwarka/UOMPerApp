@@ -20,11 +20,9 @@ dependencies:
   
   # UI Libraries
   table_calendar: ^3.1.0
-  time_planner: ^0.1.0
   intl: ^0.19.0
   
   # Data
-  read_pdf_text: ^0.3.1
   http: ^1.1.0
   shared_preferences: ^2.2.2
   url_launcher: ^6.2.5

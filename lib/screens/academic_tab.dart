@@ -308,10 +308,14 @@ class _AcademicTabState extends State<AcademicTab> {
     return Consumer<TimetableProvider>(
       builder: (context, timetable, _) {
         final subjects = timetable.userSessions.map((s) => s.subject).toSet().toList();
-        
-        // 1. Today's Classes
         final todayClasses = timetable.getClassesForDate(DateTime.now());
         final todaySubjects = todayClasses.map((s) => s.subject).toSet().toList();
+
+        // Global Stats
+        final globalStats = timetable.getGlobalSurvivalStats();
+        final int lives = globalStats['lives'];
+        final int maxLives = globalStats['maxLives']; // 10
+        final String status = globalStats['status'];
 
         if (subjects.isEmpty) {
           return Center(child: Text("No courses found. Check your schedule setup.", style: TextStyle(color: isDark ? Colors.grey : Colors.black)));
@@ -320,10 +324,62 @@ class _AcademicTabState extends State<AcademicTab> {
         return ListView(
           padding: const EdgeInsets.all(20),
           children: [
+            // --- Global Survival Header ---
+            Container(
+              padding: const EdgeInsets.all(24),
+              margin: const EdgeInsets.only(bottom: 24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: lives > 3 
+                    ? [const Color(0xFF00C853), const Color(0xFF69F0AE)] 
+                    : [const Color(0xFFD32F2F), const Color(0xFFFF5252)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(color: (lives > 3 ? Colors.green : Colors.red).withOpacity(0.4), blurRadius: 15, offset: const Offset(0, 8))
+                ]
+              ),
+              child: Column(
+                children: [
+                   Row(
+                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                     children: [
+                       const Text("SEMESTER SURVIVAL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1.2)),
+                       Container(
+                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                         decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+                         child: Text(status.toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                       )
+                     ],
+                   ),
+                   const SizedBox(height: 20),
+                   // Hearts Row
+                   Wrap(
+                     alignment: WrapAlignment.center,
+                     spacing: 8,
+                     runSpacing: 8,
+                     children: List.generate(maxLives, (index) {
+                        if (index < lives) {
+                          return const Icon(Icons.favorite, color: Colors.white, size: 28);
+                        } else {
+                          return Icon(Icons.favorite_border, color: Colors.white.withOpacity(0.5), size: 28);
+                        }
+                     }),
+                   ),
+                   const SizedBox(height: 16),
+                   Text("$lives Lives Remaining", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                   const SizedBox(height: 4),
+                   const Text("Don't let it hit zero.", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                ],
+              ),
+            ),
+
             // --- Section 1: Today's Roll Call ---
             if (todaySubjects.isNotEmpty) ...[
-               Text("Today's Roll Call", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1A237E))),
-               const SizedBox(height: 10),
+               Text("Today's Roll Call", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1E1E2C))),
+               const SizedBox(height: 12),
                ...todaySubjects.map((subject) {
                   final record = timetable.getAttendanceRecord(subject, DateTime.now());
                   final hasRecord = record != null;
@@ -332,145 +388,93 @@ class _AcademicTabState extends State<AcademicTab> {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                      color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.05), blurRadius: 10, offset: const Offset(0, 4))],
-                      border: Border.all(color: isDark ? Colors.white10 : Colors.transparent),
                     ),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       title: Text(subject, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                       subtitle: Text(
-                        hasRecord ? (isPresent ? "Marked Present" : "Marked Absent") : "Not marked yet", 
-                        style: TextStyle(color: hasRecord ? (isPresent ? Colors.green : Colors.red) : Colors.grey)
+                        hasRecord ? (isPresent ? "Marked Present" : "Marked Absent") : "Are you in class?", 
+                        style: TextStyle(color: hasRecord ? (isPresent ? Colors.green : Colors.red) : Colors.amber[700])
                       ),
-                      trailing: Transform.scale(
-                        scale: 0.9,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.check_circle),
-                              color: hasRecord && isPresent ? Colors.green : (isDark ? Colors.grey[700] : Colors.grey[300]),
-                              iconSize: 32,
-                              onPressed: () {
-                                 timetable.setAttendance(subject, DateTime.now(), true);
-                              }, 
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.cancel),
-                              color: hasRecord && !isPresent ? Colors.red : (isDark ? Colors.grey[700] : Colors.grey[300]),
-                              iconSize: 32,
-                              onPressed: () {
-                                 timetable.setAttendance(subject, DateTime.now(), false);
-                              },
-                            ),
-                          ],
-                        ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.check_circle, color: (hasRecord && isPresent) ? Colors.green : (isDark ? Colors.grey[700] : Colors.grey[300])),
+                            iconSize: 32,
+                            onPressed: () => timetable.setAttendance(subject, DateTime.now(), true),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.cancel, color: (hasRecord && !isPresent) ? Colors.red : (isDark ? Colors.grey[700] : Colors.grey[300])),
+                            iconSize: 32,
+                            onPressed: () => timetable.setAttendance(subject, DateTime.now(), false),
+                          ),
+                        ],
                       ),
                     ),
                   );
                }),
-               Divider(height: 40, color: isDark ? Colors.grey[800] : Colors.grey[300]),
+               const SizedBox(height: 24),
             ],
 
-            // --- Section 2: Survival Stats ---
-            Text("Semester Survival", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1A237E))),
-            const SizedBox(height: 15),
+            // --- Section 2: Subject Details ---
+            Text("Attendance Log", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1E1E2C))),
+            const SizedBox(height: 12),
             
             ...subjects.map((subject) {
-               final stats = timetable.getAttendanceStats(subject);
-               final int lives = stats['lives'];
-               final int maxLives = stats['maxLives'];
-               final int absences = stats['absences'];
-               final String status = stats['status'];
-
-               // Cap visible hearts
-               final visibleHearts = lives > 8 ? 8 : (lives < 0 ? 0 : lives);
-               final hasMoreHearts = lives > 8;
-
+               final subjectStats = timetable.getSubjectStats(subject);
+               final int absences = subjectStats['absences'];
+               
                return Card(
-                 elevation: 2,
-                 color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                 margin: const EdgeInsets.only(bottom: 20),
+                 elevation: 0,
+                 color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.white10 : Colors.grey[200]!)),
+                 margin: const EdgeInsets.only(bottom: 12),
                  child: Theme(
                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent, colorScheme: isDark ? const ColorScheme.dark() : const ColorScheme.light()),
                    child: ExpansionTile(
-                     collapsedIconColor: isDark ? Colors.grey : Colors.black54,
-                     iconColor: isDark ? Colors.white : Colors.black,
-                     tilePadding: const EdgeInsets.all(20),
-                     title: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         Row(
-                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                           children: [
-                             Expanded(child: Text(subject, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))),
-                             Container(
-                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                               decoration: BoxDecoration(
-                                 color: lives <= 1 ? Colors.red.withOpacity(0.1) : Colors.green.withOpacity(0.1),
-                                 borderRadius: BorderRadius.circular(8)
-                               ),
-                               child: Text(status.toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: lives <= 1 ? Colors.red : Colors.green)),
-                             )
-                           ],
-                        ),
-                        const SizedBox(height: 10),
-                         Row(
-                           crossAxisAlignment: CrossAxisAlignment.center,
-                           children: [
-                             Wrap(
-                               spacing: 4,
-                               children: [
-                                 ...List.generate(visibleHearts, (i) => const Icon(Icons.favorite, color: Colors.pinkAccent, size: 20)),
-                                 if (hasMoreHearts) Text(" +${lives - 8}", style: const TextStyle(color: Colors.pinkAccent, fontWeight: FontWeight.bold))
-                               ]
-                             ),
-                             if (lives <= 0) const Text(" 0 Lives Left", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
-                           ],
-                         ),
-                         const SizedBox(height: 6),
-                         Text("Skipped $absences / $maxLives allowed", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 12)),
-                       ],
-                     ),
+                     collapsedIconColor: isDark ? Colors.grey : Colors.grey[600],
+                     title: Text(subject, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
+                     subtitle: Text("$absences Missed Classes", style: TextStyle(color: absences > 0 ? Colors.redAccent : Colors.green, fontSize: 13, fontWeight: FontWeight.bold)),
                      children: [
-                       Divider(color: isDark ? Colors.grey[800] : Colors.grey[200]),
+                       Divider(color: isDark ? Colors.white10 : Colors.grey[100]),
                        Padding(
-                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 15),
+                         padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
                          child: Column(
                            crossAxisAlignment: CrossAxisAlignment.start,
                            children: [
-                             Text("Attendance History", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.grey[300] : Colors.grey[800])),
-                             const SizedBox(height: 10),
                              ...timetable.getPastClassDates(subject).map((date) {
                                 final r = timetable.getAttendanceRecord(subject, date);
                                 final isPresent = r?.isPresent ?? false;
                                 final hasRecord = r != null;
                                 
                                 return InkWell(
-                                  onTap: () {
-                                     // Toggle logic for history list item short-check
-                                     timetable.setAttendance(subject, date, !isPresent);
-                                  },
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                  onTap: () => timetable.setAttendance(subject, date, !isPresent),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    decoration: BoxDecoration(
+                                      border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[100]!))
+                                    ),
                                     child: Row(
                                       children: [
-                                        Text(DateFormat('MMM d (EEE)').format(date), style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[300] : Colors.black87)),
+                                        Text(DateFormat('MMM d').format(date), style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
+                                        const SizedBox(width: 8),
+                                        Text(DateFormat('EEE').format(date), style: TextStyle(color: isDark ? Colors.grey : Colors.grey[500], fontSize: 12)),
                                         const Spacer(),
                                         if (!hasRecord) 
-                                           Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.grey[200], borderRadius: BorderRadius.circular(4)), child: Text("?", style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black)))
+                                           Text("Unknown", style: TextStyle(color: isDark ? Colors.grey : Colors.grey[400], fontSize: 12))
                                         else 
-                                           Icon(isPresent ? Icons.check : Icons.close, color: isPresent ? Colors.green : Colors.red, size: 18)
+                                           Icon(isPresent ? Icons.check_circle_outline : Icons.highlight_off, color: isPresent ? Colors.green : Colors.red, size: 20)
                                       ],
                                     ),
                                   ),
                                 );
                              }).toList(),
-                             if (timetable.getPastClassDates(subject).isEmpty)
-                               const Padding(padding: EdgeInsets.all(8.0), child: Text("No past classes found.", style: TextStyle(color: Colors.grey)))
+                              if (timetable.getPastClassDates(subject).isEmpty)
+                                const Padding(padding: EdgeInsets.all(12), child: Text("No past classes.", style: TextStyle(color: Colors.grey)))
                            ],
                          ),
                        )
@@ -478,7 +482,32 @@ class _AcademicTabState extends State<AcademicTab> {
                    ),
                  ),
                );
-            })
+            }),
+            
+            const SizedBox(height: 30),
+            Center(
+              child: TextButton.icon(
+                onPressed: () {
+                   showDialog(context: context, builder: (c) => AlertDialog(
+                     title: const Text("Reset Survival Mode?"),
+                     content: const Text("This will clear all attendance records and restore your 10 lives. This cannot be undone."),
+                     actions: [
+                       TextButton(onPressed: () => Navigator.pop(c), child: const Text("Cancel")),
+                       TextButton(
+                         onPressed: () {
+                           timetable.resetAttendance();
+                           Navigator.pop(c);
+                         }, 
+                         child: const Text("Reset All", style: TextStyle(color: Colors.red))
+                       )
+                     ],
+                   ));
+                },
+                icon: const Icon(Icons.refresh, color: Colors.grey),
+                label: const Text("Reset All Progress", style: TextStyle(color: Colors.grey)),
+              ),
+            ),
+            const SizedBox(height: 40),
           ],
         );
       }

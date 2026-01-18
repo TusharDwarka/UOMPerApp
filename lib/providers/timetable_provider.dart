@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Added for DateFormat
+import 'package:intl/intl.dart';
 import 'package:isar_community/isar.dart';
 import '../models/class_session.dart';
 import '../models/academic_task.dart';
-import '../models/attendance_record.dart'; // Added
+import '../models/attendance_record.dart';
 import '../services/isar_service.dart';
 
 class TimetableProvider extends ChangeNotifier {
@@ -17,6 +17,8 @@ class TimetableProvider extends ChangeNotifier {
   // Attendance
   List<AttendanceRecord> _attendanceRecords = [];
   
+  TimetableProvider(this.isarService);
+
   Future<void> loadAttendance() async {
     final isar = await isarService.db;
     _attendanceRecords = await isar.attendanceRecords.where().findAll();
@@ -139,10 +141,64 @@ class TimetableProvider extends ChangeNotifier {
     // Load Attendance too
     await loadAttendance();
     
-    // _calculateCommonFreeTime();
     notifyListeners();
   }
+  
+  // --- Attendance Logic ---
 
+  Future<void> resetAttendance() async {
+    final isar = await isarService.db;
+    await isar.writeTxn(() async {
+      await isar.attendanceRecords.clear();
+    });
+    await loadAttendance();
+  }
+
+  // Global Survival Stats: 10 Lives Total Rule
+  Map<String, dynamic> getGlobalSurvivalStats() {
+    const int maxLives = 10;
+    
+    // Count total absences (where isPresent == false)
+    final totalAbsences = _attendanceRecords.where((r) => !r.isPresent).length;
+    
+    final livesLeft = maxLives - totalAbsences;
+    
+    String status = "Safe";
+    if (livesLeft <= 0) status = "Eliminated";
+    else if (livesLeft <= 3) status = "Danger";
+    else if (livesLeft <= 6) status = "Warning";
+    
+    return {
+      'lives': livesLeft > 0 ? livesLeft : 0,
+      'maxLives': maxLives,
+      'absences': totalAbsences,
+      'status': status
+    };
+  }
+
+  // Check for unmarked past/today classes
+  List<ClassSession> getUnmarkedClasses(DateTime date) {
+    // Get all user sessions for this day
+    final sessions = getEventsForDay(date);
+    
+    // Filter those that don't have a record
+    return sessions.where((s) {
+       final record = getAttendanceRecord(s.subject, date);
+       return record == null;
+    }).toList();
+  }
+  
+  // Per-Subject Stats (Secondary)
+  Map<String, dynamic> getSubjectStats(String subject) {
+    // Just count absences for this subject
+    final absences = _attendanceRecords
+        .where((r) => r.subjectName == subject && !r.isPresent)
+        .length;
+        
+    return {
+      'absences': absences
+    };
+  }
 
   // Getters
   // If swapped, return Friend sessions as "User" sessions (Main view)
@@ -172,10 +228,6 @@ class TimetableProvider extends ChangeNotifier {
   // Computed properties for Dashboard
   List<AcademicTask> get pendingTasks => _tasks.where((t) => !t.isCompleted).toList();
   List<AcademicTask> get completedTasks => _tasks.where((t) => t.isCompleted).toList();
-
-  TimetableProvider(this.isarService);
-
-
 
   // Helpers
   final DateTime _semesterStart = DateTime(2026, 1, 19);
