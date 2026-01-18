@@ -28,7 +28,7 @@ A comprehensive mobile companion designed for University of Mauritius students t
 1.  **Prerequisites**: Ensure you have [Flutter](https://flutter.dev/docs/get-started/install) installed.
 2.  **Clone the Repo**:
     ```bash
-    git clone https://github.com/yourusername/uom-per-app.git
+    git clone https://github.com/TusharDwarka/uom-per-app.git
     cd uom-per-app
     ```
 3.  **Install Dependencies**:
