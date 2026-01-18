@@ -93,6 +93,26 @@ class _DashboardTabState extends State<DashboardTab> {
                               Builder(
                                 builder: (context) {
                                   final week = timetable.getWeekNumber(DateTime.now());
+                                  
+                                  if (week < 1) {
+                                     final start = DateTime(2026, 1, 19);
+                                     final now = DateTime.now();
+                                     final diff = start.difference(DateTime(now.year, now.month, now.day)).inDays;
+                                     
+                                     return Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: Colors.grey.withOpacity(0.3))
+                                        ),
+                                        child: Text(
+                                          "Starts in $diff days",
+                                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[700]),
+                                        ),
+                                     );
+                                  }
+
                                   final isOnline = timetable.isOnlineWeek(week);
                                   return Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -105,7 +125,7 @@ class _DashboardTabState extends State<DashboardTab> {
                                       )
                                     ),
                                     child: Text(
-                                      "Week $week • ${isOnline ? "Online" : "Campus"}",
+                                      "Week $week • ${isOnline ? "Online" : "Campus"}", // Keep mode simple as requested
                                       style: TextStyle(
                                         fontSize: 10, 
                                         fontWeight: FontWeight.bold,

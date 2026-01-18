@@ -125,6 +125,15 @@ class TimetableProvider extends ChangeNotifier {
     final isar = await isarService.db;
     _userSessions = await isar.classSessions.filter().isUserEqualTo(true).findAll();
     _friendSessions = await isar.classSessions.filter().isUserEqualTo(false).findAll();
+    
+    // Auto-Repair / Seed Data if empty OR if schema was broken (weeks is null)
+    if ((_userSessions.isEmpty && _friendSessions.isEmpty) || 
+        (_userSessions.isNotEmpty && _userSessions.first.weeks == null)) {
+       print("Data missing or incomplete. Re-seeding database...");
+       await loadFriendTimetable(); // This will clear and re-import
+       return; // loadFriendTimetable calls loadSessions again, so we return to avoid double notify
+    }
+
     _tasks = await isar.academicTasks.where().sortByDueDateDesc().findAll();
     
     // Load Attendance too
@@ -170,6 +179,7 @@ class TimetableProvider extends ChangeNotifier {
 
   // Helpers
   final DateTime _semesterStart = DateTime(2026, 1, 19);
+  DateTime get semesterStart => _semesterStart;
 
   int getWeekNumber(DateTime date) {
     // Normalize dates to midnight to avoid time discrepancies

@@ -56,6 +56,11 @@ const ClassSessionSchema = CollectionSchema(
       id: 7,
       name: r'subject',
       type: IsarType.string,
+    ),
+    r'weeks': PropertySchema(
+      id: 8,
+      name: r'weeks',
+      type: IsarType.longList,
     )
   },
   estimateSize: _classSessionEstimateSize,
@@ -84,6 +89,12 @@ int _classSessionEstimateSize(
   bytesCount += 3 + object.room.length * 3;
   bytesCount += 3 + object.startTime.length * 3;
   bytesCount += 3 + object.subject.length * 3;
+  {
+    final value = object.weeks;
+    if (value != null) {
+      bytesCount += 3 + value.length * 8;
+    }
+  }
   return bytesCount;
 }
 
@@ -101,6 +112,7 @@ void _classSessionSerialize(
   writer.writeDateTime(offsets[5], object.specificDate);
   writer.writeString(offsets[6], object.startTime);
   writer.writeString(offsets[7], object.subject);
+  writer.writeLongList(offsets[8], object.weeks);
 }
 
 ClassSession _classSessionDeserialize(
@@ -118,6 +130,7 @@ ClassSession _classSessionDeserialize(
     specificDate: reader.readDateTimeOrNull(offsets[5]),
     startTime: reader.readStringOrNull(offsets[6]) ?? '',
     subject: reader.readStringOrNull(offsets[7]) ?? '',
+    weeks: reader.readLongList(offsets[8]),
   );
   object.id = id;
   return object;
@@ -146,6 +159,8 @@ P _classSessionDeserializeProp<P>(
       return (reader.readStringOrNull(offset) ?? '') as P;
     case 7:
       return (reader.readStringOrNull(offset) ?? '') as P;
+    case 8:
+      return (reader.readLongList(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -1191,6 +1206,169 @@ extension ClassSessionQueryFilter
       ));
     });
   }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      weeksIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'weeks',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      weeksIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'weeks',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      weeksElementEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'weeks',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      weeksElementGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'weeks',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      weeksElementLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'weeks',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      weeksElementBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'weeks',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      weeksLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'weeks',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      weeksIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'weeks',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      weeksIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'weeks',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      weeksLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'weeks',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      weeksLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'weeks',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      weeksLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'weeks',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
+    });
+  }
 }
 
 extension ClassSessionQueryObject
@@ -1468,6 +1646,12 @@ extension ClassSessionQueryWhereDistinct
       return query.addDistinctBy(r'subject', caseSensitive: caseSensitive);
     });
   }
+
+  QueryBuilder<ClassSession, ClassSession, QDistinct> distinctByWeeks() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'weeks');
+    });
+  }
 }
 
 extension ClassSessionQueryProperty
@@ -1524,6 +1708,12 @@ extension ClassSessionQueryProperty
   QueryBuilder<ClassSession, String, QQueryOperations> subjectProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'subject');
+    });
+  }
+
+  QueryBuilder<ClassSession, List<int>?, QQueryOperations> weeksProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'weeks');
     });
   }
 }

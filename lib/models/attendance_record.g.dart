@@ -40,7 +40,7 @@ const AttendanceRecordSchema = CollectionSchema(
   idName: r'id',
   indexes: {
     r'subjectName': IndexSchema(
-      id: 2303509258035435498,
+      id: -2702852998942163311,
       name: r'subjectName',
       unique: false,
       replace: false,
@@ -89,8 +89,8 @@ AttendanceRecord _attendanceRecordDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = AttendanceRecord();
-  object.id = id;
   object.date = reader.readDateTime(offsets[0]);
+  object.id = id;
   object.isPresent = reader.readBool(offsets[1]);
   object.subjectName = reader.readString(offsets[2]);
   return object;
@@ -132,15 +132,6 @@ extension AttendanceRecordQueryWhereSort
   QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
-    });
-  }
-
-  QueryBuilder<AttendanceRecord, AttendanceRecord, QAfterWhere>
-      anySubjectName() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        const IndexWhereClause.any(indexName: r'subjectName'),
-      );
     });
   }
 }
