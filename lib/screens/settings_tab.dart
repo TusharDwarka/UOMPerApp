@@ -110,6 +110,55 @@ class SettingsTab extends StatelessWidget {
 
             const SizedBox(height: 30),
 
+            // Timetable Settings
+            const Text("ACADEMIC PREFERENCES", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey, letterSpacing: 1.2)),
+            const SizedBox(height: 10),
+            
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))
+                ]
+              ),
+              child: Consumer<TimetableProvider>(
+                builder: (context, provider, child) {
+                  return Column(
+                     children: [
+                        ListTile(
+                           leading: Container(
+                             padding: const EdgeInsets.all(8),
+                             decoration: BoxDecoration(color: Colors.indigo.withOpacity(0.1), shape: BoxShape.circle),
+                             child: const Icon(Icons.class_rounded, color: Colors.indigo),
+                           ),
+                           title: const Text("My Course", style: TextStyle(fontWeight: FontWeight.bold)),
+                           subtitle: Text(provider.isSwapped ? "Computer Science" : "Data Science", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                           trailing: DropdownButton<String>(
+                             value: provider.isSwapped ? "CS" : "DS",
+                             underline: const SizedBox(),
+                             icon: const Icon(Icons.arrow_drop_down_rounded),
+                             items: const [
+                               DropdownMenuItem(value: "DS", child: Text("Data Science")),
+                               DropdownMenuItem(value: "CS", child: Text("Computer Science")),
+                             ],
+                             onChanged: (val) {
+                               if (val == "CS") {
+                                 provider.setPerspective(true);
+                               } else {
+                                 provider.setPerspective(false);
+                               }
+                             }
+                           ),
+                        ),
+                     ],
+                  );
+                }
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
             // Data Management
             const Text("DATA & SYNC", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey, letterSpacing: 1.2)),
             const SizedBox(height: 10),

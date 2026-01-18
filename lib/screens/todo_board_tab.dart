@@ -212,6 +212,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                                taskToEdit.id,
                                taskToEdit.title,
                                taskToEdit.subject,
+                               taskToEdit.type,
                                taskToEdit.dueDate,
                                taskToEdit.isCompleted
                              );
@@ -329,6 +330,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                    task.id,
                    task.title,
                    task.subject,
+                   task.type,
                    task.dueDate,
                    task.isCompleted
                  );

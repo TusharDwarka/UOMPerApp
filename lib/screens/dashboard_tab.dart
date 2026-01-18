@@ -6,6 +6,7 @@ import '../services/bus_service.dart'; // import if needed
 import 'planning_screen.dart';
 import '../models/class_session.dart';
 import '../models/academic_task.dart';
+import '../widgets/add_edit_task_sheet.dart'; 
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
@@ -421,37 +422,64 @@ class _DashboardTabState extends State<DashboardTab> {
 
   Widget _buildDeadlineCard(dynamic task, {bool isDark = false}) {
     // task is AcademicTask
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.redAccent.withOpacity(isDark ? 0.05 : 0.08),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
-      ),
-      child: Row(
-        children: [
-           Container(
-             padding: const EdgeInsets.all(12),
-             decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), shape: BoxShape.circle),
-             child: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
-           ),
-           const SizedBox(width: 16),
-           Expanded(
-             child: Column(
-               crossAxisAlignment: CrossAxisAlignment.start,
-               children: [
-                 Text(task.title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
-                 const SizedBox(height: 4),
-                 Text("Due: ${DateFormat('MMM d, h:mm a').format(task.dueDate)}", style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500)),
-               ],
+    final now = DateTime.now();
+    final diff = task.dueDate.difference(now).inDays;
+    
+    Color baseColor;
+    IconData icon;
+    
+    if (diff <= 3) {
+       baseColor = Colors.redAccent;
+       icon = Icons.warning_amber_rounded;
+    } else if (diff <= 7) {
+       baseColor = Colors.orangeAccent;
+       icon = Icons.priority_high_rounded;
+    } else {
+       baseColor = const Color(0xFF2962FF); // Blue
+       icon = Icons.event_available_rounded;
+    }
+
+    return GestureDetector(
+      onTap: () {
+        showModalBottomSheet(
+          context: context, 
+          backgroundColor: Colors.transparent,
+          isScrollControlled: true,
+          builder: (_) => AddEditTaskSheet(taskToEdit: task)
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: baseColor.withOpacity(isDark ? 0.05 : 0.08),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: baseColor.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+             Container(
+               padding: const EdgeInsets.all(12),
+               decoration: BoxDecoration(color: baseColor.withOpacity(0.1), shape: BoxShape.circle),
+               child: Icon(icon, color: baseColor),
+             ),
+             const SizedBox(width: 16),
+             Expanded(
+               child: Column(
+                 crossAxisAlignment: CrossAxisAlignment.start,
+                 children: [
+                   Text(task.title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
+                   const SizedBox(height: 4),
+                   Text("Due: ${DateFormat('MMM d, h:mm a').format(task.dueDate)}", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500)),
+                 ],
+               )
+             ),
+             Container(
+               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+               decoration: BoxDecoration(color: isDark ? const Color(0xFF1E1E1E) : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.white10 : Colors.grey[200]!)),
+               child: Text(task.subject, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.black54)),
              )
-           ),
-           Container(
-             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-             decoration: BoxDecoration(color: isDark ? const Color(0xFF1E1E1E) : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.white10 : Colors.grey[200]!)),
-             child: Text(task.subject, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.black54)),
-           )
-        ],
+          ],
+        ),
       ),
     );
   }

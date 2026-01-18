@@ -351,8 +351,17 @@ class TimetableProvider extends ChangeNotifier {
       s.day == dayName && _shouldShowSession(s, date)
     ).toList();
     
-    // Bounds: 8:00 (480) to 16:00 (960)
-    final timeBounds = _TimeInterval(start: 480, end: 960);
+    // 2. Check Campus Presence: Both must have at least one NON-ONLINE class
+    // If list is empty or all classes are ONLINE, assume not on campus.
+    final userOnCampus = dailyUser.isNotEmpty && dailyUser.any((s) => !s.room.toUpperCase().contains('ONLINE'));
+    final friendOnCampus = dailyFriend.isNotEmpty && dailyFriend.any((s) => !s.room.toUpperCase().contains('ONLINE'));
+
+    if (!userOnCampus || !friendOnCampus) {
+      return []; 
+    }
+
+    // Bounds: 8:00 (480) to 17:30 (1050)
+    final timeBounds = _TimeInterval(start: 480, end: 1050);
     
     final busy = <_TimeInterval>[];
     for (var s in [...dailyUser, ...dailyFriend]) {
@@ -416,13 +425,14 @@ class TimetableProvider extends ChangeNotifier {
      await loadSessions(); 
   }
 
-  Future<void> updateTask(int id, String title, String subject, DateTime dueDate, bool isCompleted) async {
+  Future<void> updateTask(int id, String title, String subject, String type, DateTime dueDate, bool isCompleted) async {
      final isar = await isarService.db;
      await isar.writeTxn(() async {
        final task = await isar.academicTasks.get(id);
        if (task != null) {
          task.title = title;
          task.subject = subject;
+         task.type = type;
          task.dueDate = dueDate;
          task.isCompleted = isCompleted;
          await isar.academicTasks.put(task);

@@ -25,11 +25,10 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_currentPerspective == null) {
-      return _buildCourseSelectionScreen();
-    }
-
     final timetable = Provider.of<TimetableProvider>(context);
+    // Align local state with provider (or just use provider)
+    _currentPerspective = timetable.isSwapped ? "Computer Science" : "Data Science";
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     // Calculate current week
@@ -285,6 +284,12 @@ class _ScheduleTabState extends State<ScheduleTab> {
     if (_isCompareMode) {
        for (var event in friendEvents) {
          children.add(_buildEventBlock(event, width, isGhost: true, isDark: isDark)); // No provider for ghost
+       }
+       
+       // Add Free Blocks
+       final freeSlots = timetable.getFreeSlotsForDay(_selectedDate);
+       for (var slot in freeSlots) {
+          _addFreeBlock(children, slot.start, slot.end, width, isDark);
        }
     }
     
