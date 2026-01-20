@@ -19,6 +19,11 @@ A comprehensive mobile companion designed for University of Mauritius students t
 - **Deadline Awareness**: Visual urgency indicators (Red for <= 3 days, Orange for <= 7 days).
 - **Class Quick Actions**: Add homework directly from your schedule view.
 
+### 💻 PC / Desktop Experience
+- **Responsive Layout**: Automatically adapts to large screens with a dedicated side navigation rail.
+- **Optimized for Productivity**: Use your mouse and keyboard to manage tasks faster.
+- **Windows Support**: Native performance on Windows machines.
+
 ### 🚌 Campus Utilities
 - **Bus Schedule**: Integrated bus timings for easy commute planning.
 - **Dark Mode**: Fully supported beautiful dark theme for late-night studying.
@@ -39,7 +44,16 @@ A comprehensive mobile companion designed for University of Mauritius students t
     ```bash
     flutter run
     ```
-    *(Use `flutter run --release` for a faster, optimized experience)*
+    *To run on Windows:*
+    ```bash
+    flutter run -d windows
+    ```
+
+5.  **Build for PC**:
+    ```bash
+    flutter build windows
+    ```
+    *Output located in `build/windows/runner/Release`*
 
 ## 🛠 Tech Stack
 -   **Framework**: Flutter
