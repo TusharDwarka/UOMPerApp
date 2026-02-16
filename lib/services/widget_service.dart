@@ -93,7 +93,10 @@ class WidgetService {
         final sorted = List.from(pending)..sort((a, b) => a.dueDate.compareTo(b.dueDate));
         final nearest = sorted.first;
         taskName = nearest.title;
-        final daysLeft = nearest.dueDate.difference(now).inDays;
+        taskName = nearest.title;
+        final today = DateTime(now.year, now.month, now.day);
+        final taskDate = DateTime(nearest.dueDate.year, nearest.dueDate.month, nearest.dueDate.day);
+        final daysLeft = taskDate.difference(today).inDays;
         final typeEmoji = {
           'Exam': '🔴',
           'Test': '🟠',

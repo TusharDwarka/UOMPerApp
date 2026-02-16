@@ -91,6 +91,7 @@ class _DashboardTabState extends State<DashboardTab> {
     final textSecondary = isDark ? Colors.grey[400] : Colors.grey[600];
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Consumer<TimetableProvider>(
@@ -539,7 +540,9 @@ class _DashboardTabState extends State<DashboardTab> {
 
   Widget _buildDeadlineCard(dynamic task, {bool isDark = false}) {
     final now = DateTime.now();
-    final diff = task.dueDate.difference(now).inDays;
+    final today = DateTime(now.year, now.month, now.day);
+    final taskDate = DateTime(task.dueDate.year, task.dueDate.month, task.dueDate.day);
+    final diff = taskDate.difference(today).inDays;
     
     Color baseColor;
     IconData icon;

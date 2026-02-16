@@ -356,7 +356,10 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
             final displayTitle = sanitize(task.title);
             final displaySubject = sanitize(task.subject);
 
-            final daysUntil = task.dueDate.difference(DateTime.now()).inDays;
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
+            final taskDate = DateTime(task.dueDate.year, task.dueDate.month, task.dueDate.day);
+            final daysUntil = taskDate.difference(today).inDays;
             String urgency = '';
             PdfColor urgencyColor = PdfColors.grey;
             if (!task.isCompleted && daysUntil < 0) {
@@ -508,6 +511,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
         regular.sort((a, b) => a.dueDate.compareTo(b.dueDate));
 
         return Scaffold(
+          resizeToAvoidBottomInset: false, // Prevents background rebuilds when keyboard opens in bottom sheet
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           appBar: AppBar(
             backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -651,7 +655,10 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
     }
 
     // Urgency
-    final daysUntil = task.dueDate.difference(DateTime.now()).inDays;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final taskDate = DateTime(task.dueDate.year, task.dueDate.month, task.dueDate.day);
+    final daysUntil = taskDate.difference(today).inDays;
     Color? urgencyColor;
     String? urgencyLabel;
     if (!task.isCompleted && daysUntil < 0) {
