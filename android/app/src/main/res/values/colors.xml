@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="widget_background">#FFFFFF</color>
+    <color name="widget_text_primary">#1A1D1E</color>
+    <color name="widget_text_secondary">#78909C</color>
+    <color name="widget_divider">#E0E0E0</color>
+    <color name="widget_app_name">#1565C0</color>
+    <color name="widget_badge_bg">#1565C0</color>
+    <color name="widget_badge_text">#FFFFFF</color>
+    <color name="widget_label">#90A4AE</color>
     <color name="ic_launcher_background">#1A237E</color>
 </resources>

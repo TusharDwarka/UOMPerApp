@@ -269,7 +269,8 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
     final noteProvider = Provider.of<NoteProvider>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Padding(
+    return AnimatedPadding(
+       duration: const Duration(milliseconds: 100),
        padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
         top: 20, left: 20, right: 20

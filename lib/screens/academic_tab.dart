@@ -440,7 +440,9 @@ class _AcademicTabState extends State<AcademicTab> {
   Color _getTypeColor(String type) {
     switch (type) {
       case 'Exam': return Colors.red;
+      case 'Test': return Colors.orangeAccent;
       case 'Assignment': return Colors.orange;
+      case 'Homework': return Colors.teal;
       case 'Project': return Colors.purple;
       case 'Note': return Colors.green;
       default: return Colors.blue;
@@ -450,7 +452,9 @@ class _AcademicTabState extends State<AcademicTab> {
   IconData _getTypeIcon(String type) {
     switch (type) {
       case 'Exam': return Icons.warning_amber_rounded;
+      case 'Test': return Icons.priority_high_rounded;
       case 'Assignment': return Icons.assignment_outlined;
+      case 'Homework': return Icons.menu_book_rounded;
       case 'Project': return Icons.rocket_launch_outlined;
       case 'Note': return Icons.sticky_note_2_outlined;
       default: return Icons.task_alt;

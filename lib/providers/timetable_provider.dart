@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:isar_community/isar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/class_session.dart';
 import '../models/academic_task.dart';
 import '../models/attendance_record.dart';
 import '../services/isar_service.dart';
+import '../services/widget_service.dart';
 
 class TimetableProvider extends ChangeNotifier {
   final IsarService isarService;
@@ -123,6 +125,10 @@ class TimetableProvider extends ChangeNotifier {
     _userSessions = await isar.classSessions.filter().isUserEqualTo(true).findAll();
     _friendSessions = await isar.classSessions.filter().isUserEqualTo(false).findAll();
     
+    // Load persisted perspective
+    final prefs = await SharedPreferences.getInstance();
+    _isSwapped = prefs.getBool('isSwapped') ?? false;
+    
     // Auto-Repair / Seed Data if empty OR if schema was broken (weeks is null)
     if ((_userSessions.isEmpty && _friendSessions.isEmpty) || 
         (_userSessions.isNotEmpty && _userSessions.first.weeks == null)) {
@@ -137,6 +143,9 @@ class TimetableProvider extends ChangeNotifier {
     await loadAttendance();
     
     notifyListeners();
+    
+    // Update home screen widget
+    WidgetService.updateWidget(this);
   }
   
   // --- Attendance Logic ---
@@ -207,14 +216,21 @@ class TimetableProvider extends ChangeNotifier {
 
   void togglePerspective() {
     _isSwapped = !_isSwapped;
+    _persistPerspective();
     notifyListeners();
   }
 
   void setPerspective(bool isSwapped) {
     if (_isSwapped != isSwapped) {
       _isSwapped = isSwapped;
+      _persistPerspective();
       notifyListeners();
     }
+  }
+
+  Future<void> _persistPerspective() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isSwapped', _isSwapped);
   }
 
   List<AcademicTask> _tasks = [];
@@ -327,10 +343,10 @@ class TimetableProvider extends ChangeNotifier {
     return _tasks.where((t) => isSameDay(t.dueDate, date)).toList();
   }
 
-  // Friend Helpers
+  // Friend Helpers — uses the swapped getter so it always returns the "other" course
   List<ClassSession> getFriendEventsForDay(DateTime date) {
     final dayName = DateFormat('EEEE').format(date);
-    return _friendSessions.where((s) => 
+    return friendSessions.where((s) => 
       s.day == dayName && _shouldShowSession(s, date)
     ).toList();
   }
@@ -342,12 +358,14 @@ class TimetableProvider extends ChangeNotifier {
 
     final dayName = DateFormat('EEEE').format(date);
     
-    // 1. Get User and Friend Sessions active for THIS specific date (checking weeks)
-    final dailyUser = _userSessions.where((s) => 
+    // Use SWAPPED getters so comparison works from both perspectives
+    // userSessions = current user's timetable (respects swap)
+    // friendSessions = the other course's timetable (respects swap)
+    final dailyUser = userSessions.where((s) => 
       s.day == dayName && _shouldShowSession(s, date)
     ).toList();
 
-    final dailyFriend = _friendSessions.where((s) => 
+    final dailyFriend = friendSessions.where((s) => 
       s.day == dayName && _shouldShowSession(s, date)
     ).toList();
     
@@ -412,20 +430,21 @@ class TimetableProvider extends ChangeNotifier {
   }
 
   // Task Management
-  Future<void> addTask(String title, String subject, String type, DateTime due) async {
+  Future<void> addTask(String title, String subject, String type, DateTime due, {String description = ''}) async {
      final isar = await isarService.db;
      final newTask = AcademicTask(
        title: title, 
        subject: subject, 
        type: type, 
        dueDate: due, 
+       description: description,
        isCompleted: false
      );
      await isar.writeTxn(() async => await isar.academicTasks.put(newTask));
      await loadSessions(); 
   }
 
-  Future<void> updateTask(int id, String title, String subject, String type, DateTime dueDate, bool isCompleted) async {
+  Future<void> updateTask(int id, String title, String subject, String type, DateTime dueDate, bool isCompleted, {String description = ''}) async {
      final isar = await isarService.db;
      await isar.writeTxn(() async {
        final task = await isar.academicTasks.get(id);
@@ -435,10 +454,18 @@ class TimetableProvider extends ChangeNotifier {
          task.type = type;
          task.dueDate = dueDate;
          task.isCompleted = isCompleted;
+         task.description = description;
          await isar.academicTasks.put(task);
        }
      });
      await loadSessions();
+  }
+
+  // Unique subjects from existing tasks for autocomplete
+  List<String> get savedSubjects {
+    final subjects = _tasks.map((t) => t.subject).where((s) => s.isNotEmpty && s != 'General').toSet().toList();
+    subjects.sort();
+    return subjects;
   }
 
   Future<void> deleteTask(int id) async {

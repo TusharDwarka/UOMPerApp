@@ -23,6 +23,7 @@ class _BusTabState extends State<BusTab> {
           {"arrival_at_reduit": "08:05", "arrival_at_lescalier": "09:11"},
           {"arrival_at_reduit": "08:42", "arrival_at_lescalier": "09:48"},
           {"arrival_at_reduit": "09:22", "arrival_at_lescalier": "10:28"},
+          {"arrival_at_reduit": "10:05", "arrival_at_lescalier": "11:11", "bus_name": "L'express"},
           {"arrival_at_reduit": "10:25", "arrival_at_lescalier": "11:28", "bus_name": "Private"},
           {"arrival_at_reduit": "10:42", "arrival_at_lescalier": "11:48", "bus_name": "UBS"},
           {"arrival_at_reduit": "11:22", "arrival_at_lescalier": "12:28", "bus_name": "Napoleon"},
@@ -84,13 +85,13 @@ class _BusTabState extends State<BusTab> {
           {"departure_from_lescalier": "05:52", "arrival_at_reduit": "07:12"},
           {"departure_from_lescalier": "06:14", "arrival_at_reduit": "07:34"},
           {"departure_from_lescalier": "06:36", "arrival_at_reduit": "07:56"},
-          {"departure_from_lescalier": "06:58", "arrival_at_reduit": "08:18"},
+          {"departure_from_lescalier": "06:58", "arrival_at_reduit": "08:18", "bus_name": "L'express"},
           {"departure_from_lescalier": "07:20", "arrival_at_reduit": "08:40"},
           {"departure_from_lescalier": "07:42", "arrival_at_reduit": "09:02"},
           {"departure_from_lescalier": "08:04", "arrival_at_reduit": "09:24"},
           {"departure_from_lescalier": "08:26", "arrival_at_reduit": "09:46"},
           {"departure_from_lescalier": "09:14", "arrival_at_reduit": "10:34"},
-          {"departure_from_lescalier": "10:02", "arrival_at_reduit": "11:22"},
+          {"departure_from_lescalier": "10:02", "arrival_at_reduit": "11:22", "bus_name": "Rosa"},
           {"departure_from_lescalier": "10:50", "arrival_at_reduit": "12:10"},
           {"departure_from_lescalier": "11:38", "arrival_at_reduit": "12:58"},
           {"departure_from_lescalier": "12:26", "arrival_at_reduit": "13:46"},
@@ -135,8 +136,24 @@ class _BusTabState extends State<BusTab> {
           {"departure_from_lescalier": "17:00", "arrival_at_reduit": "18:20"}
         ]
       }
+    },
+    // ───────────────────────────────────────────
+    // Route 198: Réduit → Plaine Magnien (Mahebourg direction)
+    // Passes through L'Escalier — weekdays only
+    // ───────────────────────────────────────────
+    {
+      "location_name": "Réduit → Mahebourg / L'Escalier",
+      "bus_route": "198",
+      "schedules": {
+        "weekdays": [
+          {"departure_from_reduit": "13:18", "arrival_at_lescalier": "~14:20", "bus_name": "UBS"},
+          {"departure_from_reduit": "14:43", "arrival_at_lescalier": "~15:45", "bus_name": "UBS"},
+          {"departure_from_reduit": "15:45", "arrival_at_lescalier": "~16:45", "bus_name": "UBS"},
+        ],
+        "saturdays": [],
+        "sundays_public_holidays": []
+      }
     }
-    // ... Curepipe routes can be added later or user can add them
   ];
 
   int _expandedIndex = -1; 

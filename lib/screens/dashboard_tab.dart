@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/timetable_provider.dart';
-import '../services/bus_service.dart'; // import if needed
+import '../services/bus_service.dart';
 import 'planning_screen.dart';
 import '../models/class_session.dart';
 import '../models/academic_task.dart';
@@ -20,21 +20,73 @@ class _DashboardTabState extends State<DashboardTab> {
   @override
   void initState() {
     super.initState();
-    // Load data once
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<TimetableProvider>(context, listen: false).loadSessions();
     });
+  }
+
+  // Find the next upcoming class — may be tomorrow or later
+  Map<String, dynamic>? _findNextUpcomingClass(TimetableProvider timetable) {
+    final now = DateTime.now();
+    final nowMinutes = now.hour * 60 + now.minute;
+    
+    // 1. Check today first
+    final todayClasses = timetable.getEventsForDay(now);
+    todayClasses.sort((a,b) => a.startTime.compareTo(b.startTime));
+    
+    for (var s in todayClasses) {
+      final parts = s.startTime.split(":");
+      final startMinutes = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+      if (startMinutes > nowMinutes) {
+        final diff = startMinutes - nowMinutes;
+        String timeStatus;
+        if (diff < 60) {
+          timeStatus = "Starts in ${diff}m";
+        } else {
+          timeStatus = "Starts in ${diff ~/ 60}h ${diff % 60}m";
+        }
+        return {'session': s, 'timeStatus': timeStatus, 'dayLabel': 'Today'};
+      }
+    }
+    
+    // Check "currently in class"
+    for (var s in todayClasses) {
+      final startParts = s.startTime.split(":");
+      final endParts = s.endTime.split(":");
+      final startMins = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+      final endMins = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
+      if (nowMinutes >= startMins && nowMinutes < endMins) {
+        final remaining = endMins - nowMinutes;
+        return {'session': s, 'timeStatus': "In class • ${remaining}m left", 'dayLabel': 'Now', 'inClass': true};
+      }
+    }
+    
+    // 2. Check next 7 days
+    for (int d = 1; d <= 7; d++) {
+      final futureDate = now.add(Duration(days: d));
+      final week = timetable.getWeekNumber(futureDate);
+      
+      // Skip if before semester or online week
+      if (week < 1) continue;
+      if (timetable.isOnlineWeek(week)) continue;
+      
+      final classes = timetable.getEventsForDay(futureDate);
+      if (classes.isNotEmpty) {
+        classes.sort((a,b) => a.startTime.compareTo(b.startTime));
+        final first = classes.first;
+        final dayLabel = d == 1 ? "Tomorrow" : DateFormat('EEEE').format(futureDate);
+        return {'session': first, 'timeStatus': "$dayLabel at ${first.startTime}", 'dayLabel': dayLabel};
+      }
+    }
+    
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    // Premium Vibrant Colors - Adapted
     final primaryBlue = const Color(0xFF2962FF); 
-    // final secondaryPurple = const Color(0xFF6200EA); // Unused
-    
-    // Text Colors
     final textPrimary = isDark ? Colors.white : const Color(0xFF1A1D1E);
     final textSecondary = isDark ? Colors.grey[400] : Colors.grey[600];
 
@@ -45,32 +97,63 @@ class _DashboardTabState extends State<DashboardTab> {
           builder: (context, timetable, child) {
              final today = DateFormat('EEEE').format(DateTime.now()); 
              final todayClasses = timetable.getEventsForDay(DateTime.now());
-             
-             // Sort by time
              todayClasses.sort((a,b) => a.startTime.compareTo(b.startTime));
              
-             // Find next class
-             final now = DateTime.now();
-             final nowMinutes = now.hour * 60 + now.minute;
+             // Smart next class finder
+             final nextInfo = _findNextUpcomingClass(timetable);
+             final nextClass = nextInfo != null ? nextInfo['session'] as ClassSession : null;
+             final timeStatus = nextInfo?['timeStatus'] ?? '';
+             final dayLabel = nextInfo?['dayLabel'] ?? '';
+             final isInClass = nextInfo?['inClass'] == true;
              
-             ClassSession? nextClass;
-             String timeStatus = "No more classes today";
+             // Check week status
+             final currentWeek = timetable.getWeekNumber(DateTime.now());
+             final isOnline = currentWeek >= 1 && timetable.isOnlineWeek(currentWeek);
+             final isWeekend = DateTime.now().weekday >= 6;
              
-             for (var s in todayClasses) {
-               final parts = s.startTime.split(":");
-               final startMinutes = int.parse(parts[0]) * 60 + int.parse(parts[1]);
-               if (startMinutes > nowMinutes) {
-                 nextClass = s;
-                 final diff = startMinutes - nowMinutes;
-                 if (diff < 60) {
-                   timeStatus = "Starts in ${diff}m";
-                 } else {
-                   final h = diff ~/ 60;
-                   final m = diff % 60;
-                   timeStatus = "Starts in ${h}h ${m}m";
-                 }
-                 break;
-               }
+             // Status message for the hero card
+             String heroSubject;
+             String heroDetail;
+             IconData heroIcon;
+             List<Color> heroGradient;
+             
+             if (nextClass != null) {
+               heroSubject = nextClass.subject;
+               heroDetail = "${nextClass.room} • $timeStatus";
+               heroIcon = isInClass ? Icons.school_rounded : Icons.menu_book_rounded;
+               heroGradient = isInClass 
+                 ? [const Color(0xFF00C853), const Color(0xFF009624)]
+                 : isDark 
+                   ? [const Color(0xFF1565C0), const Color(0xFF0D47A1)]
+                   : [const Color(0xFF2979FF), const Color(0xFF1565C0)];
+             } else if (isOnline) {
+               heroSubject = "Online Week";
+               heroDetail = "Week $currentWeek • No campus classes";
+               heroIcon = Icons.laptop_mac_rounded;
+               heroGradient = isDark 
+                 ? [const Color(0xFFE65100), const Color(0xFFBF360C)]
+                 : [const Color(0xFFFF9800), const Color(0xFFE65100)];
+             } else if (isWeekend) {
+               heroSubject = "Weekend Break";
+               heroDetail = "Enjoy your time off!";
+               heroIcon = Icons.weekend_rounded;
+               heroGradient = isDark
+                 ? [const Color(0xFF6A1B9A), const Color(0xFF4A148C)]
+                 : [const Color(0xFF9C27B0), const Color(0xFF6A1B9A)];
+             } else if (currentWeek < 1) {
+               heroSubject = "Semester Not Started";
+               final start = DateTime(2026, 1, 19);
+               final diff = start.difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)).inDays;
+               heroDetail = diff > 0 ? "Starts in $diff days" : "Check your schedule";
+               heroIcon = Icons.event_note_rounded;
+               heroGradient = [Colors.grey[600]!, Colors.grey[800]!];
+             } else {
+               heroSubject = "All Done for Today!";
+               heroDetail = "No more classes — enjoy your evening";
+               heroIcon = Icons.celebration_rounded;
+               heroGradient = isDark
+                 ? [const Color(0xFF1565C0), const Color(0xFF0D47A1)]
+                 : [const Color(0xFF2979FF), const Color(0xFF1565C0)];
              }
              
             return SingleChildScrollView(
@@ -92,12 +175,9 @@ class _DashboardTabState extends State<DashboardTab> {
                                 style: TextStyle(color: textSecondary, fontSize: 14, fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(width: 8),
-                              // Week Badge
                               Builder(
                                 builder: (context) {
-                                  final week = timetable.getWeekNumber(DateTime.now());
-                                  
-                                  if (week < 1) {
+                                  if (currentWeek < 1) {
                                      final start = DateTime(2026, 1, 19);
                                      final now = DateTime.now();
                                      final diff = start.difference(DateTime(now.year, now.month, now.day)).inDays;
@@ -110,13 +190,12 @@ class _DashboardTabState extends State<DashboardTab> {
                                           border: Border.all(color: isDark ? Colors.white24 : Colors.grey.withOpacity(0.3))
                                         ),
                                         child: Text(
-                                          "Starts in $diff days",
+                                          diff > 0 ? "Starts in $diff days" : "Semester Active",
                                           style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: textSecondary),
                                         ),
                                      );
                                   }
 
-                                  final isOnline = timetable.isOnlineWeek(week);
                                   return Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                     decoration: BoxDecoration(
@@ -132,7 +211,7 @@ class _DashboardTabState extends State<DashboardTab> {
                                       )
                                     ),
                                     child: Text(
-                                      "Week $week • ${isOnline ? "Online" : "Campus"}", 
+                                      "Week $currentWeek • ${isOnline ? "Online" : "Campus"}", 
                                       style: TextStyle(
                                         fontSize: 10, 
                                         fontWeight: FontWeight.bold,
@@ -168,33 +247,43 @@ class _DashboardTabState extends State<DashboardTab> {
                   const SizedBox(height: 30),
 
                   // Status Counters 
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildStatusCard(timetable.tasks.length.toString(), "All Tasks", primaryBlue, false, isDark), 
-                      _buildStatusCard(timetable.pendingTasks.length.toString(), "Pending", textPrimary, false, isDark),
-                      _buildStatusCard(timetable.completedTasks.length.toString(), "Done", const Color(0xFF4CAF50), timetable.completedTasks.isNotEmpty, isDark),
-                    ],
-                  ),
+                  Builder(builder: (context) {
+                    // Check if all today's classes are done
+                    final nowMins = DateTime.now().hour * 60 + DateTime.now().minute;
+                    final allClassesDone = todayClasses.isNotEmpty && todayClasses.every((s) {
+                      final endParts = s.endTime.split(":");
+                      final endMins = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
+                      return nowMins >= endMins;
+                    });
+                    
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        allClassesDone 
+                          ? _buildStatusCard("✓", "All Done", const Color(0xFF4CAF50), true, isDark)
+                          : _buildStatusCard(todayClasses.length.toString(), "Today", primaryBlue, todayClasses.isNotEmpty, isDark), 
+                        _buildStatusCard(timetable.pendingTasks.length.toString(), "Pending", textPrimary, false, isDark),
+                        _buildStatusCard(timetable.completedTasks.length.toString(), "Done", const Color(0xFF4CAF50), timetable.completedTasks.isNotEmpty, isDark),
+                      ],
+                    );
+                  }),
 
                   const SizedBox(height: 30),
 
-                  // Featured Card (Next Class)
+                  // Featured Card (Next Class / Status)
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(26),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: isDark 
-                            ? [const Color(0xFF1565C0), const Color(0xFF0D47A1)]
-                            : [const Color(0xFF2979FF), const Color(0xFF1565C0)], 
+                        colors: heroGradient,
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(32),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF2979FF).withOpacity(0.4),
+                          color: heroGradient[0].withOpacity(0.4),
                           blurRadius: 24,
                           offset: const Offset(0, 12),
                         ),
@@ -212,53 +301,49 @@ class _DashboardTabState extends State<DashboardTab> {
                                 color: Colors.white.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(16),
                               ),
-                              child: const Icon(Icons.menu_book_rounded, color: Colors.white, size: 24),
+                              child: Icon(heroIcon, color: Colors.white, size: 24),
                             ),
-                            if (nextClass != null)
+                            if (dayLabel.isNotEmpty)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: Colors.white.withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
-                                child: Text("${timetable.userSessions.length} Total", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1565C0))),
+                                child: Text(dayLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
                               )
                           ],
                         ),
                         const SizedBox(height: 28),
                         Text(
-                          nextClass?.subject ?? "No upcoming classes",
+                          heroSubject,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          nextClass != null ? "${nextClass.room} • $timeStatus" : "Enjoy your free time!",
+                          heroDetail,
                           style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 16, fontWeight: FontWeight.w500),
                         ),
-                        const SizedBox(height: 28),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () {
-                               if (nextClass != null) {
-                                 _showClassDetailsSheet(context, nextClass);
-                               } else {
-                                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No upcoming classes to view!")));
-                               }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: const Color(0xFF1565C0),
-                              padding: const EdgeInsets.symmetric(vertical: 18),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              elevation: 0,
-                              textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
+                        if (nextClass != null) ...[
+                          const SizedBox(height: 28),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () => _showClassDetailsSheet(context, nextClass),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: heroGradient[1],
+                                padding: const EdgeInsets.symmetric(vertical: 18),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                elevation: 0,
+                                textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
+                              ),
+                              child: const Text("View Class Details"),
                             ),
-                            child: const Text("View Class Details"),
                           ),
-                        )
+                        ]
                       ],
                     ),
                   ),
@@ -273,7 +358,12 @@ class _DashboardTabState extends State<DashboardTab> {
                         ],
                      ),
                      const SizedBox(height: 16),
-                     _buildDeadlineCard(timetable.pendingTasks.first, isDark: isDark),
+                     // Show nearest deadline first (sorted by date)
+                     Builder(builder: (context) {
+                       final sorted = List<AcademicTask>.from(timetable.pendingTasks);
+                       sorted.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+                       return _buildDeadlineCard(sorted.first, isDark: isDark);
+                     }),
                      const SizedBox(height: 34),
                   ],
 
@@ -282,39 +372,63 @@ class _DashboardTabState extends State<DashboardTab> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                        Text("Today's Schedule", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textPrimary)),
-                      TextButton(onPressed: () {
-                         // Navigate to timetable?
-                      }, child: Text("See All", style: TextStyle(color: textSecondary, fontSize: 16))),
+                       TextButton(onPressed: () {}, child: Text("See All", style: TextStyle(color: textSecondary, fontSize: 16))),
                     ],
                   ),
                   
                   const SizedBox(height: 16),
 
-                  // List Real Classes
                   if (todayClasses.isEmpty)
                     Center(
                       child: Padding(
                         padding: const EdgeInsets.all(20.0),
-                        child: Text("No classes scheduled for $today.", style: TextStyle(color: textSecondary)),
+                        child: Column(
+                          children: [
+                            Icon(
+                              isOnline ? Icons.laptop_mac : (isWeekend ? Icons.weekend : Icons.free_breakfast),
+                              size: 40, color: isDark ? Colors.grey[700] : Colors.grey[300],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              isOnline ? "Online week — no campus classes" 
+                                : isWeekend ? "It's the weekend!" 
+                                : "No classes scheduled for $today.",
+                              style: TextStyle(color: textSecondary),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
                       ),
                     )
                   else
                     ...todayClasses.map((session) {
                        final colorIndex = session.subject.hashCode.abs() % 4;
                        final colors = [
-                         const Color(0xFF69F0AE), // Green
-                         const Color(0xFFFFD180), // Orange
-                         const Color(0xFFEA80FC), // Purple
-                         const Color(0xFF40C4FF), // Light Blue
+                         const Color(0xFF69F0AE),
+                         const Color(0xFFFFD180),
+                         const Color(0xFFEA80FC),
+                         const Color(0xFF40C4FF),
                        ];
                        final bgColor = colors[colorIndex];
+                       
+                       // Highlight currently-in-progress class / done class
+                       final nowMins = DateTime.now().hour * 60 + DateTime.now().minute;
+                       final startParts = session.startTime.split(":");
+                       final endParts = session.endTime.split(":");
+                       final startMins = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+                       final endMins = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
+                       final isNow = nowMins >= startMins && nowMins < endMins;
+                       final isDone = nowMins >= endMins;
                        
                        return _buildScheduleItem(
                          "${session.startTime} - ${session.endTime}", 
                          session.subject, 
                          session.room, 
                          bgColor, 
-                         isDark
+                         isDark,
+                         isActive: isNow,
+                         isDone: isDone,
+                         session: session,
                        );
                     }).toList(),
                 ],
@@ -329,7 +443,7 @@ class _DashboardTabState extends State<DashboardTab> {
   Widget _buildStatusCard(String count, String label, Color color, bool isActive, bool isDark) {
     return Expanded(
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 5), // spacing
+        margin: const EdgeInsets.symmetric(horizontal: 5),
         padding: const EdgeInsets.symmetric(vertical: 24),
         decoration: BoxDecoration(
           color: isActive ? color : (isDark ? const Color(0xFF1E1E1E) : Colors.white),
@@ -344,21 +458,77 @@ class _DashboardTabState extends State<DashboardTab> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              count,
-              style: TextStyle(
-                fontSize: 26, 
-                fontWeight: FontWeight.bold, 
-                color: isActive ? Colors.white : (isDark ? Colors.white : Colors.black87)
-              ),
-            ),
+            Text(count, style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: isActive ? Colors.white : (isDark ? Colors.white : Colors.black87))),
             const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13, 
-                fontWeight: FontWeight.w500,
-                color: isActive ? Colors.white.withOpacity(0.9) : Colors.grey[500]
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: isActive ? Colors.white.withOpacity(0.9) : Colors.grey[500])),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScheduleItem(String time, String title, String subtitle, Color bgColor, bool isDark, {bool isActive = false, bool isDone = false, ClassSession? session}) {
+    final textColor = isDark ? Colors.white : Colors.black87;
+    return GestureDetector(
+      onTap: session != null ? () => _showClassDetailsSheet(context, session) : null,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 18),
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: isDone 
+            ? (isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.08))
+            : (isDark ? bgColor.withOpacity(0.15) : bgColor.withOpacity(0.25)), 
+          borderRadius: BorderRadius.circular(26),
+          border: isActive ? Border.all(color: bgColor, width: 2) : null,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(time.split(' - ')[0], style: TextStyle(color: isDone ? textColor.withOpacity(0.4) : textColor.withOpacity(0.7), fontWeight: FontWeight.w600, fontSize: 13, decoration: isDone ? TextDecoration.lineThrough : null)),
+                const SizedBox(height: 4),
+                Text(time.split(' - ')[1], style: TextStyle(color: isDone ? textColor.withOpacity(0.3) : textColor.withOpacity(0.5), fontWeight: FontWeight.w600, fontSize: 13, decoration: isDone ? TextDecoration.lineThrough : null)),
+              ],
+            ),
+            const SizedBox(width: 20),
+            Container(height: 42, width: 2, color: isDone ? textColor.withOpacity(0.05) : textColor.withOpacity(0.1)),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: Text(title, style: TextStyle(color: isDone ? textColor.withOpacity(0.4) : textColor, fontWeight: FontWeight.w700, fontSize: 16, decoration: isDone ? TextDecoration.lineThrough : null))),
+                      if (isActive)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: Colors.green.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                          child: const Text("NOW", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.w800)),
+                        ),
+                      if (isDone && !isActive)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.green.withOpacity(0.15) : Colors.green.withOpacity(0.1), 
+                            borderRadius: BorderRadius.circular(8)
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle, size: 10, color: isDark ? Colors.green[300] : Colors.green[700]),
+                              const SizedBox(width: 3),
+                              Text("Done", style: TextStyle(color: isDark ? Colors.green[300] : Colors.green[700], fontSize: 10, fontWeight: FontWeight.w800)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(subtitle, style: TextStyle(color: isDone ? textColor.withOpacity(0.3) : textColor.withOpacity(0.6), fontSize: 14, fontWeight: FontWeight.w500)),
+                ],
               ),
             ),
           ],
@@ -367,61 +537,7 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildScheduleItem(String time, String title, String subtitle, Color bgColor, bool isDark) {
-    final textColor = isDark ? Colors.white : Colors.black87;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 18),
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: isDark ? bgColor.withOpacity(0.15) : bgColor.withOpacity(0.25), 
-        borderRadius: BorderRadius.circular(26),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Time Column
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                time.split(' - ')[0],
-                style: TextStyle(color: textColor.withOpacity(0.7), fontWeight: FontWeight.w600, fontSize: 13),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                time.split(' - ')[1],
-                style: TextStyle(color: textColor.withOpacity(0.5), fontWeight: FontWeight.w600, fontSize: 13),
-              ),
-            ],
-          ),
-          const SizedBox(width: 20),
-          // Divider
-          Container(height: 42, width: 2, color: textColor.withOpacity(0.1)),
-          const SizedBox(width: 20),
-          // Content
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 16)),
-                const SizedBox(height: 6),
-                Text(subtitle, style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 14, fontWeight: FontWeight.w500)),
-              ],
-            ),
-          ),
-          // Action Icon
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: (isDark ? Colors.black : Colors.white).withOpacity(0.3), shape: BoxShape.circle),
-            child: Icon(Icons.more_horiz, color: textColor.withOpacity(0.7), size: 18),
-          )
-        ],
-      ),
-    );
-  }
-
   Widget _buildDeadlineCard(dynamic task, {bool isDark = false}) {
-    // task is AcademicTask
     final now = DateTime.now();
     final diff = task.dueDate.difference(now).inDays;
     
@@ -435,7 +551,7 @@ class _DashboardTabState extends State<DashboardTab> {
        baseColor = Colors.orangeAccent;
        icon = Icons.priority_high_rounded;
     } else {
-       baseColor = const Color(0xFF2962FF); // Blue
+       baseColor = const Color(0xFF2962FF);
        icon = Icons.event_available_rounded;
     }
 
@@ -519,11 +635,10 @@ class _DashboardTabState extends State<DashboardTab> {
                     color: Colors.blueAccent,
                     onTap: () {
                       Navigator.pop(context);
-                      // Add task for this subject
                       Provider.of<TimetableProvider>(context, listen: false).addTask(
                         "Homework for ${session.subject}", 
                         session.subject, 
-                        "Assignment", 
+                        "Homework", 
                         DateTime.now().add(const Duration(days: 7))
                       );
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Homework added to Board!")));
@@ -538,7 +653,6 @@ class _DashboardTabState extends State<DashboardTab> {
                     color: Colors.orangeAccent,
                     onTap: () {
                        Navigator.pop(context);
-                       // Just a mock for now
                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Reminder set for 15 min before!")));
                     }
                   ),
