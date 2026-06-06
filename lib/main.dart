@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'services/isar_service.dart';
 import 'providers/timetable_provider.dart';
 import 'providers/theme_provider.dart';
 
 import 'providers/note_provider.dart';
 import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
 
 import 'services/bus_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
   final isarService = IsarService();
 
   runApp(
@@ -19,7 +22,7 @@ void main() async {
         Provider<IsarService>.value(value: isarService),
         Provider<BusService>(create: (_) => BusService(isarService)),
         ChangeNotifierProvider(
-          create: (_) => TimetableProvider(isarService),
+          create: (_) => TimetableProvider(isarService)..loadSetupState(),
         ),
         ChangeNotifierProvider(
           create: (_) => NoteProvider(isarService),
@@ -39,6 +42,7 @@ class UOMPerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final timetableProvider = Provider.of<TimetableProvider>(context);
 
     return MaterialApp(
       title: 'UOMPerApp',
@@ -91,7 +95,7 @@ class UOMPerApp extends StatelessWidget {
           unselectedItemColor: Colors.grey,
         ),
       ),
-      home: const HomeScreen(),
+      home: timetableProvider.hasCompletedSetup ? const HomeScreen() : const OnboardingScreen(),
     );
   }
 }

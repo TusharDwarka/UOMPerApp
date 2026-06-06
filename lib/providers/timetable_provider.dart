@@ -18,8 +18,84 @@ class TimetableProvider extends ChangeNotifier {
   
   // Attendance
   List<AttendanceRecord> _attendanceRecords = [];
+
+  // Adaptive Timetable Fields
+  String _courseName = '';
+  bool _hasCompletedSetup = false;
+  
+  String get courseName => _courseName;
+  bool get hasCompletedSetup => _hasCompletedSetup;
   
   TimetableProvider(this.isarService);
+
+  /// Load setup state from SharedPreferences (called early in app init)
+  Future<void> loadSetupState() async {
+    final prefs = await SharedPreferences.getInstance();
+    _courseName = prefs.getString('courseName') ?? '';
+    _hasCompletedSetup = prefs.getBool('hasCompletedSetup') ?? false;
+    
+    // Load configurable semester start
+    final semesterStartMs = prefs.getInt('semesterStartMs');
+    if (semesterStartMs != null) {
+      _semesterStart = DateTime.fromMillisecondsSinceEpoch(semesterStartMs);
+    }
+    notifyListeners();
+  }
+
+  Future<void> setCourseName(String name) async {
+    _courseName = name;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('courseName', name);
+    notifyListeners();
+  }
+
+  Future<void> setSemesterStart(DateTime date) async {
+    _semesterStart = date;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('semesterStartMs', date.millisecondsSinceEpoch);
+    notifyListeners();
+  }
+
+  Future<void> setSetupCompleted(bool completed) async {
+    _hasCompletedSetup = completed;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hasCompletedSetup', completed);
+    notifyListeners();
+  }
+
+  /// Import sessions parsed by AI. Clears existing user sessions and saves new ones.
+  Future<void> importAiSessions(List<ClassSession> sessions) async {
+    final isar = await isarService.db;
+    await isar.writeTxn(() async {
+      // Clear only user sessions (keep friend sessions if any)
+      final existingUser = await isar.classSessions.filter().isUserEqualTo(true).findAll();
+      for (final s in existingUser) {
+        await isar.classSessions.delete(s.id);
+      }
+      // Save new AI-parsed sessions
+      for (final session in sessions) {
+        await isar.classSessions.put(session);
+      }
+    });
+    await loadSessions();
+  }
+
+  /// Reset everything for a fresh setup (re-onboarding)
+  Future<void> resetForNewSetup() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('courseName');
+    await prefs.remove('hasCompletedSetup');
+    await prefs.remove('semesterStartMs');
+    _courseName = '';
+    _hasCompletedSetup = false;
+    _semesterStart = DateTime.now();
+    
+    final isar = await isarService.db;
+    await isar.writeTxn(() async {
+      await isar.classSessions.clear();
+    });
+    await loadSessions();
+  }
 
   Future<void> loadAttendance() async {
     final isar = await isarService.db;
@@ -241,7 +317,8 @@ class TimetableProvider extends ChangeNotifier {
   List<AcademicTask> get completedTasks => _tasks.where((t) => t.isCompleted).toList();
 
   // Helpers
-  final DateTime _semesterStart = DateTime(2026, 1, 19);
+  // Configurable semester start — loaded from SharedPreferences, fallback to Jan 19 2026
+  DateTime _semesterStart = DateTime(2026, 1, 19);
   DateTime get semesterStart => _semesterStart;
 
   int getWeekNumber(DateTime date) {
@@ -423,10 +500,10 @@ class TimetableProvider extends ChangeNotifier {
   }
 
   bool isOnlineWeek(int week) {
-    // Campus Weeks: 1, 2, 3, 6, 10
-    const campusWeeks = [1, 2, 3, 6, 10];
-    // If it's not a campus week, it's online
-    return !campusWeeks.contains(week);
+    // For generic/adaptive courses, all weeks are campus by default.
+    // The old DS/CS hardcoded campus weeks were [1, 2, 3, 6, 10].
+    // In the adaptive system, we treat every week as campus unless configured otherwise.
+    return false;
   }
 
   // Task Management
@@ -491,45 +568,23 @@ class TimetableProvider extends ChangeNotifier {
     await loadSessions();
   }
 
-  // Friend Load - Now Supercharged to Reset & Seed Data
+  /* ================================================================
+   * OMITTED — Old Semester Data (Y1 S2 - Data Science & Computer Science)
+   * 
+   * The hardcoded DS/CS timetable JSON that was here has been omitted
+   * in favor of the new adaptive AI-powered timetable import system.
+   * The original data is preserved in the json/ directory as:
+   *   - json/DSS2Y1.json (Data Science)
+   *   - json/CSS2Y1.json (Computer Science)
+   * 
+   * To restore the old behavior, see git history.
+   * ================================================================ */
+
+  // Legacy: Seed data loader — now a no-op in the adaptive system.
+  // Kept for backward compatibility with code that calls it.
   Future<void> loadFriendTimetable() async {
-     
-     // DS2Y1 (Data Science - User)
-     final dssJson = {
-      "timetable": {
-        "Monday": [{"day": "Monday", "startTime": "09:00", "endTime": "12:00", "moduleCode": "SIS 1067(1)", "moduleName": "Graphs", "location": "Room (NAC 2.12)", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Monday", "startTime": "09:00", "endTime": "12:00", "moduleCode": "SIS 1067(1)", "moduleName": "Graphs", "location": "ONLINE", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
-        "Tuesday": [{"day": "Tuesday", "startTime": "08:30", "endTime": "11:30", "moduleCode": "SIS 1066", "moduleName": "Programming Lecture", "location": "ONLINE", "mode": "ONLINE", "weeks": []}, {"day": "Tuesday", "startTime": "12:00", "endTime": "15:00", "moduleCode": "MA 1024(1)", "moduleName": "Mathematical Analysis II", "location": "ONLINE", "mode": "ONLINE", "weeks": []}, {"day": "Tuesday", "startTime": "16:00", "endTime": "17:30", "moduleCode": "STAT 1244", "moduleName": "Probability and Statistics", "location": "ONLINE", "mode": "ONLINE", "weeks": []}],
-        "Wednesday": [{"day": "Wednesday", "startTime": "12:00", "endTime": "15:00", "moduleCode": "MA 1023(1)", "moduleName": "Differential Equations", "location": "Room 2.7 - NAC Reduit", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Wednesday", "startTime": "12:00", "endTime": "15:00", "moduleCode": "MA 1023(1)", "moduleName": "Differential Equations", "location": "ONLINE", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
-        "Thursday": [{"day": "Thursday", "startTime": "09:00", "endTime": "12:00", "moduleCode": "MA 1022(1)", "moduleName": "Matric Computation", "location": "Room 2.37 FLM", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Thursday", "startTime": "09:00", "endTime": "12:00", "moduleCode": "MA 1022(1)", "moduleName": "Matric Computation", "location": "ONLINE", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Thursday", "startTime": "12:00", "endTime": "15:00", "moduleCode": "MA 1024(1)", "moduleName": "Mathematical Analysis II", "location": "Room 2.37 FLM", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Thursday", "startTime": "12:00", "endTime": "15:00", "moduleCode": "MA 1024(1)", "moduleName": "Mathematical Analysis II", "location": "ONLINE", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Thursday", "startTime": "16:00", "endTime": "17:30", "moduleCode": "STAT 1244", "moduleName": "Probability and Statistics", "location": "Room 1.14 Phase II Building", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Thursday", "startTime": "16:00", "endTime": "17:30", "moduleCode": "STAT 1244", "moduleName": "Probability and Statistics", "location": "ONLINE", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
-        "Friday": [{"day": "Friday", "startTime": "08:30", "endTime": "11:30", "moduleCode": "SIS 1066", "moduleName": "Programming Lab", "location": "SIS Lab - Second Floor Phase II Building", "mode": "CAMPUS", "weeks": []}],
-        "Saturday": [{"day": "Saturday", "startTime": "09:00", "endTime": "12:00", "moduleCode": "ICT 1201", "moduleName": "Computer Architecture", "location": "ONLINE", "mode": "ONLINE", "weeks": []}, {"day": "Saturday", "startTime": "12:00", "endTime": "15:00", "moduleCode": "STAT 1244", "moduleName": "Probability and Statistics", "location": "ONLINE", "mode": "ONLINE", "weeks": []}]
-      }
-     };
-
-     // CSS2Y1 (Computer Science - Friend)
-     final cssJson = {
-       "timetable": {
-         "Monday": [{"day": "Monday", "startTime": "08:00", "endTime": "10:00", "moduleCode": "ICDT 1202Y(1)", "moduleName": "Database Systems Lecture", "location": "Room 1.16", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Monday", "startTime": "08:00", "endTime": "10:00", "moduleCode": "ICDT 1202Y(1)", "moduleName": "Database Systems Lecture", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Monday", "startTime": "13:00", "endTime": "15:00", "moduleCode": "ICDT 1016Y", "moduleName": "Communication and Business Skills for IT (Lecture)", "location": "ELT1", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Monday", "startTime": "13:00", "endTime": "15:00", "moduleCode": "ICDT 1016Y", "moduleName": "Communication and Business Skills for IT (Lecture)", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
-         "Tuesday": [{"day": "Tuesday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICDT 1201Y(1)", "moduleName": "Computer Programming", "location": "ELT1", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Tuesday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICDT 1201Y(1)", "moduleName": "Computer Programming", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Tuesday", "startTime": "11:00", "endTime": "12:00", "moduleCode": "ICDT 1016Y(1)", "moduleName": "Communication and Business Skills for IT (Tutorial)", "location": "Room 1.14", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Tuesday", "startTime": "11:00", "endTime": "12:00", "moduleCode": "ICDT 1016Y(1)", "moduleName": "Communication and Business Skills for IT (Tutorial)", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
-         "Wednesday": [{"day": "Wednesday", "startTime": "08:30", "endTime": "09:30", "moduleCode": "ICDT 1201Y(1)", "moduleName": "Computer Programming (Lab)", "location": "CITS Lab 1A", "group": "A1", "mode": "CAMPUS", "weeks": []}, {"day": "Wednesday", "startTime": "09:30", "endTime": "10:30", "moduleCode": "ICDT 1208Y", "moduleName": "Software Engineering Principles (Tutorial)", "location": "Tech Avenue", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Wednesday", "startTime": "09:30", "endTime": "10:30", "moduleCode": "ICDT 1208Y", "moduleName": "Software Engineering Principles (Tutorial)", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Wednesday", "startTime": "10:30", "endTime": "11:30", "moduleCode": "ICDT 1207Y", "moduleName": "Computational Mathematics(Tutorial)", "location": "Room 1.15", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Wednesday", "startTime": "10:30", "endTime": "11:30", "moduleCode": "ICDT 1207Y", "moduleName": "Computational Mathematics(Tutorial)", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
-         "Thursday": [{"day": "Thursday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICT 1207(1)", "moduleName": "Computational Mathematics", "location": "ELT1", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Thursday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICT 1207(1)", "moduleName": "Computational Mathematics", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Thursday", "startTime": "10:30", "endTime": "12:30", "moduleCode": "ICDT 1208Y", "moduleName": "Software Engineering Principles (Lecture)", "location": "ELT1", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Thursday", "startTime": "10:30", "endTime": "12:30", "moduleCode": "ICDT 1208Y", "moduleName": "Software Engineering Principles (Lecture)", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}],
-         "Friday": [{"day": "Friday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICT 1206Y(1)", "moduleName": "Computer Organisation and Architecture(Lecture)", "location": "ELT1", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Friday", "startTime": "08:30", "endTime": "10:30", "moduleCode": "ICT 1206Y(1)", "moduleName": "Computer Organisation and Architecture(Lecture)", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}, {"day": "Friday", "startTime": "12:30", "endTime": "13:30", "moduleCode": "ICT 1206Y(1)", "moduleName": "Computer Organisation and Architecture(Lecture)", "location": "CITS Lab 1A", "group": "A1", "mode": "CAMPUS", "weeks": []}],
-         "Saturday": [{"day": "Saturday", "startTime": "08:00", "endTime": "09:00", "moduleCode": "ICDT 1202Y(1)", "moduleName": "Database Systems Lecture", "location": "ICT Lab", "group": "A1", "mode": "CAMPUS", "weeks": [1, 2, 3, 6, 10]}, {"day": "Saturday", "startTime": "08:00", "endTime": "09:00", "moduleCode": "ICDT 1202Y(1)", "moduleName": "Database Systems Lecture", "location": "ONLINE", "group": "A1", "mode": "ONLINE", "weeks": [4, 5, 7, 8, 9]}]
-       }
-     };
-
-     final isar = await isarService.db;
-     await isar.writeTxn(() async {
-       // Clear ALL existing sessions to ensure fresh start
-       await isar.classSessions.clear(); // Safest
-       
-       // Import DSS (User = true)
-       _importSessions(isar, dssJson['timetable'] as Map<String, dynamic>, true);
-       
-       // Import CSS (Friend = false)
-       _importSessions(isar, cssJson['timetable'] as Map<String, dynamic>, false);
-     });
-     
+     // In the adaptive system, this is replaced by importAiSessions().
+     // If called, just reload whatever sessions exist in the DB.
      await loadSessions();
   }
 

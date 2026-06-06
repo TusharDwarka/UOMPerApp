@@ -26,8 +26,8 @@ class _ScheduleTabState extends State<ScheduleTab> {
   @override
   Widget build(BuildContext context) {
     final timetable = Provider.of<TimetableProvider>(context);
-    // Align local state with provider (or just use provider)
-    _currentPerspective = timetable.isSwapped ? "Computer Science" : "Data Science";
+    // Align local state with provider
+    _currentPerspective = timetable.courseName.isNotEmpty ? timetable.courseName : "My Schedule";
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
@@ -45,10 +45,6 @@ class _ScheduleTabState extends State<ScheduleTab> {
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: Icon(Icons.compare_arrows, color: isDark ? Colors.white : Colors.black),
-            onPressed: () => _showCompareModal(context),
-          ),
           IconButton(
             icon: Icon(Icons.edit, color: _isEditMode ? Colors.blue : (isDark ? Colors.white : Colors.black)),
              onPressed: () {
@@ -208,11 +204,11 @@ class _ScheduleTabState extends State<ScheduleTab> {
                   },
                 ),
               ),
-              const Spacer(),
-              IconButton(
-                icon: Icon(Icons.people_outline, color: _isCompareMode ? Colors.green : (isDark ? Colors.white : Colors.black)),
-                onPressed: () => _showCompareModal(context),
-              ),
+              // Compare feature temporarily disabled in adaptive system
+              // IconButton(
+              //   icon: Icon(Icons.people_outline, color: _isCompareMode ? Colors.green : (isDark ? Colors.white : Colors.black)),
+              //   onPressed: () => _showCompareModal(context),
+              // ),
             ],
           ),
           const SizedBox(height: 12),

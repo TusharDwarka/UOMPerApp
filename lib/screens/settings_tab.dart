@@ -133,23 +133,7 @@ class SettingsTab extends StatelessWidget {
                              child: const Icon(Icons.class_rounded, color: Colors.indigo),
                            ),
                            title: const Text("My Course", style: TextStyle(fontWeight: FontWeight.bold)),
-                           subtitle: Text(provider.isSwapped ? "Computer Science" : "Data Science", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                           trailing: DropdownButton<String>(
-                             value: provider.isSwapped ? "CS" : "DS",
-                             underline: const SizedBox(),
-                             icon: const Icon(Icons.arrow_drop_down_rounded),
-                             items: const [
-                               DropdownMenuItem(value: "DS", child: Text("Data Science")),
-                               DropdownMenuItem(value: "CS", child: Text("Computer Science")),
-                             ],
-                             onChanged: (val) {
-                               if (val == "CS") {
-                                 provider.setPerspective(true);
-                               } else {
-                                 provider.setPerspective(false);
-                               }
-                             }
-                           ),
+                           subtitle: Text(provider.courseName.isNotEmpty ? provider.courseName : "Not Set", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600])),
                         ),
                      ],
                   );
@@ -175,30 +159,29 @@ class SettingsTab extends StatelessWidget {
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), shape: BoxShape.circle),
-                      child: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                      decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), shape: BoxShape.circle),
+                      child: const Icon(Icons.sync_rounded, color: Colors.blue),
                     ),
-                    title: const Text("Reset Timetable", style: TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: const Text("Reloads default course data"),
+                    title: const Text("Re-import Timetable", style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text("Upload a new schedule"),
                     trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                     onTap: () {
-                      showDialog(
+                       // We can just set hasCompletedSetup to false and navigate to OnboardingScreen.
+                       // For safety, let's ask for confirmation first.
+                       showDialog(
                         context: context, 
                         builder: (context) => AlertDialog(
-                          title: const Text("Reset Timetable?"),
-                          content: const Text("This will revert your schedule to the default module data. Custom edits may be lost."),
+                          title: const Text("Change Course / Timetable?"),
+                          content: const Text("This will restart the setup process so you can upload a new timetable."),
                           actions: [
                             TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
                             TextButton(
                               onPressed: () async {
-                                Navigator.pop(context);
+                                Navigator.pop(context); // Close dialog
                                 final provider = Provider.of<TimetableProvider>(context, listen: false);
-                                await provider.loadFriendTimetable();
-                                if(context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Timetable reset successfully")));
-                                }
+                                await provider.resetForNewSetup();
                               }, 
-                              child: const Text("Reset", style: TextStyle(color: Colors.red))
+                              child: const Text("Continue", style: TextStyle(color: Colors.blue))
                             ),
                           ],
                         )
