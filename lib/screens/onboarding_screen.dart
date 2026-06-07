@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/class_session.dart';
 import '../providers/timetable_provider.dart';
 import '../services/ai_service.dart';
+import '../widgets/add_edit_class_sheet.dart';
 import 'home_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -37,7 +38,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
   // Semester config
   DateTime _semesterStart = DateTime.now();
+  DateTime? _semesterEnd;
   final TextEditingController _semesterStartController = TextEditingController();
+  final TextEditingController _semesterEndController = TextEditingController();
 
   late AnimationController _pulseController;
 
@@ -56,6 +59,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     _pageController.dispose();
     _courseNameController.dispose();
     _semesterStartController.dispose();
+    _semesterEndController.dispose();
     _pulseController.dispose();
     super.dispose();
   }
@@ -150,6 +154,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
         mimeType: _selectedMimeType,
       );
 
+      if (results.isEmpty) {
+        throw Exception("We couldn't detect a valid timetable in this file. Please try another one.");
+      }
+
       setState(() {
         _parsedSessions = results;
         _sessionSelected = List.generate(results.length, (_) => true);
@@ -157,9 +165,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
       });
       _goToStep(3); // Confirm step
     } catch (e) {
+      String msg = "Failed to process timetable. Please try again.";
+      final eStr = e.toString().toLowerCase();
+      
+      if (eStr.contains("quota") || eStr.contains("429") || eStr.contains("overloaded")) {
+        msg = "The AI servers are currently busy or overloaded. Please try again in a minute.";
+      } else if (eStr.contains("detect a valid timetable")) {
+        msg = "We couldn't detect a valid timetable in this file. Please try a clearer picture.";
+      } else if (eStr.contains("network") || eStr.contains("socket") || eStr.contains("connection")) {
+        msg = "Network error. Please check your internet connection.";
+      }
+
       setState(() {
         _isProcessing = false;
-        _errorMessage = e.toString();
+        _errorMessage = msg;
       });
       _goToStep(1); // Back to upload step
     }
@@ -189,12 +208,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
         moduleCode: s['moduleCode'] ?? '',
         isUser: true,
         weeks: weeksList,
+        specificDate: s['specificDate'] != null ? DateTime.tryParse(s['specificDate']) : null,
       ));
     }
 
-    // Save course name and semester start
+    // Save course name and semester dates
     await provider.setCourseName(courseName);
-    await provider.setSemesterStart(_semesterStart);
+    await provider.setSemesterDates(_semesterStart, _semesterEnd);
     await provider.importAiSessions(sessions);
     await provider.setSetupCompleted(true);
 
@@ -348,6 +368,56 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                   ),
                   const Spacer(),
                   Icon(Icons.arrow_drop_down, color: isDark ? Colors.grey[500] : Colors.grey),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+          const Text("Semester End (Optional)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _semesterEnd ?? _semesterStart.add(const Duration(days: 90)),
+                firstDate: _semesterStart,
+                lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+              );
+              if (picked != null) {
+                setState(() {
+                  _semesterEnd = picked;
+                  _semesterEndController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                });
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey[100],
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.event_outlined, color: isDark ? Colors.white70 : Colors.black87),
+                  const SizedBox(width: 12),
+                  Text(
+                    _semesterEndController.text.isEmpty ? "No End Date" : _semesterEndController.text,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black),
+                  ),
+                  const Spacer(),
+                  if (_semesterEnd != null)
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _semesterEnd = null;
+                          _semesterEndController.clear();
+                        });
+                      },
+                      child: const Icon(Icons.clear, color: Colors.grey, size: 20),
+                    )
+                  else
+                    Icon(Icons.arrow_drop_down, color: isDark ? Colors.grey[500] : Colors.grey),
                 ],
               ),
             ),
@@ -720,7 +790,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               // Add class manually button
               Center(
                 child: TextButton.icon(
-                  onPressed: _showManualAddClassDialog,
+                  onPressed: _showAddEditClassSheet,
                   icon: const Icon(Icons.add_circle_outline),
                   label: const Text("Add Class Manually"),
                   style: TextButton.styleFrom(
@@ -800,6 +870,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                 ],
               ),
             ),
+            IconButton(
+              icon: const Icon(Icons.edit_rounded, size: 20),
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+              onPressed: () => _showAddEditClassSheet(index: index),
+            ),
             Checkbox(
               value: isSelected,
               onChanged: (v) => setState(() => _sessionSelected[index] = v ?? true),
@@ -831,108 +906,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     );
   }
 
-  // --- Manual Add Class Dialog ---
-  Future<void> _showManualAddClassDialog() async {
-    final moduleNameCtrl = TextEditingController();
-    final moduleCodeCtrl = TextEditingController();
-    final locationCtrl = TextEditingController();
-    String selectedDay = 'Monday';
-    TimeOfDay startTime = const TimeOfDay(hour: 9, minute: 0);
-    TimeOfDay endTime = const TimeOfDay(hour: 10, minute: 0);
-
-    final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
-    await showDialog(
+  // --- Add / Edit Class Bottom Sheet ---
+  Future<void> _showAddEditClassSheet({int? index}) async {
+    final initialData = index != null ? _parsedSessions[index] : null;
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return AlertDialog(
-              title: const Text("Add Class"),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: moduleNameCtrl,
-                      decoration: const InputDecoration(labelText: "Module Name", hintText: "e.g. Programming"),
-                      textCapitalization: TextCapitalization.words,
-                    ),
-                    TextField(
-                      controller: moduleCodeCtrl,
-                      decoration: const InputDecoration(labelText: "Module Code (Optional)", hintText: "e.g. CS101"),
-                      textCapitalization: TextCapitalization.characters,
-                    ),
-                    TextField(
-                      controller: locationCtrl,
-                      decoration: const InputDecoration(labelText: "Room / Location", hintText: "e.g. Room A"),
-                      textCapitalization: TextCapitalization.words,
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: selectedDay,
-                      decoration: const InputDecoration(labelText: "Day"),
-                      items: days.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                      onChanged: (val) => setModalState(() => selectedDay = val!),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton.icon(
-                            icon: const Icon(Icons.access_time),
-                            label: Text(startTime.format(context)),
-                            onPressed: () async {
-                              final picked = await showTimePicker(context: context, initialTime: startTime);
-                              if (picked != null) setModalState(() => startTime = picked);
-                            },
-                          ),
-                        ),
-                        const Text(" - "),
-                        Expanded(
-                          child: TextButton.icon(
-                            icon: const Icon(Icons.access_time),
-                            label: Text(endTime.format(context)),
-                            onPressed: () async {
-                              final picked = await showTimePicker(context: context, initialTime: endTime);
-                              if (picked != null) setModalState(() => endTime = picked);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-                ElevatedButton(
-                  onPressed: () {
-                    if (moduleNameCtrl.text.trim().isEmpty) return;
-                    
-                    final newClass = {
-                      'moduleName': moduleNameCtrl.text.trim(),
-                      'moduleCode': moduleCodeCtrl.text.trim(),
-                      'location': locationCtrl.text.trim().isEmpty ? 'TBD' : locationCtrl.text.trim(),
-                      'day': selectedDay,
-                      'startTime': '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}',
-                      'endTime': '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}',
-                      'weeks': [],
-                    };
-
-                    setState(() {
-                      _parsedSessions.add(newClass);
-                      _sessionSelected.add(true);
-                    });
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text("Add"),
-                ),
-              ],
-            );
-          }
-        );
-      }
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => AddEditClassSheet(initialData: initialData),
     );
+
+    if (result != null) {
+      setState(() {
+        if (index != null) {
+          _parsedSessions[index] = result;
+          _sessionSelected[index] = true; // Auto-select if edited
+        } else {
+          _parsedSessions.add(result);
+          _sessionSelected.add(true);
+        }
+      });
+    }
   }
 }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/timetable_provider.dart';
 import '../models/class_session.dart';
+import '../widgets/add_edit_class_sheet.dart';
 
 class ScheduleTab extends StatefulWidget {
   const ScheduleTab({super.key});
@@ -33,184 +34,54 @@ class _ScheduleTabState extends State<ScheduleTab> {
   }
 
   // Show "Add Class" Bottom Sheet
-  void _showAddSessionDialog({ClassSession? sessionToEdit}) {
-    final formKey = GlobalKey<FormState>();
-    final isEditing = sessionToEdit != null;
-    
-    String subject = sessionToEdit?.subject ?? '';
-    String room = sessionToEdit?.room ?? '';
-    String startTime = sessionToEdit?.startTime ?? "09:00";
-    String endTime = sessionToEdit?.endTime ?? "10:30";
-    // If editing, use existing session day, else use selected date
-    String selectedDayName = isEditing 
-        ? sessionToEdit!.day 
-        : DateFormat('EEEE').format(_selectedDate);
-        
-    final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  Future<void> _showAddSessionDialog({ClassSession? sessionToEdit}) async {
+    Map<String, dynamic>? initialData;
+    if (sessionToEdit != null) {
+      initialData = {
+        'moduleName': sessionToEdit.subject,
+        'moduleCode': sessionToEdit.moduleCode,
+        'location': sessionToEdit.room,
+        'day': sessionToEdit.day,
+        'startTime': sessionToEdit.startTime,
+        'endTime': sessionToEdit.endTime,
+        'weeks': sessionToEdit.weeks,
+        'specificDate': sessionToEdit.specificDate?.toIso8601String(),
+      };
+    } else {
+      initialData = {
+        'day': DateFormat('EEEE').format(_selectedDate),
+        'specificDate': _selectedDate.toIso8601String(),
+      };
+    }
 
-    // Ensure keyboard doesn't cover content
-    showModalBottomSheet(
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20, 
-            top: 30, right: 24, left: 24),
-        child: SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(isEditing ? "Edit Task" : "Add New Task", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87)),
-                    if (isEditing)
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        onPressed: () {
-                           // Quick delete confirm
-                           showDialog(
-                             context: context, 
-                             builder: (c) => AlertDialog(
-                               title: const Text("Delete Task?"),
-                               content: const Text("This cannot be undone."),
-                               actions: [
-                                 TextButton(onPressed: () => Navigator.pop(c), child: const Text("Cancel")),
-                                 TextButton(
-                                   onPressed: () {
-                                     Provider.of<TimetableProvider>(context, listen: false).deleteSession(sessionToEdit!.id);
-                                     Navigator.pop(c); // Close Dialog
-                                     Navigator.pop(context); // Close Sheet
-                                   }, 
-                                   child: const Text("Delete", style: TextStyle(color: Colors.red))
-                                 ),
-                               ],
-                             )
-                           );
-                        },
-                      )
-                  ],
-                ),
-                const SizedBox(height: 30),
-                
-                // Subject Input
-                TextFormField(
-                  initialValue: subject,
-                  decoration: InputDecoration(
-                    labelText: "Title (e.g. Mobile Computing)",
-                    labelStyle: TextStyle(color: Colors.grey[500]),
-                    filled: true,
-                    fillColor: Colors.grey[50],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                    prefixIcon: const Icon(Icons.bookmark_border_rounded, color: Colors.blue),
-                  ),
-                  validator: (v) => v!.isEmpty ? "Required" : null,
-                  onSaved: (v) => subject = v!,
-                ),
-                const SizedBox(height: 20),
-                
-                // Room Input
-                TextFormField(
-                  initialValue: room,
-                  decoration: InputDecoration(
-                    labelText: "Location / Room",
-                    labelStyle: TextStyle(color: Colors.grey[500]),
-                    filled: true,
-                    fillColor: Colors.grey[50],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                    prefixIcon: const Icon(Icons.location_on_outlined, color: Colors.blue),
-                  ),
-                  onSaved: (v) => room = v ?? '',
-                ),
-                const SizedBox(height: 20),
-                
-                // Day Dropdown
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(16)),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButtonFormField<String>(
-                      value: days.contains(selectedDayName) ? selectedDayName : 'Monday',
-                      decoration: const InputDecoration(border: InputBorder.none, icon: Icon(Icons.calendar_today_outlined, color: Colors.blue)),
-                      items: days.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                      onChanged: (v) => selectedDayName = v!,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                
-                // Time Pickers
-                Row(
-                  children: [
-                     Expanded(child: _buildTimeField("Start", startTime, (val) => startTime = val)),
-                     const SizedBox(width: 16),
-                     Expanded(child: _buildTimeField("End", endTime, (val) => endTime = val)),
-                  ],
-                ),
-                const SizedBox(height: 40),
-                
-                // Done Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      if (formKey.currentState!.validate()) {
-                        formKey.currentState!.save();
-                        final session = ClassSession(
-                          subject: subject,
-                          room: room,
-                          day: selectedDayName,
-                          startTime: startTime,
-                          endTime: endTime,
-                          isUser: true,
-                        );
-                        
-                        if (isEditing) {
-                          session.id = sessionToEdit!.id; // Preserve ID for update
-                          Provider.of<TimetableProvider>(context, listen: false).addSession(session);
-                        } else {
-                          Provider.of<TimetableProvider>(context, listen: false).addSession(session);
-                        }
-                        Navigator.pop(context);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0066FF),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    child: Text(isEditing ? "Update Task" : "Create Task", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
-            ),
-          ),
-        ),
-      ),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => AddEditClassSheet(initialData: initialData),
     );
+
+    if (result != null) {
+      final session = ClassSession(
+        subject: result['moduleName'] ?? '',
+        startTime: result['startTime'] ?? '',
+        endTime: result['endTime'] ?? '',
+        day: result['day'] ?? '',
+        room: result['location'] ?? 'TBD',
+        moduleCode: result['moduleCode'] ?? '',
+        isUser: true,
+        weeks: result['weeks'],
+        specificDate: result['specificDate'] != null ? DateTime.tryParse(result['specificDate']) : null,
+      );
+
+      if (sessionToEdit != null) {
+        session.id = sessionToEdit.id;
+      }
+      Provider.of<TimetableProvider>(context, listen: false).addSession(session);
+    }
   }
 
-  Widget _buildTimeField(String label, String initialVal, Function(String) onSave) {
-    return TextFormField(
-      initialValue: initialVal,
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: Colors.grey[50],
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-        suffixText: "HH:MM",
-      ),
-      onSaved: (v) => onSave(v!),
-    );
-  }
+
 
   @override
   Widget build(BuildContext context) {

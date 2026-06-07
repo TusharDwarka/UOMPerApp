@@ -39,6 +39,11 @@ class TimetableProvider extends ChangeNotifier {
     if (semesterStartMs != null) {
       _semesterStart = DateTime.fromMillisecondsSinceEpoch(semesterStartMs);
     }
+
+    final semesterEndMs = prefs.getInt('semesterEndMs');
+    if (semesterEndMs != null) {
+      _semesterEnd = DateTime.fromMillisecondsSinceEpoch(semesterEndMs);
+    }
     notifyListeners();
   }
 
@@ -49,10 +54,16 @@ class TimetableProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setSemesterStart(DateTime date) async {
-    _semesterStart = date;
+  Future<void> setSemesterDates(DateTime start, DateTime? end) async {
+    _semesterStart = start;
+    _semesterEnd = end;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('semesterStartMs', date.millisecondsSinceEpoch);
+    await prefs.setInt('semesterStartMs', start.millisecondsSinceEpoch);
+    if (end != null) {
+      await prefs.setInt('semesterEndMs', end.millisecondsSinceEpoch);
+    } else {
+      await prefs.remove('semesterEndMs');
+    }
     notifyListeners();
   }
 
@@ -86,9 +97,11 @@ class TimetableProvider extends ChangeNotifier {
     await prefs.remove('courseName');
     await prefs.remove('hasCompletedSetup');
     await prefs.remove('semesterStartMs');
+    await prefs.remove('semesterEndMs');
     _courseName = '';
     _hasCompletedSetup = false;
     _semesterStart = DateTime.now();
+    _semesterEnd = null;
     
     final isar = await isarService.db;
     await isar.writeTxn(() async {
@@ -319,7 +332,9 @@ class TimetableProvider extends ChangeNotifier {
   // Helpers
   // Configurable semester start — loaded from SharedPreferences, fallback to Jan 19 2026
   DateTime _semesterStart = DateTime(2026, 1, 19);
+  DateTime? _semesterEnd;
   DateTime get semesterStart => _semesterStart;
+  DateTime? get semesterEnd => _semesterEnd;
 
   int getWeekNumber(DateTime date) {
     // Normalize dates to midnight to avoid time discrepancies
@@ -332,6 +347,20 @@ class TimetableProvider extends ChangeNotifier {
   }
 
   bool _shouldShowSession(ClassSession session, DateTime date) {
+    if (session.specificDate != null) {
+      return isSameDay(date, session.specificDate!);
+    }
+
+    // Check semester bounds
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final normalizedStart = DateTime(_semesterStart.year, _semesterStart.month, _semesterStart.day);
+    if (normalizedDate.isBefore(normalizedStart)) return false;
+    
+    if (_semesterEnd != null) {
+      final normalizedEnd = DateTime(_semesterEnd!.year, _semesterEnd!.month, _semesterEnd!.day);
+      if (normalizedDate.isAfter(normalizedEnd)) return false;
+    }
+
     // If no weeks specified, assume it runs every week
     if (session.weeks == null || session.weeks!.isEmpty) return true;
     
@@ -344,8 +373,16 @@ class TimetableProvider extends ChangeNotifier {
   }
 
   String getWeekLabel(DateTime date) {
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final normalizedStart = DateTime(_semesterStart.year, _semesterStart.month, _semesterStart.day);
+    if (normalizedDate.isBefore(normalizedStart)) return "Pre-Sem";
+    
+    if (_semesterEnd != null) {
+      final normalizedEnd = DateTime(_semesterEnd!.year, _semesterEnd!.month, _semesterEnd!.day);
+      if (normalizedDate.isAfter(normalizedEnd)) return "Break";
+    }
+
     final w = getWeekNumber(date);
-    if (w == 0) return "Pre-Sem";
     if (w > 15) return "Break";
     
     final online = isOnlineWeek(w);

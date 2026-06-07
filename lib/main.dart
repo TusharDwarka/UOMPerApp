@@ -22,7 +22,7 @@ void main() async {
         Provider<IsarService>.value(value: isarService),
         Provider<BusService>(create: (_) => BusService(isarService)),
         ChangeNotifierProvider(
-          create: (_) => TimetableProvider(isarService)..loadSetupState(),
+          create: (_) => TimetableProvider(isarService)..resetForNewSetup()..loadSetupState(),
         ),
         ChangeNotifierProvider(
           create: (_) => NoteProvider(isarService),

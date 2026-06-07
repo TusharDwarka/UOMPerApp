@@ -46,26 +46,26 @@ class AiService {
 
   String _buildPrompt(String courseName) {
     return '''
-You are a university timetable parser. The student is studying "$courseName".
+You are a highly intelligent timetable parsing assistant for university students. 
+The user is studying: "$courseName" (Use this context to help understand abbreviations or module names).
 
-Parse the timetable and extract EVERY class/lecture/tutorial/lab session.
+CRITICAL VALIDATION STEP:
+First, analyze the provided image or document. If it is NOT a timetable, schedule, or list of classes (e.g., if it is a random photo, a picture of an animal, unrelated text, etc.), you MUST return exactly the following empty JSON array and nothing else:
+[]
 
-Return ONLY a valid JSON array (no markdown, no explanation, no code fences). Each element must have:
-{
-  "day": "Monday",           // Full day name (Monday-Sunday)
-  "startTime": "09:00",     // 24-hour format HH:mm
-  "endTime": "12:00",       // 24-hour format HH:mm
-  "moduleName": "...",      // Full module/subject name
-  "moduleCode": "...",      // Module code if visible, else ""
-  "location": "...",        // Room/location if visible, else "TBD"
-  "mode": "CAMPUS",         // "CAMPUS" or "ONLINE" if distinguishable, else "CAMPUS"
-  "weeks": []               // List of week numbers if specified, else [] (meaning every week)
-}
+If it IS a timetable, extract ALL class sessions and return them as a JSON array.
+Each object in the array MUST have the following keys exactly:
+- "moduleName": String (The name of the class/module, e.g. "Programming", "Data Science")
+- "moduleCode": String (The course code if present, else "")
+- "location": String (The room or location, e.g. "NAC 2.12" or "ONLINE")
+- "day": String (The day of the week, e.g. "Monday")
+- "startTime": String (In HH:MM format, 24-hour clock)
+- "endTime": String (In HH:MM format, 24-hour clock)
+- "weeks": [] (List of week numbers if specified, else [])
 
 Rules:
 - If the same module appears on multiple days, create separate entries for each day.
 - If a module has both a lecture and tutorial/lab, create separate entries for each.
-- If online vs campus variants exist for different weeks, create separate entries with the appropriate weeks list.
 - Use 24-hour time format (e.g. 09:00 not 9:00 AM).
 - Return ONLY the JSON array. No other text.
 ''';
