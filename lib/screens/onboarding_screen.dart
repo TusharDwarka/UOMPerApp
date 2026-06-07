@@ -52,6 +52,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
     _semesterStartController.text = '${_semesterStart.year}-${_semesterStart.month.toString().padLeft(2, '0')}-${_semesterStart.day.toString().padLeft(2, '0')}';
+    _semesterEnd = _semesterStart.add(const Duration(days: 105)); // 15 weeks
+    _semesterEndController.text = '${_semesterEnd!.year}-${_semesterEnd!.month.toString().padLeft(2, '0')}-${_semesterEnd!.day.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -185,44 +187,52 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   }
 
   Future<void> _saveAndFinish() async {
-    final provider = Provider.of<TimetableProvider>(context, listen: false);
-    final courseName = _courseNameController.text.trim();
+    try {
+      final provider = Provider.of<TimetableProvider>(context, listen: false);
+      final courseName = _courseNameController.text.trim();
 
-    // Build ClassSession list from selected parsed sessions
-    final sessions = <ClassSession>[];
-    for (int i = 0; i < _parsedSessions.length; i++) {
-      if (!_sessionSelected[i]) continue;
+      // Build ClassSession list from selected parsed sessions
+      final sessions = <ClassSession>[];
+      for (int i = 0; i < _parsedSessions.length; i++) {
+        if (!_sessionSelected[i]) continue;
 
-      final s = _parsedSessions[i];
-      List<int>? weeksList;
-      if (s['weeks'] != null && s['weeks'] is List && (s['weeks'] as List).isNotEmpty) {
-        weeksList = (s['weeks'] as List).map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0).toList();
+        final s = _parsedSessions[i];
+        List<int>? weeksList;
+        if (s['weeks'] != null && s['weeks'] is List && (s['weeks'] as List).isNotEmpty) {
+          weeksList = (s['weeks'] as List).map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0).toList();
+        }
+
+        sessions.add(ClassSession(
+          subject: s['moduleName'] ?? '',
+          startTime: s['startTime'] ?? '',
+          endTime: s['endTime'] ?? '',
+          day: s['day'] ?? '',
+          room: s['location'] ?? 'TBD',
+          moduleCode: s['moduleCode'] ?? '',
+          isUser: true,
+          weeks: weeksList,
+          specificDate: s['specificDate'] != null ? DateTime.tryParse(s['specificDate']) : null,
+        ));
       }
 
-      sessions.add(ClassSession(
-        subject: s['moduleName'] ?? '',
-        startTime: s['startTime'] ?? '',
-        endTime: s['endTime'] ?? '',
-        day: s['day'] ?? '',
-        room: s['location'] ?? 'TBD',
-        moduleCode: s['moduleCode'] ?? '',
-        isUser: true,
-        weeks: weeksList,
-        specificDate: s['specificDate'] != null ? DateTime.tryParse(s['specificDate']) : null,
-      ));
-    }
+      // Save course name and semester dates
+      await provider.setCourseName(courseName);
+      await provider.setSemesterDates(_semesterStart, _semesterEnd);
+      await provider.importAiSessions(sessions);
+      await provider.setSetupCompleted(true);
 
-    // Save course name and semester dates
-    await provider.setCourseName(courseName);
-    await provider.setSemesterDates(_semesterStart, _semesterEnd);
-    await provider.importAiSessions(sessions);
-    await provider.setSetupCompleted(true);
-
-    if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (route) => false,
-      );
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving: $e', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -349,6 +359,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                 setState(() {
                   _semesterStart = picked;
                   _semesterStartController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                  
+                  // Auto-update end date
+                  _semesterEnd = picked.add(const Duration(days: 105));
+                  _semesterEndController.text = '${_semesterEnd!.year}-${_semesterEnd!.month.toString().padLeft(2, '0')}-${_semesterEnd!.day.toString().padLeft(2, '0')}';
                 });
               }
             },

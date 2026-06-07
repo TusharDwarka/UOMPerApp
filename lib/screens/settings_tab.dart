@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/theme_provider.dart';
 import '../providers/timetable_provider.dart';
+import '../widgets/end_semester_dialog.dart';
 
 class SettingsTab extends StatelessWidget {
   const SettingsTab({super.key});
@@ -240,6 +241,44 @@ class SettingsTab extends StatelessWidget {
                 ],
               ),
             ),
+
+            const SizedBox(height: 40),
+
+            // Danger Zone
+            const Text("DANGER ZONE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.red, letterSpacing: 1.2)),
+            const SizedBox(height: 10),
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+                boxShadow: [
+                  if (!isDark) BoxShadow(color: Colors.red.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))
+                ]
+              ),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), shape: BoxShape.circle),
+                      child: const Icon(Icons.warning_rounded, color: Colors.red),
+                    ),
+                    title: const Text("End Semester", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                    subtitle: const Text("Archive modules and start fresh"),
+                    trailing: const Icon(Icons.chevron_right_rounded, color: Colors.red),
+                    onTap: () {
+                      showDialog(
+                        context: context, 
+                        builder: (context) => const EndSemesterDialog(),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 40),
           ],
         ),
       ),

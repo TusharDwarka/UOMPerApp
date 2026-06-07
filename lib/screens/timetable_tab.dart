@@ -12,7 +12,10 @@ class ScheduleTab extends StatefulWidget {
   State<ScheduleTab> createState() => _ScheduleTabState();
 }
 
-class _ScheduleTabState extends State<ScheduleTab> {
+class _ScheduleTabState extends State<ScheduleTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   DateTime _selectedDate = DateTime.now();
   final double _hourHeight = 80.0;
   final double _timeColumnWidth = 60.0;
@@ -51,6 +54,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
       initialData = {
         'day': DateFormat('EEEE').format(_selectedDate),
         'specificDate': _selectedDate.toIso8601String(),
+        'isTemporary': false,
       };
     }
 
@@ -85,6 +89,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(

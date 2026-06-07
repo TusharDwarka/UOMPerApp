@@ -72,13 +72,19 @@ class _HomeScreenState extends State<HomeScreen> {
                  const VerticalDivider(thickness: 1, width: 1),
                  // Content
                  Expanded(
-                   child: _pages[_selectedIndex]
+                   child: IndexedStack(
+                     index: _selectedIndex,
+                     children: _pages,
+                   )
                  ),
                ],
              );
           } else {
              // Mobile Version
-             return _pages[_selectedIndex];
+             return IndexedStack(
+               index: _selectedIndex,
+               children: _pages,
+             );
           }
         }
       ),

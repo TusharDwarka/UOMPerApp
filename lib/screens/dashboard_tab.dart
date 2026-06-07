@@ -7,6 +7,7 @@ import 'planning_screen.dart';
 import '../models/class_session.dart';
 import '../models/academic_task.dart';
 import '../widgets/add_edit_task_sheet.dart'; 
+import '../widgets/end_semester_dialog.dart';
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
@@ -162,6 +163,58 @@ class _DashboardTabState extends State<DashboardTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                   if (timetable.semesterEnd != null && DateTime.now().isAfter(timetable.semesterEnd!))
+                     Container(
+                       margin: const EdgeInsets.only(bottom: 24),
+                       padding: const EdgeInsets.all(20),
+                       decoration: BoxDecoration(
+                         color: Colors.red.withOpacity(0.1),
+                         borderRadius: BorderRadius.circular(24),
+                         border: Border.all(color: Colors.red.withOpacity(0.3)),
+                       ),
+                       child: Column(
+                         crossAxisAlignment: CrossAxisAlignment.start,
+                         children: [
+                           Row(
+                             children: [
+                               const Icon(Icons.celebration_rounded, color: Colors.red),
+                               const SizedBox(width: 12),
+                               Expanded(
+                                 child: Text(
+                                   "Semester Ended!",
+                                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.black),
+                                 ),
+                               ),
+                             ],
+                           ),
+                           const SizedBox(height: 12),
+                           Text(
+                             "It looks like your semester has ended. Would you like to finalize your results and close this semester?",
+                             style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], height: 1.4),
+                           ),
+                           const SizedBox(height: 16),
+                           SizedBox(
+                             width: double.infinity,
+                             child: ElevatedButton(
+                               onPressed: () {
+                                 showDialog(
+                                   context: context, 
+                                   builder: (context) => const EndSemesterDialog(),
+                                 );
+                               },
+                               style: ElevatedButton.styleFrom(
+                                 backgroundColor: Colors.red,
+                                 foregroundColor: Colors.white,
+                                 padding: const EdgeInsets.symmetric(vertical: 14),
+                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                 elevation: 0,
+                               ),
+                               child: const Text("End Semester Now", style: TextStyle(fontWeight: FontWeight.bold)),
+                             ),
+                           ),
+                         ],
+                       ),
+                     ),
                   // Header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,

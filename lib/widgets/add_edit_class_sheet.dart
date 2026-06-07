@@ -38,7 +38,7 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
     }
 
     _specificDate = d?['specificDate'] != null ? DateTime.tryParse(d!['specificDate'].toString()) : null;
-    _isTemporary = _specificDate != null;
+    _isTemporary = d?['isTemporary'] ?? (_specificDate != null);
 
     _startTime = _parseTime(d?['startTime']) ?? const TimeOfDay(hour: 9, minute: 0);
     _endTime = _parseTime(d?['endTime']) ?? const TimeOfDay(hour: 10, minute: 0);
