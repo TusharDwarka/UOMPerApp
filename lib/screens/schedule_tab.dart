@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/timetable_provider.dart';
 import '../models/class_session.dart';
+import '../widgets/add_edit_class_sheet.dart';
 
 class ScheduleTab extends StatefulWidget {
   const ScheduleTab({super.key});
@@ -31,8 +32,8 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    // Calculate current week
-    final start = DateTime(2026, 1, 19);
+    // Calculate current week using provider's semester start
+    final start = timetable.semesterStart;
     final now = DateTime.now();
     final diffDays = now.difference(start).inDays;
     int currentWeek = (diffDays / 7).floor() + 1;
@@ -250,8 +251,8 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
   // Grid Event Builder Logic (Restored)
   List<Widget> _buildAllEvents(double width, TimetableProvider timetable, bool isDark) {
-    // 1. Check Date Bounds (Jan 19 2026)
-    final semesterStart = DateTime(2026, 1, 19);
+    // 1. Check Date Bounds (use provider's actual semester start)
+    final semesterStart = timetable.semesterStart;
     
     if (_selectedDate.isBefore(semesterStart)) {
        return [
@@ -266,8 +267,8 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
     List<Widget> children = [];
     
-    // Filter events for the selected day only
-    final events = timetable.getEventsForDay(_selectedDate);
+    // Get events for the selected day
+    final events = timetable.getClassesForDate(_selectedDate);
     final friendEvents = _isCompareMode ? timetable.getFriendEventsForDay(_selectedDate) : <ClassSession>[];
 
     // 2. Build User Events
@@ -555,14 +556,53 @@ class _ScheduleTabState extends State<ScheduleTab> {
      }
   
   // Ensure _showAddSessionDialog is fully dark aware
-  void _showAddSessionDialog({ClassSession? sessionToEdit}) {
-     showModalBottomSheet(
-       context: context,
-       isScrollControlled: true,
-       // Let the bottom sheet handle background itself or set transparent to allow component handling
-       backgroundColor: Colors.transparent, 
-       builder: (context) => _AddSessionSheet(sessionToEdit: sessionToEdit)
-     );
+  Future<void> _showAddSessionDialog({ClassSession? sessionToEdit}) async {
+    Map<String, dynamic>? initialData;
+    if (sessionToEdit != null) {
+      initialData = {
+        'moduleName': sessionToEdit.subject,
+        'moduleCode': sessionToEdit.moduleCode,
+        'location': sessionToEdit.room,
+        'day': sessionToEdit.day,
+        'startTime': sessionToEdit.startTime,
+        'endTime': sessionToEdit.endTime,
+        'weeks': sessionToEdit.weeks,
+        'specificDate': sessionToEdit.specificDate?.toIso8601String(),
+        'isTemporary': sessionToEdit.specificDate != null,
+      };
+    } else {
+      initialData = {
+        'day': DateFormat('EEEE').format(_selectedDate),
+        'specificDate': _selectedDate.toIso8601String(),
+        'isTemporary': false,
+      };
+    }
+
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => AddEditClassSheet(initialData: initialData),
+    );
+
+    if (result != null) {
+      final session = ClassSession(
+        subject: result['moduleName'] ?? '',
+        startTime: result['startTime'] ?? '',
+        endTime: result['endTime'] ?? '',
+        day: result['day'] ?? '',
+        room: result['location'] ?? 'TBD',
+        moduleCode: result['moduleCode'] ?? '',
+        isUser: true,
+        weeks: result['weeks'] != null ? List<int>.from(result['weeks']) : null,
+        specificDate: result['specificDate'] != null ? DateTime.tryParse(result['specificDate']) : null,
+      );
+
+      if (sessionToEdit != null) {
+        session.id = sessionToEdit.id;
+      }
+      Provider.of<TimetableProvider>(context, listen: false).addSession(session);
+    }
   }
 
   Widget _buildCourseSelectionScreen() {
@@ -685,210 +725,5 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
   bool isSameDay2(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
-}
-
-// Separate Widget to handle dialog state and avoid lag
-class _AddSessionSheet extends StatefulWidget {
-  final ClassSession? sessionToEdit;
-  const _AddSessionSheet({this.sessionToEdit});
-
-  @override
-  State<_AddSessionSheet> createState() => _AddSessionSheetState();
-}
-
-class _AddSessionSheetState extends State<_AddSessionSheet> {
-  late TextEditingController subjectController;
-  late TextEditingController roomController;
-  late String day;
-  late TimeOfDay startTime;
-  late TimeOfDay endTime;
-  
-  @override
-  void initState() {
-    super.initState();
-    subjectController = TextEditingController(text: widget.sessionToEdit?.subject ?? '');
-    roomController = TextEditingController(text: widget.sessionToEdit?.room ?? '');
-    
-    // Day Logic
-    day = widget.sessionToEdit?.day ?? 'Monday';
-    
-    // If we're not editing, try to guess day based on context? 
-    // Wait, we don't have selectedDate here easily unless passed. 
-    // Defaults to Monday. User can change. That's fine.
-    
-    if (widget.sessionToEdit != null) {
-       final startP = widget.sessionToEdit!.startTime.split(":");
-       startTime = TimeOfDay(hour: int.parse(startP[0]), minute: int.parse(startP[1]));
-       final endP = widget.sessionToEdit!.endTime.split(":");
-       endTime = TimeOfDay(hour: int.parse(endP[0]), minute: int.parse(endP[1]));
-    } else {
-       startTime = const TimeOfDay(hour: 9, minute: 0);
-       endTime = const TimeOfDay(hour: 10, minute: 0);
-    }
-  }
-  
-  @override
-  void dispose() {
-    subjectController.dispose();
-    roomController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24))
-      ),
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 24, left: 24, right: 24, top: 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(widget.sessionToEdit == null ? "Add Class" : "Edit Class", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
-              const Spacer(),
-              IconButton(icon: Icon(Icons.close, color: isDark ? Colors.grey : Colors.grey[600]), onPressed: () => Navigator.pop(context))
-            ],
-          ),
-          const SizedBox(height: 24),
-          
-          // Inputs
-          _buildInput("Subject", subjectController, isDark),
-          const SizedBox(height: 16),
-          _buildInput("Room", roomController, isDark),
-          const SizedBox(height: 16),
-          
-          DropdownButtonFormField<String>(
-            value: day,
-            dropdownColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-            icon: Icon(Icons.keyboard_arrow_down, color: isDark ? Colors.white70 : Colors.black54),
-            items: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d) => DropdownMenuItem(value: d, child: Text(d, style: TextStyle(color: isDark ? Colors.white : Colors.black)))).toList(),
-            onChanged: (v) => setState(() => day = v!),
-            decoration: InputDecoration(
-              labelText: "Day",
-              labelStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[600]),
-              filled: true, 
-              fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100], 
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16)
-            ),
-          ),
-
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(child: _buildTimeButton("Start", startTime, (t) => setState(() => startTime = t), isDark)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildTimeButton("End", endTime, (t) => setState(() => endTime = t), isDark)),
-            ],
-          ),
-          const SizedBox(height: 32),
-          SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: ElevatedButton(
-              onPressed: () {
-                final provider = Provider.of<TimetableProvider>(context, listen: false);
-                final startStr = "${startTime.hour.toString().padLeft(2,'0')}:${startTime.minute.toString().padLeft(2,'0')}";
-                final endStr = "${endTime.hour.toString().padLeft(2,'0')}:${endTime.minute.toString().padLeft(2,'0')}";
-                
-                // Validation
-                if (subjectController.text.isEmpty) return;
-
-                if (widget.sessionToEdit != null) {
-                  provider.deleteSession(widget.sessionToEdit!.id); 
-                }
-                
-                final newSession = ClassSession(
-                  day: day,
-                  startTime: startStr,
-                  endTime: endStr,
-                  subject: subjectController.text,
-                  room: roomController.text,
-                  moduleCode: '',
-                  isUser: true, 
-                );
-                provider.addSession(newSession);
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2962FF), 
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 0
-              ),
-              child: const Text("Save Class", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-          ),
-          if (widget.sessionToEdit != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Center(
-                child: TextButton(
-                  onPressed: () {
-                    Provider.of<TimetableProvider>(context, listen: false).deleteSession(widget.sessionToEdit!.id);
-                    Navigator.pop(context);
-                  },
-                  child: const Text("Delete Class", style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
-                ),
-              ),
-            )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInput(String label, TextEditingController controller, bool isDark) {
-    return TextField(
-      controller: controller,
-      style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.w500),
-      decoration: InputDecoration(
-        labelText: label, 
-        filled: true,
-        fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
-        labelStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[600]),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16)
-      ),
-    );
-  }
-
-  Widget _buildTimeButton(String label, TimeOfDay time, Function(TimeOfDay) onPicked, bool isDark) {
-    return InkWell(
-      onTap: () async {
-        final t = await showTimePicker(
-          context: context, 
-          initialTime: time,
-          builder: (context, child) {
-             return Theme(
-               data: isDark 
-                   ? ThemeData.dark().copyWith(
-                       colorScheme: const ColorScheme.dark(primary: Color(0xFF3949AB), onPrimary: Colors.white, surface: Color(0xFF1E1E1E), onSurface: Colors.white),
-                       dialogBackgroundColor: const Color(0xFF1E1E1E),
-                       textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: Colors.white))
-                     )
-                   : ThemeData.light().copyWith(primaryColor: const Color(0xFF0066FF)),
-               child: child!,
-             );
-          }
-        );
-        if (t != null) onPicked(t);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.blue[50], borderRadius: BorderRadius.circular(12)),
-        child: Column(
-          children: [
-            Text(label, style: TextStyle(color: isDark ? Colors.grey : Colors.blue[800], fontSize: 12)),
-            Text(time.format(context), style: TextStyle(color: isDark ? Colors.white : Colors.blue[900], fontWeight: FontWeight.bold, fontSize: 16)),
-          ],
-        ),
-      ),
-    );
   }
 }

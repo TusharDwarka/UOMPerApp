@@ -53,9 +53,10 @@ class _EndSemesterDialogState extends State<EndSemesterDialog> {
       backgroundColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       contentPadding: const EdgeInsets.all(32),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -94,7 +95,8 @@ class _EndSemesterDialogState extends State<EndSemesterDialog> {
             ),
             textCapitalization: TextCapitalization.characters,
           ),
-        ],
+          ],
+        ),
       ),
       actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       actions: [

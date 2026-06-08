@@ -30,6 +30,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
   // Step 3 — AI processing
   bool _isProcessing = false;
+  bool _isSaving = false;
   String? _errorMessage;
 
   // Step 4 — Parsed sessions
@@ -187,9 +188,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   }
 
   Future<void> _saveAndFinish() async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+    print("DEBUG: _saveAndFinish started");
     try {
       final provider = Provider.of<TimetableProvider>(context, listen: false);
       final courseName = _courseNameController.text.trim();
+      print("DEBUG: courseName = $courseName");
 
       // Build ClassSession list from selected parsed sessions
       final sessions = <ClassSession>[];
@@ -215,23 +220,37 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
         ));
       }
 
+      print("DEBUG: sessions built. Count = ${sessions.length}");
+
       // Save course name and semester dates
       await provider.setCourseName(courseName);
+      print("DEBUG: setCourseName completed");
       await provider.setSemesterDates(_semesterStart, _semesterEnd);
+      print("DEBUG: setSemesterDates completed");
       await provider.importAiSessions(sessions);
+      print("DEBUG: importAiSessions completed");
       await provider.setSetupCompleted(true);
+      print("DEBUG: setSetupCompleted completed");
 
       if (mounted) {
+        print("DEBUG: mounted is true, navigating to HomeScreen");
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const HomeScreen()),
           (route) => false,
         );
+      } else {
+        print("DEBUG: mounted is false, navigation skipped");
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print("DEBUG: _saveAndFinish ERROR: $e\n$stackTrace");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error saving: $e', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.red),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
       }
     }
   }
@@ -826,7 +845,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
             color: isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF8F9FE),
             boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -4))],
           ),
-          child: _buildContinueButton("Looks Good! Save ${selectedCount} classes", _saveAndFinish, isDark),
+          child: _buildContinueButton("Looks Good! Save ${selectedCount} classes", _saveAndFinish, isDark, isLoading: _isSaving),
         ),
       ],
     );
@@ -901,13 +920,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     );
   }
 
-  Widget _buildContinueButton(String label, VoidCallback onTap, bool isDark) {
+  Widget _buildContinueButton(String label, VoidCallback onTap, bool isDark, {bool isLoading = false}) {
     final accentColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF2962FF);
     return SizedBox(
       width: double.infinity,
       height: 58,
       child: ElevatedButton(
-        onPressed: onTap,
+        onPressed: isLoading ? null : onTap,
         style: ElevatedButton.styleFrom(
           backgroundColor: accentColor,
           foregroundColor: Colors.white,
@@ -915,7 +934,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
         ),
-        child: Text(label),
+        child: isLoading 
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+            : Text(label),
       ),
     );
   }

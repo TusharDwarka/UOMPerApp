@@ -235,6 +235,7 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _buildDateButton(isDark, true, () async {
+                         FocusScope.of(context).unfocus();
                          final t = await showTimePicker(
                            context: context, 
                            initialTime: selectedTime,

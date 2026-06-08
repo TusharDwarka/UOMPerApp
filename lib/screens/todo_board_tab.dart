@@ -1089,6 +1089,7 @@ class _AddEditTaskSheetState extends State<_AddEditTaskSheet> {
                   Expanded(
                     child: InkWell(
                       onTap: () async {
+                        FocusScope.of(context).unfocus();
                         final d = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
                         if(d != null) setState(() => selectedDate = d);
                       },
@@ -1112,6 +1113,7 @@ class _AddEditTaskSheetState extends State<_AddEditTaskSheet> {
                   Expanded(
                     child: InkWell(
                       onTap: () async {
+                        FocusScope.of(context).unfocus();
                         final t = await showTimePicker(context: context, initialTime: selectedTime);
                         if(t != null) setState(() => selectedTime = t);
                       },

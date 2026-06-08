@@ -229,11 +229,30 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
             Row(
               children: [
                 Expanded(
-                  child: _buildTimePicker("Start Time", _startTime, (t) => setState(() => _startTime = t), isDark, accentColor),
+                  child: _buildTimePicker(
+                    "Start Time", 
+                    _startTime, 
+                    (t) {
+                      setState(() {
+                        _startTime = t;
+                        // Automatically add 1 hour to end time
+                        _endTime = TimeOfDay(hour: (t.hour + 1) % 24, minute: t.minute);
+                      });
+                    }, 
+                    isDark, 
+                    accentColor
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _buildTimePicker("End Time", _endTime, (t) => setState(() => _endTime = t), isDark, accentColor),
+                  child: _buildTimePicker(
+                    "End Time", 
+                    _endTime, 
+                    (t) => setState(() => _endTime = t), 
+                    isDark, 
+                    accentColor,
+                    hasError: _endTime.hour * 60 + _endTime.minute <= _startTime.hour * 60 + _startTime.minute
+                  ),
                 ),
               ],
             ),
@@ -255,7 +274,20 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _save,
+                    onPressed: () {
+                      final startMins = _startTime.hour * 60 + _startTime.minute;
+                      final endMins = _endTime.hour * 60 + _endTime.minute;
+                      if (endMins <= startMins) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("End time must be after start time."),
+                            backgroundColor: Colors.redAccent,
+                          ),
+                        );
+                        return;
+                      }
+                      _save();
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accentColor,
                       foregroundColor: Colors.white,
@@ -263,7 +295,7 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
-                    child: Text("Save", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: const Text("Save", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -305,9 +337,10 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
     );
   }
 
-  Widget _buildTimePicker(String label, TimeOfDay time, Function(TimeOfDay) onChanged, bool isDark, Color accentColor) {
+  Widget _buildTimePicker(String label, TimeOfDay time, Function(TimeOfDay) onChanged, bool isDark, Color accentColor, {bool hasError = false}) {
     return GestureDetector(
       onTap: () async {
+        FocusScope.of(context).unfocus(); // Prevent keyboard from reappearing
         final picked = await showTimePicker(context: context, initialTime: time);
         if (picked != null) onChanged(picked);
       },
@@ -316,6 +349,7 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
         decoration: BoxDecoration(
           color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
           borderRadius: BorderRadius.circular(16),
+          border: hasError ? Border.all(color: Colors.redAccent, width: 1.5) : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

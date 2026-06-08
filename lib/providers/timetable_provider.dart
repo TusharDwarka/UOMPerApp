@@ -217,14 +217,6 @@ class TimetableProvider extends ChangeNotifier {
     // Load persisted perspective
     final prefs = await SharedPreferences.getInstance();
     _isSwapped = prefs.getBool('isSwapped') ?? false;
-    
-    // Auto-Repair / Seed Data if empty OR if schema was broken (weeks is null)
-    if ((_userSessions.isEmpty && _friendSessions.isEmpty) || 
-        (_userSessions.isNotEmpty && _userSessions.first.weeks == null)) {
-       print("Data missing or incomplete. Re-seeding database...");
-       await loadFriendTimetable(); // This will clear and re-import
-       return; // loadFriendTimetable calls loadSessions again, so we return to avoid double notify
-    }
 
     _tasks = await isar.academicTasks.where().sortByDueDateDesc().findAll();
     
@@ -397,9 +389,18 @@ class TimetableProvider extends ChangeNotifier {
     ).toList();
   }
   
-  // New: Get specific classes for today (or specific date) to aid UI
+  // Get all classes for a specific date — always uses _userSessions directly
+  // and also catches one-off classes whose specificDate matches even if day name doesn't
   List<ClassSession> getClassesForDate(DateTime date) {
-    return getEventsForDay(date);
+    final dayName = DateFormat('EEEE').format(date);
+    return _userSessions.where((s) {
+      // One-off class: match by specificDate only
+      if (s.specificDate != null) {
+        return isSameDay(date, s.specificDate!);
+      }
+      // Regular class: match by day name + semester/week bounds
+      return s.day == dayName && _shouldShowSession(s, date);
+    }).toList();
   }
 
   // Calculate past/valid dates from Semester Start (Jan 19, 2026) going forward
