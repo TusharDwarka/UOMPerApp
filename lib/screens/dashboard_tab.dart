@@ -6,6 +6,8 @@ import '../providers/resource_provider.dart';
 import '../services/bus_service.dart';
 import 'planning_screen.dart';
 import '../models/class_session.dart';
+import '../services/notification_service.dart';
+import '../widgets/add_edit_task_sheet.dart';
 import '../models/academic_task.dart';
 import '../widgets/add_edit_task_sheet.dart'; 
 import '../widgets/end_semester_dialog.dart';
@@ -718,14 +720,16 @@ class _DashboardTabState extends State<DashboardTab> {
                     label: "Add Homework", 
                     color: Colors.blueAccent,
                     onTap: () {
-                      Navigator.pop(context);
-                      Provider.of<TimetableProvider>(context, listen: false).addTask(
-                        "Homework for ${session.subject}", 
-                        session.subject, 
-                        "Homework", 
-                        DateTime.now().add(const Duration(days: 7))
+                      Navigator.pop(context); // close sheet
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (context) => AddEditTaskSheet(
+                          initialCategory: "Homework",
+                          initialModule: session.subject,
+                        ),
                       );
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Homework added to Board!")));
                     }
                   ),
                 ),
@@ -735,9 +739,29 @@ class _DashboardTabState extends State<DashboardTab> {
                     icon: Icons.notification_add_rounded, 
                     label: "Set Reminder", 
                     color: Colors.orangeAccent,
-                    onTap: () {
-                       Navigator.pop(context);
-                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Reminder set for 15 min before!")));
+                    onTap: () async {
+                       Navigator.pop(context); // close sheet
+                       final now = DateTime.now();
+                       // Parse start time (e.g., "09:30")
+                       try {
+                         final parts = session.startTime.split(":");
+                         final hour = int.parse(parts[0]);
+                         final minute = int.parse(parts[1]);
+                         var classStartTime = DateTime(now.year, now.month, now.day, hour, minute);
+                         
+                         // If it's already past today, maybe schedule for next week?
+                         // For simplicity, we just use today's time since it's a today's class.
+                         
+                         await NotificationService().scheduleClassReminder(
+                           id: session.id, // using session ID for uniqueness
+                           subject: session.subject,
+                           room: session.room,
+                           classStartTime: classStartTime,
+                         );
+                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Reminder set for 15 min before class!")));
+                       } catch (e) {
+                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not set reminder for this class.")));
+                       }
                     }
                   ),
                 ),

@@ -4,9 +4,50 @@ import 'package:url_launcher/url_launcher.dart';
 import '../providers/theme_provider.dart';
 import '../providers/timetable_provider.dart';
 import '../widgets/end_semester_dialog.dart';
+import '../services/notification_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class SettingsTab extends StatelessWidget {
+class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
+
+  @override
+  State<SettingsTab> createState() => _SettingsTabState();
+}
+
+class _SettingsTabState extends State<SettingsTab> {
+  bool _remindersEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReminderPreference();
+  }
+
+  Future<void> _loadReminderPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _remindersEnabled = prefs.getBool('class_reminders_enabled') ?? true;
+    });
+  }
+
+  Future<void> _toggleReminders(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    if (value) {
+      final granted = await NotificationService().requestPermissions();
+      if (!granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Notification permissions denied.')));
+        }
+        return;
+      }
+    }
+    
+    await prefs.setBool('class_reminders_enabled', value);
+    setState(() {
+      _remindersEnabled = value;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,8 +139,10 @@ class SettingsTab extends StatelessWidget {
                              DropdownMenuItem(value: ThemeMode.light, child: Text("Light")),
                              DropdownMenuItem(value: ThemeMode.dark, child: Text("Dark")),
                           ],
-                          onChanged: (mode) {
-                             if(mode != null) provider.setTheme(mode);
+                          onChanged: (ThemeMode? newMode) {
+                            if (newMode != null) {
+                              provider.setTheme(newMode);
+                            }
                           },
                         );
                       }
@@ -108,7 +151,39 @@ class SettingsTab extends StatelessWidget {
                 ],
               ),
             ),
+            
+            const SizedBox(height: 30),
 
+            // Notifications Section
+            const Text("NOTIFICATIONS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey, letterSpacing: 1.2)),
+            const SizedBox(height: 10),
+            
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))
+                ]
+              ),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    secondary: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), shape: BoxShape.circle),
+                      child: const Icon(Icons.notifications_active_rounded, color: Colors.orange),
+                    ),
+                    title: const Text("Class Reminders", style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text("Get notified 15 mins before class", style: TextStyle(fontSize: 12)),
+                    value: _remindersEnabled,
+                    onChanged: _toggleReminders,
+                    activeColor: Colors.orange,
+                  ),
+                ],
+              ),
+            ),
+            
             const SizedBox(height: 30),
 
             // Timetable Settings

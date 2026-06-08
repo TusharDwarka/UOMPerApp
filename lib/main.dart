@@ -11,10 +11,15 @@ import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 
 import 'services/bus_service.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
+  
+  final notificationService = NotificationService();
+  await notificationService.init();
+
   final isarService = IsarService();
 
   runApp(
