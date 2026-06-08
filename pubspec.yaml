@@ -37,6 +37,7 @@ dependencies:
   file_picker: ^8.1.2
   google_generative_ai: ^0.4.3
   confetti: ^0.8.0
+  receive_sharing_intent: ^1.8.1
   
 dev_dependencies:
   flutter_test:

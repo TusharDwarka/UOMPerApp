@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/timetable_provider.dart';
+import '../providers/resource_provider.dart';
 import '../services/bus_service.dart';
 import 'planning_screen.dart';
 import '../models/class_session.dart';
@@ -95,8 +96,8 @@ class _DashboardTabState extends State<DashboardTab> {
       resizeToAvoidBottomInset: false,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: Consumer<TimetableProvider>(
-          builder: (context, timetable, child) {
+        child: Consumer2<TimetableProvider, ResourceProvider>(
+          builder: (context, timetable, resourceProv, child) {
              final today = DateFormat('EEEE').format(DateTime.now()); 
              final todayClasses = timetable.getEventsForDay(DateTime.now());
              todayClasses.sort((a,b) => a.startTime.compareTo(b.startTime));
@@ -215,6 +216,33 @@ class _DashboardTabState extends State<DashboardTab> {
                          ],
                        ),
                      ),
+
+                   // Unsorted Files Indicator
+                   if (resourceProv.unsortedCount > 0)
+                     Container(
+                       margin: const EdgeInsets.only(bottom: 24),
+                       decoration: BoxDecoration(
+                         color: isDark ? const Color(0xFF2C1E1E) : const Color(0xFFFFF4F2),
+                         borderRadius: BorderRadius.circular(24),
+                         border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+                       ),
+                       child: ListTile(
+                         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                         leading: Container(
+                           padding: const EdgeInsets.all(12),
+                           decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), shape: BoxShape.circle),
+                           child: const Icon(Icons.move_to_inbox_rounded, color: Colors.redAccent),
+                         ),
+                         title: Text("Unsorted Inbox", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                         subtitle: Text("${resourceProv.unsortedCount} file(s) waiting to be sorted", style: const TextStyle(color: Colors.redAccent)),
+                         trailing: const Icon(Icons.chevron_right, color: Colors.redAccent),
+                         onTap: () {
+                           // They can sort it from the Resources Tab
+                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Go to the Resources Tab to sort files.")));
+                         },
+                       ),
+                     ),
+
                   // Header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -6,6 +6,7 @@ import 'providers/timetable_provider.dart';
 import 'providers/theme_provider.dart';
 
 import 'providers/note_provider.dart';
+import 'providers/resource_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 
@@ -22,10 +23,13 @@ void main() async {
         Provider<IsarService>.value(value: isarService),
         Provider<BusService>(create: (_) => BusService(isarService)),
         ChangeNotifierProvider(
-          create: (_) => TimetableProvider(isarService)..resetForNewSetup()..loadSetupState(),
+          create: (_) => TimetableProvider(isarService)..loadSetupState(),
         ),
         ChangeNotifierProvider(
           create: (_) => NoteProvider(isarService),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ResourceProvider(isarService),
         ),
         ChangeNotifierProvider(
           create: (_) => ThemeProvider(),

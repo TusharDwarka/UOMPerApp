@@ -4,8 +4,13 @@ import 'schedule_tab.dart';
 import 'academic_tab.dart';
 import 'bus_tab.dart';
 import 'todo_board_tab.dart';
-import 'notes_tab.dart';
+import 'resources_tab.dart';
 import 'settings_tab.dart';
+import 'dart:async';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:provider/provider.dart';
+import '../providers/resource_provider.dart';
+import '../providers/timetable_provider.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,13 +21,152 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  late StreamSubscription _intentDataStreamSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    // For sharing images coming from outside the app while the app is in the memory
+    _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((List<SharedMediaFile> value) {
+      if (value.isNotEmpty) {
+        _handleSharedFiles(value);
+      }
+    }, onError: (err) {
+      print("getIntentDataStream error: $err");
+    });
+
+    // For sharing images coming from outside the app while the app is closed
+    ReceiveSharingIntent.instance.getInitialMedia().then((List<SharedMediaFile> value) {
+      if (value.isNotEmpty) {
+        _handleSharedFiles(value);
+        // Tell the library that we are done processing the intent.
+        ReceiveSharingIntent.instance.reset();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _intentDataStreamSubscription.cancel();
+    super.dispose();
+  }
+
+  void _handleSharedFiles(List<SharedMediaFile> files) {
+    // We navigate to the Resources Tab (index 4) and trigger a dialog
+    if (mounted) {
+      setState(() => _selectedIndex = 4);
+      _showSortDialog(files.first); // Handle single file for now
+    }
+  }
+
+  void _showSortDialog(SharedMediaFile file) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final timetable = Provider.of<TimetableProvider>(context, listen: false);
+        final resourceProv = Provider.of<ResourceProvider>(context, listen: false);
+        final modules = timetable.userSessions.map((s) => s.subject).toSet().toList();
+        modules.sort();
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 24, left: 24, right: 24, top: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Save Shared File", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text("File: ${file.path.split('/').last}", style: const TextStyle(fontSize: 14, color: Colors.grey)),
+              const SizedBox(height: 24),
+              const Text("Which module is this for?", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ...modules.map((m) => ActionChip(
+                    label: Text(m),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showCategoryDialog(file, m, resourceProv);
+                    },
+                  )),
+                  ActionChip(
+                    label: const Text("Unsorted (Later)", style: TextStyle(color: Colors.redAccent)),
+                    backgroundColor: Colors.redAccent.withOpacity(0.1),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      resourceProv.addResource(
+                        sourceFilePath: file.path, 
+                        fileName: file.path.split('/').last, 
+                        moduleName: 'Unsorted', 
+                        category: 'Unsorted',
+                        sourceApp: 'whatsapp'
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Saved to Inbox")));
+                    },
+                  )
+                ],
+              )
+            ],
+          ),
+        );
+      }
+    );
+  }
+
+  void _showCategoryDialog(SharedMediaFile file, String moduleName, ResourceProvider resourceProv) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final categories = ['Lectures', 'Tutorials', 'Past Papers', 'Assignments'];
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Category for $moduleName", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              ...categories.map((c) => ListTile(
+                title: Text(c),
+                leading: const Icon(Icons.folder_open),
+                onTap: () {
+                  Navigator.pop(context);
+                  resourceProv.addResource(
+                    sourceFilePath: file.path, 
+                    fileName: file.path.split('/').last, 
+                    moduleName: moduleName, 
+                    category: c,
+                    sourceApp: 'whatsapp'
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Saved to $moduleName / $c")));
+                },
+              ))
+            ],
+          ),
+        );
+      }
+    );
+  }
 
   static const List<Widget> _pages = <Widget>[
     DashboardTab(),
     ScheduleTab(),
     AcademicTab(), 
     TodoBoardTab(),
-    NotesTab(),
+    ResourcesTab(),
     BusTab(),
     SettingsTab(), // New Settings Tab
   ];
@@ -63,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
                      NavigationRailDestination(icon: Icon(Icons.calendar_view_week_rounded), label: Text('Schedule')),
                      NavigationRailDestination(icon: Icon(Icons.calendar_month_rounded), label: Text('Calendar')),
                      NavigationRailDestination(icon: Icon(Icons.assignment_turned_in_rounded), label: Text('Board')),
-                     NavigationRailDestination(icon: Icon(Icons.edit_note_rounded), label: Text('Notes')),
+                     NavigationRailDestination(icon: Icon(Icons.folder_rounded), label: Text('Resources')),
                      NavigationRailDestination(icon: Icon(Icons.directions_bus_filled_rounded), label: Text('Transport')),
                      NavigationRailDestination(icon: Icon(Icons.settings_rounded), label: Text('Settings')),
                    ],
@@ -128,8 +272,8 @@ class _HomeScreenState extends State<HomeScreen> {
               label: 'Board',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.edit_note_rounded),
-              label: 'Notes',
+              icon: Icon(Icons.folder_rounded),
+              label: 'Resources',
             ),
              BottomNavigationBarItem(
               icon: Icon(Icons.directions_bus_filled_rounded),

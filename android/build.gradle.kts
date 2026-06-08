@@ -22,6 +22,15 @@ subprojects {
                 // Generate a namespace based on the project name (e.g., com.isar_flutter_libs)
                 android.namespace = "com.${project.name.replace("-", "_").replace(":", ".")}"
             }
+            
+            android.compileOptions {
+                sourceCompatibility = JavaVersion.VERSION_17
+                targetCompatibility = JavaVersion.VERSION_17
+            }
+        }
+        
+        project.tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+            compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
     }
 }
