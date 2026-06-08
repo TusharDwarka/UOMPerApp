@@ -1,133 +1,132 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
+    android:orientation="vertical"
     android:padding="16dp">
 
-    <!-- Header -->
     <LinearLayout
-        android:id="@+id/widget_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical">
-
         <TextView
-            android:id="@+id/widget_app_name"
+            android:id="@+id/widget_status"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="UOMPer"
+            android:layout_height="wrap_content"
+            android:text="Thu, 8 Aug, 10:30 AM"
+            android:textColor="#E0E0E0"
             android:textSize="14sp"
-            android:textStyle="bold"
-            android:textColor="@color/widget_app_name" />
-
+            android:textStyle="normal" />
         <TextView
             android:id="@+id/widget_week_badge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Week 1"
-            android:textSize="10sp"
-            android:textColor="@color/widget_badge_text"
+            android:textColor="#B0BEC5"
+            android:textSize="11sp"
             android:background="@drawable/widget_badge_bg"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="3dp"
-            android:paddingBottom="3dp" />
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp" />
     </LinearLayout>
 
-    <!-- Next Class Section -->
+    <!-- Flight Tracker UI -->
     <LinearLayout
-        android:id="@+id/widget_next_class_section"
+        android:id="@+id/tracker_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@id/widget_header"
-        android:layout_marginTop="12dp"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:layout_marginTop="16dp">
 
-        <TextView
-            android:id="@+id/widget_next_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="NEXT CLASS"
-            android:textSize="9sp"
-            android:textColor="@color/widget_label"
-            android:textStyle="bold" />
+        <ProgressBar
+            android:id="@+id/widget_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="12dp"
+            android:progressDrawable="@drawable/widget_progress_bar"
+            android:max="1000"
+            android:progress="0" />
 
-        <TextView
-            android:id="@+id/widget_class_name"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="No upcoming classes"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:textColor="@color/widget_text_primary"
-            android:maxLines="1"
-            android:ellipsize="end" />
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
 
-        <TextView
-            android:id="@+id/widget_class_detail"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text=""
-            android:textSize="12sp"
-            android:textColor="@color/widget_text_secondary"
-            android:maxLines="1"
-            android:ellipsize="end" />
+            <!-- Left Side (Start) -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="start">
+                <TextView
+                    android:id="@+id/widget_start_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Room"
+                    android:textColor="#9E9E9E"
+                    android:textSize="11sp"/>
+                <TextView
+                    android:id="@+id/widget_start_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="--:--"
+                    android:textColor="#FFFFFF"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="2dp"/>
+            </LinearLayout>
+
+            <!-- Right Side (End) -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="end">
+                <TextView
+                    android:id="@+id/widget_end_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Class"
+                    android:textColor="#9E9E9E"
+                    android:textSize="11sp"/>
+                <TextView
+                    android:id="@+id/widget_end_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="--:--"
+                    android:textColor="#FFFFFF"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:layout_marginTop="2dp"/>
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 
-    <!-- Divider -->
     <FrameLayout
         android:id="@+id/widget_divider"
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_below="@id/widget_next_class_section"
-        android:layout_marginTop="10dp"
-        android:background="@color/widget_divider" />
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="12dp"
+        android:background="#33FFFFFF" />
 
-    <!-- Task Section -->
-    <LinearLayout
-        android:id="@+id/widget_task_section"
+    <TextView
+        android:id="@+id/widget_upcoming_classes"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@id/widget_divider"
-        android:layout_marginTop="10dp"
-        android:orientation="vertical">
+        android:text="No more classes today"
+        android:textColor="#B0BEC5"
+        android:textSize="12sp"
+        android:lineSpacingExtra="4dp" />
 
-        <TextView
-            android:id="@+id/widget_task_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="UPCOMING TASK"
-            android:textSize="9sp"
-            android:textColor="@color/widget_label"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/widget_task_name"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="No pending tasks"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:textColor="@color/widget_text_primary"
-            android:maxLines="1"
-            android:ellipsize="end" />
-
-        <TextView
-            android:id="@+id/widget_task_detail"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text=""
-            android:textSize="11sp"
-            android:textColor="@color/widget_text_secondary"
-            android:maxLines="1"
-            android:ellipsize="end" />
-    </LinearLayout>
-
-</RelativeLayout>
+</LinearLayout>

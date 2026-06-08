@@ -22,6 +22,7 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
   late TimeOfDay _endTime;
   bool _isTemporary = false;
   DateTime? _specificDate;
+  String? _errorMessage;
 
   final List<String> _days = [
     'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
@@ -67,17 +68,21 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
   }
 
   void _save() {
+    setState(() {
+      _errorMessage = null;
+    });
+
     if (_moduleNameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Module Name is required')),
-      );
+      setState(() {
+        _errorMessage = 'Module Name is required';
+      });
       return;
     }
 
     if (_isTemporary && _specificDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a date for the one-off class')),
-      );
+      setState(() {
+        _errorMessage = 'Please select a date for the one-off class';
+      });
       return;
     }
 
@@ -110,10 +115,9 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
        final sEnd = int.parse(sEndParts[0]) * 60 + int.parse(sEndParts[1]);
        
        if (newStart < sEnd && newEnd > sStart) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-             content: Text('Time conflict with ${s.subject}! Please choose a different time.'),
-             backgroundColor: Colors.redAccent,
-          ));
+          setState(() {
+            _errorMessage = 'Time conflict with ${s.subject}! Please choose a different time.';
+          });
           return;
        }
     }
@@ -296,6 +300,30 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
             ),
             const SizedBox(height: 32),
 
+            // Error Message
+            if (_errorMessage != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             // Action Buttons
             Row(
               children: [
@@ -333,12 +361,9 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
                       final startMins = _startTime.hour * 60 + _startTime.minute;
                       final endMins = _endTime.hour * 60 + _endTime.minute;
                       if (endMins <= startMins) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("End time must be after start time."),
-                            backgroundColor: Colors.redAccent,
-                          ),
-                        );
+                        setState(() {
+                          _errorMessage = "End time must be after start time.";
+                        });
                         return;
                       }
                       _save();

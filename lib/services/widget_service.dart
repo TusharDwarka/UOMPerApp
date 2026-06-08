@@ -1,5 +1,6 @@
 import 'package:home_widget/home_widget.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import '../providers/timetable_provider.dart';
 
 /// Service to update Android/iOS home screen widgets with
@@ -121,6 +122,21 @@ class WidgetService {
           ? 'Week $currentWeek${timetable.isOnlineWeek(currentWeek) ? " • Online" : ""}'
           : 'Pre-Semester';
 
+      // ── Native Widget JSON Serialization ──
+      final todayClasses = todaySessions.map((s) => {
+        'subject': s.subject,
+        'room': s.room,
+        'startTime': s.startTime,
+        'endTime': s.endTime,
+      }).toList();
+
+      final pendingTasksJson = pending.map((t) => {
+        'title': t.title,
+        'subject': t.subject,
+        'dueDate': t.dueDate.toIso8601String(),
+        'type': t.type,
+      }).toList();
+
       // ── Save to SharedPreferences for native widget ──
       await HomeWidget.saveWidgetData('className', className);
       await HomeWidget.saveWidgetData('classDetail', classDetail);
@@ -128,10 +144,17 @@ class WidgetService {
       await HomeWidget.saveWidgetData('taskName', taskName);
       await HomeWidget.saveWidgetData('taskDetail', taskDetail);
       await HomeWidget.saveWidgetData('weekBadge', weekBadge);
+      
+      // New JSON properties for the native timeline calculation
+      await HomeWidget.saveWidgetData('widget_classes_json', jsonEncode(todayClasses));
+      await HomeWidget.saveWidgetData('widget_tasks_json', jsonEncode(pendingTasksJson));
 
       // Trigger widget update
       await HomeWidget.updateWidget(
         androidName: _androidWidgetName,
+      );
+      await HomeWidget.updateWidget(
+        androidName: 'TaskWidgetProvider',
       );
     } catch (e) {
       // Silently fail — widget is optional
