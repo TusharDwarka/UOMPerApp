@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:open_filex/open_filex.dart';
 import '../providers/resource_provider.dart';
 import '../models/module_resource.dart';
 
@@ -68,11 +68,49 @@ class _CategoryList extends StatelessWidget {
   }
 
   void _openFile(String path) async {
-    final uri = Uri.file(path);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      debugPrint("Could not launch $uri");
+    final result = await OpenFilex.open(path);
+    if (result.type != ResultType.done) {
+      debugPrint("Could not open file: ${result.message}");
+    }
+  }
+
+  IconData _getFileIcon(String fileName) {
+    final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+    switch (ext) {
+      case 'pdf': return Icons.picture_as_pdf;
+      case 'doc':
+      case 'docx': return Icons.description;
+      case 'xls':
+      case 'xlsx': return Icons.table_chart;
+      case 'ppt':
+      case 'pptx': return Icons.slideshow;
+      case 'txt': return Icons.article;
+      case 'png':
+      case 'jpg':
+      case 'jpeg': return Icons.image;
+      case 'zip':
+      case 'rar': return Icons.folder_zip;
+      default: return Icons.insert_drive_file;
+    }
+  }
+
+  Color _getFileIconColor(String fileName) {
+    final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+    switch (ext) {
+      case 'pdf': return Colors.redAccent;
+      case 'doc':
+      case 'docx': return Colors.blueAccent;
+      case 'xls':
+      case 'xlsx': return Colors.green;
+      case 'ppt':
+      case 'pptx': return Colors.orangeAccent;
+      case 'txt': return Colors.grey;
+      case 'png':
+      case 'jpg':
+      case 'jpeg': return Colors.purpleAccent;
+      case 'zip':
+      case 'rar': return Colors.brown;
+      default: return Colors.blueGrey;
     }
   }
 
@@ -125,7 +163,7 @@ class _CategoryList extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
                   onTap: () => _openFile(file.filePath),
-                  leading: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 32),
+                  leading: Icon(_getFileIcon(file.fileName), color: _getFileIconColor(file.fileName), size: 32),
                   title: Text(file.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
                   subtitle: Row(
                     children: [
