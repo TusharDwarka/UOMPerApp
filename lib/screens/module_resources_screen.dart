@@ -15,7 +15,7 @@ class ModuleResourcesScreen extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return DefaultTabController(
-      length: 4,
+      length: 6,
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
@@ -33,6 +33,8 @@ class ModuleResourcesScreen extends StatelessWidget {
               Tab(text: "Tutorials"),
               Tab(text: "Past Papers"),
               Tab(text: "Assignments"),
+              Tab(text: "General"),
+              Tab(text: "Module Catalogue"),
             ],
           ),
         ),
@@ -42,6 +44,8 @@ class ModuleResourcesScreen extends StatelessWidget {
             _CategoryList(moduleName: moduleName, category: "Tutorials"),
             _CategoryList(moduleName: moduleName, category: "Past Papers"),
             _CategoryList(moduleName: moduleName, category: "Assignments"),
+            _CategoryList(moduleName: moduleName, category: "General"),
+            _CategoryList(moduleName: moduleName, category: "Module Catalogue"),
           ],
         ),
       ),

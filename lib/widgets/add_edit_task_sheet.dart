@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/academic_task.dart';
 import '../providers/timetable_provider.dart';
+import 'scroll_time_picker.dart';
 
 class AddEditTaskSheet extends StatefulWidget {
   final AcademicTask? taskToEdit;
@@ -235,14 +236,9 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _buildDateButton(isDark, true, () async {
-                         FocusScope.of(context).unfocus();
-                         final t = await showTimePicker(
+                         final t = await showScrollTimePicker(
                            context: context, 
                            initialTime: selectedTime,
-                           builder: (context, child) => Theme(
-                            data: isDark ? ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: Color(0xFF2962FF), onPrimary: Colors.white, surface: Color(0xFF1E1E1E), onSurface: Colors.white), timePickerTheme: const TimePickerThemeData(backgroundColor: Color(0xFF1E1E1E))) : ThemeData.light(),
-                            child: child!,
-                          )
                          );
                          if(t!=null) setState(() => selectedTime = t);
                       })

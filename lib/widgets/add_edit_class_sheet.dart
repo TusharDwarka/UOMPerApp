@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../providers/timetable_provider.dart';
+import 'scroll_time_picker.dart';
 
 class AddEditClassSheet extends StatefulWidget {
   final Map<String, dynamic>? initialData;
@@ -79,6 +82,41 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
     }
 
     final dayToSave = _isTemporary ? DateFormat('EEEE').format(_specificDate!) : _selectedDay;
+    
+    // Conflict Detection
+    final provider = Provider.of<TimetableProvider>(context, listen: false);
+    final newStart = _startTime.hour * 60 + _startTime.minute;
+    final newEnd = _endTime.hour * 60 + _endTime.minute;
+    final editId = widget.initialData?['id'];
+
+    final sessionsToCheck = provider.userSessions.where((s) {
+       if (editId != null && s.id == editId) return false;
+       
+       if (_isTemporary && _specificDate != null) {
+          if (s.specificDate != null) {
+             return s.specificDate!.year == _specificDate!.year && s.specificDate!.month == _specificDate!.month && s.specificDate!.day == _specificDate!.day;
+          } else {
+             return s.day == dayToSave;
+          }
+       } else {
+          return s.day == dayToSave && s.specificDate == null;
+       }
+    }).toList();
+    
+    for (var s in sessionsToCheck) {
+       final sStartParts = s.startTime.split(':');
+       final sStart = int.parse(sStartParts[0]) * 60 + int.parse(sStartParts[1]);
+       final sEndParts = s.endTime.split(':');
+       final sEnd = int.parse(sEndParts[0]) * 60 + int.parse(sEndParts[1]);
+       
+       if (newStart < sEnd && newEnd > sStart) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+             content: Text('Time conflict with ${s.subject}! Please choose a different time.'),
+             backgroundColor: Colors.redAccent,
+          ));
+          return;
+       }
+    }
 
     final result = {
       'moduleName': _moduleNameCtrl.text.trim(),
@@ -261,6 +299,23 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
             // Action Buttons
             Row(
               children: [
+                if (isEditing)
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: () {
+                         Navigator.of(context).pop({'delete': true});
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        foregroundColor: Colors.redAccent,
+                      ),
+                      icon: const Icon(Icons.delete),
+                      label: const Text("Delete", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                if (isEditing)
+                  const SizedBox(width: 8),
                 Expanded(
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
@@ -341,7 +396,7 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
     return GestureDetector(
       onTap: () async {
         FocusScope.of(context).unfocus(); // Prevent keyboard from reappearing
-        final picked = await showTimePicker(context: context, initialTime: time);
+        final picked = await showScrollTimePicker(context: context, initialTime: time);
         if (picked != null) onChanged(picked);
       },
       child: Container(

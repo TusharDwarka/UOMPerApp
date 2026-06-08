@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../widgets/scroll_time_picker.dart';
 
 class TodoBoardTab extends StatefulWidget {
   const TodoBoardTab({super.key});
@@ -1114,7 +1115,7 @@ class _AddEditTaskSheetState extends State<_AddEditTaskSheet> {
                     child: InkWell(
                       onTap: () async {
                         FocusScope.of(context).unfocus();
-                        final t = await showTimePicker(context: context, initialTime: selectedTime);
+                        final t = await showScrollTimePicker(context: context, initialTime: selectedTime);
                         if(t != null) setState(() => selectedTime = t);
                       },
                       child: Container(

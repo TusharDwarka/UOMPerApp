@@ -175,7 +175,7 @@ class UnsortedInboxScreen extends StatelessWidget {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        final categories = ['Lectures', 'Tutorials', 'Past Papers', 'Assignments'];
+        final categories = ['Lectures', 'Tutorials', 'Past Papers', 'Assignments', 'General', 'Module Catalogue'];
         return Container(
           decoration: BoxDecoration(
             color: Theme.of(context).scaffoldBackgroundColor,

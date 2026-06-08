@@ -560,6 +560,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
     Map<String, dynamic>? initialData;
     if (sessionToEdit != null) {
       initialData = {
+        'id': sessionToEdit.id,
         'moduleName': sessionToEdit.subject,
         'moduleCode': sessionToEdit.moduleCode,
         'location': sessionToEdit.room,
@@ -586,6 +587,12 @@ class _ScheduleTabState extends State<ScheduleTab> {
     );
 
     if (result != null) {
+      final provider = Provider.of<TimetableProvider>(context, listen: false);
+      if (result['delete'] == true && sessionToEdit != null) {
+         provider.deleteSession(sessionToEdit.id);
+         return;
+      }
+
       final session = ClassSession(
         subject: result['moduleName'] ?? '',
         startTime: result['startTime'] ?? '',
@@ -601,7 +608,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
       if (sessionToEdit != null) {
         session.id = sessionToEdit.id;
       }
-      Provider.of<TimetableProvider>(context, listen: false).addSession(session);
+      provider.addSession(session);
     }
   }
 
