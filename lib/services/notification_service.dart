@@ -24,8 +24,9 @@ class NotificationService {
       android: initializationSettingsAndroid,
     );
 
+    // v22 API: requires settings named parameter
     await _notificationsPlugin.initialize(
-      initializationSettings,
+      settings: initializationSettings,
       onDidReceiveNotificationResponse: (details) {
         // Handle notification tap here if needed
       },
@@ -34,16 +35,15 @@ class NotificationService {
     _isInitialized = true;
   }
 
-  Future<bool> _areRemindersEnabled() async {
+  Future<bool> areRemindersEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    // Default to true unless explicitly disabled
-    return prefs.getBool('class_reminders_enabled') ?? true;
+    return prefs.getBool('class_reminders_enabled') ?? false;
   }
 
+  /// Request notification permissions from the OS.
+  /// This does NOT check SharedPreferences — it's meant to be called
+  /// both during onboarding and from settings.
   Future<bool> requestPermissions() async {
-    final enabled = await _areRemindersEnabled();
-    if (!enabled) return false;
-
     final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
         _notificationsPlugin.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
@@ -59,21 +59,27 @@ class NotificationService {
     required String room,
     required DateTime classStartTime,
     int minutesBefore = 15,
+    bool force = false,
   }) async {
-    final enabled = await _areRemindersEnabled();
-    if (!enabled) return;
+    if (force) {
+      await requestPermissions();
+    } else {
+      final enabled = await areRemindersEnabled();
+      if (!enabled) return;
+    }
 
     final reminderTime = classStartTime.subtract(Duration(minutes: minutesBefore));
 
     // Don't schedule if it's already in the past
     if (reminderTime.isBefore(DateTime.now())) return;
 
+    // v22 API: androidScheduleMode is required, uiLocalNotificationDateInterpretation is REMOVED
     await _notificationsPlugin.zonedSchedule(
-      id,
-      'Upcoming Class: $subject',
-      'Starts in $minutesBefore mins at $room',
-      tz.TZDateTime.from(reminderTime, tz.local),
-      const NotificationDetails(
+      id: id,
+      title: 'Upcoming Class: $subject',
+      body: 'Starts in $minutesBefore mins at $room',
+      scheduledDate: tz.TZDateTime.from(reminderTime, tz.local),
+      notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           'class_reminders',
           'Class Reminders',
@@ -83,12 +89,11 @@ class NotificationService {
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
+  // v22 API: requires id named parameter
   Future<void> cancelReminder(int id) async {
-    await _notificationsPlugin.cancel(id);
+    await _notificationsPlugin.cancel(id: id);
   }
 }

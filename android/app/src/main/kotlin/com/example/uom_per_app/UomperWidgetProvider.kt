@@ -5,6 +5,9 @@ import android.util.Log
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.widget.RemoteViews
+import android.app.PendingIntent
+import android.content.Intent
+import android.net.Uri
 import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -37,6 +40,9 @@ class UomperWidgetProvider : AppWidgetProvider() {
                 val views = RemoteViews(context.packageName, R.layout.uomper_widget).apply {
                     setTextViewText(R.id.widget_status, statusText)
                     setTextViewText(R.id.widget_week_badge, weekBadge)
+
+                    val pendingIntent = es.antonborri.home_widget.HomeWidgetLaunchIntent.getActivity(context, MainActivity::class.java, Uri.parse("uomper://schedule"))
+                    setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
                     try {
                         val classesArray = JSONArray(classesJsonStr)
@@ -79,12 +85,16 @@ class UomperWidgetProvider : AppWidgetProvider() {
                         }
                         
                         if (!currentOrNextFound) {
+                            val nextLabel = prefs.getString("nextLabel", "Status") ?: "Status"
+                            val className = prefs.getString("className", "Finished") ?: "Finished"
+                            val classDetail = prefs.getString("classDetail", "No more classes today") ?: "No more classes today"
+                            
                             setTextViewText(R.id.widget_start_label, "Status")
-                            setTextViewText(R.id.widget_start_value, "--:--")
+                            setTextViewText(R.id.widget_start_value, nextLabel)
                             setTextViewText(R.id.widget_end_label, "Class")
-                            setTextViewText(R.id.widget_end_value, "Finished")
+                            setTextViewText(R.id.widget_end_value, className)
                             setProgressBar(R.id.widget_progress, 1000, 1000, false)
-                            setTextViewText(R.id.widget_upcoming_classes, "No more classes today")
+                            setTextViewText(R.id.widget_upcoming_classes, classDetail)
                         } else {
                             if (upcomingText.isEmpty()) {
                                 setTextViewText(R.id.widget_upcoming_classes, "No more classes today")

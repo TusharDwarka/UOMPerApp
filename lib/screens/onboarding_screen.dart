@@ -8,6 +8,8 @@ import '../providers/timetable_provider.dart';
 import '../services/ai_service.dart';
 import '../widgets/add_edit_class_sheet.dart';
 import 'home_screen.dart';
+import '../services/notification_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -232,14 +234,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
       await provider.setSetupCompleted(true);
       print("DEBUG: setSetupCompleted completed");
 
+      // Instead of going to home screen, go to notifications permission step
       if (mounted) {
-        print("DEBUG: mounted is true, navigating to HomeScreen");
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (route) => false,
-        );
-      } else {
-        print("DEBUG: mounted is false, navigation skipped");
+        _goToStep(4);
       }
     } catch (e, stackTrace) {
       print("DEBUG: _saveAndFinish ERROR: $e\n$stackTrace");
@@ -276,6 +273,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                   _buildStep2Upload(isDark),
                   _buildStep3Processing(isDark),
                   _buildStep4Confirm(isDark),
+                  _buildStep5Permissions(isDark),
                 ],
               ),
             ),
@@ -286,20 +284,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   }
 
   Widget _buildProgressBar(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+    return Container(
+      height: 4,
+      margin: const EdgeInsets.only(top: 20, left: 30, right: 30),
       child: Row(
-        children: List.generate(4, (index) {
-          final isActive = index <= _currentStep;
+        children: List.generate(5, (index) {
           return Expanded(
-            child: Container(
-              height: 4,
-              margin: const EdgeInsets.symmetric(horizontal: 3),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              margin: const EdgeInsets.symmetric(horizontal: 4),
               decoration: BoxDecoration(
+                color: index <= _currentStep
+                    ? (isDark ? const Color(0xFF5C6BC0) : const Color(0xFF3949AB))
+                    : (isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
                 borderRadius: BorderRadius.circular(2),
-                color: isActive
-                    ? (isDark ? const Color(0xFF5C6BC0) : const Color(0xFF2962FF))
-                    : (isDark ? Colors.white10 : Colors.grey[300]),
               ),
             ),
           );
@@ -939,6 +937,66 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
             : Text(label),
       ),
     );
+  }
+
+  // --- Step 5: Notifications ---
+  Widget _buildStep5Permissions(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.all(30.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: Colors.orange.withOpacity(0.15), shape: BoxShape.circle),
+            child: const Icon(Icons.notifications_active_rounded, size: 60, color: Colors.orange),
+          ),
+          const SizedBox(height: 40),
+          Text(
+            "Never Miss a Class",
+            style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: isDark ? Colors.white : const Color(0xFF1A1A1A), height: 1.1),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            "Do you want to be notified 15 minutes before your classes start?",
+            style: TextStyle(fontSize: 18, color: isDark ? Colors.white70 : Colors.black87, height: 1.4),
+          ),
+          const Spacer(),
+          _buildContinueButton("Yes, Enable Notifications", () => _finishSetup(true), isDark),
+          const SizedBox(height: 15),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => _finishSetup(false),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                foregroundColor: isDark ? Colors.white60 : Colors.black54,
+              ),
+              child: const Text("Not Now", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Future<void> _finishSetup(bool enableNotifications) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    if (enableNotifications) {
+      final granted = await NotificationService().requestPermissions();
+      await prefs.setBool('class_reminders_enabled', granted);
+    } else {
+      await prefs.setBool('class_reminders_enabled', false);
+    }
+
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+    }
   }
 
   // --- Add / Edit Class Bottom Sheet ---

@@ -9,6 +9,7 @@ import 'settings_tab.dart';
 import 'dart:async';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:provider/provider.dart';
+import 'package:home_widget/home_widget.dart';
 import '../providers/resource_provider.dart';
 import '../providers/timetable_provider.dart';
 
@@ -22,6 +23,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   late StreamSubscription _intentDataStreamSubscription;
+  StreamSubscription? _homeWidgetSubscription;
 
   @override
   void initState() {
@@ -43,11 +45,26 @@ class _HomeScreenState extends State<HomeScreen> {
         ReceiveSharingIntent.instance.reset();
       }
     });
+
+    // Handle home widget intents
+    HomeWidget.initiallyLaunchedFromHomeWidget().then(_loadFromWidget);
+    _homeWidgetSubscription = HomeWidget.widgetClicked.listen(_loadFromWidget);
+  }
+
+  void _loadFromWidget(Uri? uri) {
+    if (uri != null && uri.scheme == 'uomper') {
+      if (uri.host == 'schedule') {
+        if (mounted) setState(() => _selectedIndex = 1);
+      } else if (uri.host == 'tasks') {
+        if (mounted) setState(() => _selectedIndex = 3);
+      }
+    }
   }
 
   @override
   void dispose() {
     _intentDataStreamSubscription.cancel();
+    _homeWidgetSubscription?.cancel();
     super.dispose();
   }
 

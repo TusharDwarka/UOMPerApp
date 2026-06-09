@@ -7,8 +7,10 @@ import 'scroll_time_picker.dart';
 
 class AddEditTaskSheet extends StatefulWidget {
   final AcademicTask? taskToEdit;
+  final String? initialCategory;
+  final String? initialModule;
   
-  const AddEditTaskSheet({super.key, this.taskToEdit});
+  const AddEditTaskSheet({super.key, this.taskToEdit, this.initialCategory, this.initialModule});
 
   @override
   State<AddEditTaskSheet> createState() => _AddEditTaskSheetState();
@@ -31,8 +33,8 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
     super.initState();
     final t = widget.taskToEdit;
     title = t?.title ?? '';
-    subject = t?.subject ?? 'General';
-    type = t?.type ?? 'Assignment';
+    subject = t?.subject ?? widget.initialModule ?? 'General';
+    type = t?.type ?? widget.initialCategory ?? 'Assignment';
     selectedDate = t?.dueDate ?? DateTime.now();
     selectedTime = t != null ? TimeOfDay.fromDateTime(t.dueDate) : const TimeOfDay(hour: 23, minute: 59);
     

@@ -740,6 +740,7 @@ class _DashboardTabState extends State<DashboardTab> {
                     label: "Set Reminder", 
                     color: Colors.orangeAccent,
                     onTap: () async {
+                       final messenger = ScaffoldMessenger.of(context);
                        Navigator.pop(context); // close sheet
                        final now = DateTime.now();
                        // Parse start time (e.g., "09:30")
@@ -749,18 +750,16 @@ class _DashboardTabState extends State<DashboardTab> {
                          final minute = int.parse(parts[1]);
                          var classStartTime = DateTime(now.year, now.month, now.day, hour, minute);
                          
-                         // If it's already past today, maybe schedule for next week?
-                         // For simplicity, we just use today's time since it's a today's class.
-                         
                          await NotificationService().scheduleClassReminder(
                            id: session.id, // using session ID for uniqueness
                            subject: session.subject,
                            room: session.room,
                            classStartTime: classStartTime,
+                           force: true, // Bypass global pref & request permissions
                          );
-                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Reminder set for 15 min before class!")));
+                         messenger.showSnackBar(const SnackBar(content: Text("Reminder set for 15 min before class!")));
                        } catch (e) {
-                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not set reminder for this class.")));
+                         messenger.showSnackBar(const SnackBar(content: Text("Could not set reminder for this class.")));
                        }
                     }
                   ),

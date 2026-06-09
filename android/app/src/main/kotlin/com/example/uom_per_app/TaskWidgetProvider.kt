@@ -5,6 +5,9 @@ import android.util.Log
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.widget.RemoteViews
+import android.app.PendingIntent
+import android.content.Intent
+import android.net.Uri
 import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -38,6 +41,9 @@ class TaskWidgetProvider : AppWidgetProvider() {
 
             appWidgetIds.forEach { widgetId ->
                 val views = RemoteViews(context.packageName, R.layout.widget_tasks)
+
+                val pendingIntent = es.antonborri.home_widget.HomeWidgetLaunchIntent.getActivity(context, MainActivity::class.java, Uri.parse("uomper://tasks"))
+                views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
                 try {
                     val tasksArray = JSONArray(tasksJsonStr)
