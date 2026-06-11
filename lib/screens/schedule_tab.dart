@@ -78,11 +78,11 @@ class _ScheduleTabState extends State<ScheduleTab> {
                     padding: const EdgeInsets.only(top: 10), // Alignment correction
                     child: Column(
                       children: [
-                        for (int i = 8; i <= 20; i++)
+                        for (int i = 8; i <= 24; i++)
                           SizedBox(
                             height: 60, 
                             child: Text(
-                              "${i.toString().padLeft(2, '0')}:00",
+                              i == 24 ? "00:00" : "${i.toString().padLeft(2, '0')}:00",
                               textAlign: TextAlign.center,
                               style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400], fontSize: 12, fontWeight: FontWeight.w500),
                             ),
@@ -100,7 +100,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
                              // Grid Lines
                              Column(
                                children: [
-                                 for (int i = 8; i <= 20; i++)
+                                 for (int i = 8; i <= 24; i++)
                                    Container(
                                      height: 60, 
                                      decoration: BoxDecoration(
@@ -141,7 +141,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
   Widget _buildCurrentTimeLine(bool isDark) {
     // Calculate current time position
     final now = DateTime.now();
-    if (now.hour < 8 || now.hour > 20) return const SizedBox();
+    if (now.hour < 8) return const SizedBox();
     
     final minutes = (now.hour * 60) + now.minute;
     final top = (minutes - 480).toDouble();
@@ -347,7 +347,11 @@ class _ScheduleTabState extends State<ScheduleTab> {
      final partsStart = event.startTime.split(':');
      final startMinutes = int.parse(partsStart[0]) * 60 + int.parse(partsStart[1]);
      final partsEnd = event.endTime.split(':');
-     final endMinutes = int.parse(partsEnd[0]) * 60 + int.parse(partsEnd[1]);
+     int endMinutes = int.parse(partsEnd[0]) * 60 + int.parse(partsEnd[1]);
+     
+     if (endMinutes < startMinutes) {
+       endMinutes += 24 * 60; // Handle events crossing midnight
+     }
      
      // 8:00 AM is 480 minutes.
      // Offset: (startMinutes - 480) * (60px / 60min) -> 1 px per minute.

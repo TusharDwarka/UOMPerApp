@@ -603,9 +603,12 @@ class _AddEditRouteSheetState extends State<_AddEditRouteSheet> {
                   children: [
                     Text("DEP", style: TextStyle(fontSize: 9, color: isDark ? Colors.grey[500] : Colors.grey, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 2),
-                    Text(
-                      trip['departure']?.isEmpty ?? true ? "--:--" : trip['departure']!,
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        trip['departure']?.isEmpty ?? true ? "--:--" : trip['departure']!,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
+                      ),
                     ),
                   ],
                 ),
@@ -633,9 +636,12 @@ class _AddEditRouteSheetState extends State<_AddEditRouteSheet> {
                   children: [
                     Text("ARR", style: TextStyle(fontSize: 9, color: isDark ? Colors.grey[500] : Colors.grey, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 2),
-                    Text(
-                      trip['arrival']?.isEmpty ?? true ? "--:--" : trip['arrival']!,
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        trip['arrival']?.isEmpty ?? true ? "--:--" : trip['arrival']!,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
+                      ),
                     ),
                   ],
                 ),
@@ -776,6 +782,8 @@ class _BusRouteCardState extends State<BusRouteCard> {
                       children: [
                         Text(
                           locationName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1A1D1E)),
                         ),
                         const SizedBox(height: 4),

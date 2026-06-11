@@ -17,7 +17,7 @@
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="wrap_content"
-            android:text="Thu, 8 Aug, 10:30 AM"
+            android:text="--"
             android:textColor="#E0E0E0"
             android:textSize="14sp"
             android:textStyle="normal" />
