@@ -97,29 +97,15 @@ class UomperWidgetProvider : AppWidgetProvider() {
                         }
                         
                         if (!currentOrNextFound) {
-                            val nextLabel = prefs.getString("nextLabel", "Status") ?: "Status"
-                            val className = prefs.getString("className", "Finished") ?: "Finished"
-                            val classDetail = prefs.getString("classDetail", "No more classes today") ?: "No more classes today"
+                            // Truly no classes left today
+                            setViewVisibility(R.id.tracker_container, android.view.View.GONE)
+                            setViewVisibility(R.id.empty_state_container, android.view.View.VISIBLE)
                             
-                            if (className != "Finished" && className != "No upcoming classes" && className != "Online Week") {
-                                // We have a class tomorrow or later
-                                setViewVisibility(R.id.tracker_container, android.view.View.VISIBLE)
-                                setViewVisibility(R.id.empty_state_container, android.view.View.GONE)
-                                
-                                setTextViewText(R.id.widget_start_label, "Status")
-                                setTextViewText(R.id.widget_start_value, nextLabel)
-                                setTextViewText(R.id.widget_end_label, "Class")
-                                setTextViewText(R.id.widget_end_value, className)
-                                setProgressBar(R.id.widget_progress, 1000, 1000, false)
-                            } else {
-                                // Truly no classes
-                                setViewVisibility(R.id.tracker_container, android.view.View.GONE)
-                                setViewVisibility(R.id.empty_state_container, android.view.View.VISIBLE)
-                                
-                                val emptyTitle = if (classDetail.contains("No campus classes")) "Online Week" else "No classes right now"
-                                setTextViewText(R.id.widget_empty_text, emptyTitle)
-                                setTextViewText(R.id.widget_empty_subtext, classDetail)
-                            }
+                            val classDetail = prefs.getString("classDetail", "No more classes today") ?: "No more classes today"
+                            val emptyTitle = if (classDetail.contains("No campus classes")) "Online Week" else "NO CLASS 🌴"
+                            
+                            setTextViewText(R.id.widget_empty_text, emptyTitle)
+                            setTextViewText(R.id.widget_empty_subtext, "Relax and enjoy your day.")
                         } else {
                             // Show tracker, hide empty state
                             setViewVisibility(R.id.tracker_container, android.view.View.VISIBLE)

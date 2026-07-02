@@ -124,10 +124,10 @@
         android:visibility="gone">
 
         <ImageView
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:src="@android:drawable/ic_menu_today"
-            android:tint="#78909C"/>
+            android:tint="#B0BEC5"/>
 
         <TextView
             android:id="@+id/widget_empty_text"
@@ -135,9 +135,9 @@
             android:layout_height="wrap_content"
             android:text="No more classes"
             android:textColor="#FFFFFF"
-            android:textSize="18sp"
+            android:textSize="22sp"
             android:textStyle="bold"
-            android:layout_marginTop="8dp"/>
+            android:layout_marginTop="12dp"/>
 
         <TextView
             android:id="@+id/widget_empty_subtext"
@@ -145,8 +145,8 @@
             android:layout_height="wrap_content"
             android:text="Enjoy your free time!"
             android:textColor="#90A4AE"
-            android:textSize="13sp"
-            android:layout_marginTop="2dp"/>
+            android:textSize="14sp"
+            android:layout_marginTop="4dp"/>
     </LinearLayout>
 
     <FrameLayout

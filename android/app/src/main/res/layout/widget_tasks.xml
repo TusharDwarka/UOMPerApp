@@ -35,54 +35,76 @@
         android:layout_marginBottom="12dp"
         android:background="#33FFFFFF" />
 
-    <!-- Main Task Focus -->
+    <!-- Main Body: 70/30 Split -->
     <LinearLayout
-        android:id="@+id/task_main_container"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:background="#1A2962FF"
-        android:padding="12dp">
-        
-        <TextView
-            android:id="@+id/task_main_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="No pending tasks"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:maxLines="1"
-            android:ellipsize="end" />
-
-        <TextView
-            android:id="@+id/task_main_subject"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Enjoy your free time!"
-            android:textColor="#82B1FF"
-            android:textSize="12sp"
-            android:layout_marginTop="2dp" />
-
-        <TextView
-            android:id="@+id/task_main_due"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text=""
-            android:textColor="#FF5252"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:layout_marginTop="6dp" />
-    </LinearLayout>
-
-    <!-- Sub tasks list -->
-    <ListView
-        android:id="@+id/widget_list"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginTop="12dp"
-        android:divider="@null"
-        android:dividerHeight="0dp"
-        android:scrollbars="none" />
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+
+        <!-- Left Side: Tasks List (70%) -->
+        <ListView
+            android:id="@+id/widget_list"
+            android:layout_width="0dp"
+            android:layout_weight="65"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:dividerHeight="0dp"
+            android:scrollbars="none" />
+
+        <!-- Vertical Divider -->
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:layout_marginLeft="8dp"
+            android:layout_marginRight="8dp"
+            android:background="#33FFFFFF" />
+
+        <!-- Right Side: Mini Calendar (35%) -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="35"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/calendar_month_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="MONTH"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_marginBottom="4dp"/>
+
+            <!-- Days of Week Header -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="4dp">
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="M" android:textSize="9sp" android:textColor="#B0BEC5" android:gravity="center"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="T" android:textSize="9sp" android:textColor="#B0BEC5" android:gravity="center"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="W" android:textSize="9sp" android:textColor="#B0BEC5" android:gravity="center"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="T" android:textSize="9sp" android:textColor="#B0BEC5" android:gravity="center"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="F" android:textSize="9sp" android:textColor="#B0BEC5" android:gravity="center"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="S" android:textSize="9sp" android:textColor="#B0BEC5" android:gravity="center"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="S" android:textSize="9sp" android:textColor="#FF5252" android:gravity="center"/>
+            </LinearLayout>
+
+            <!-- Calendar Grid -->
+            <GridView
+                android:id="@+id/widget_calendar_grid"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:numColumns="7"
+                android:verticalSpacing="2dp"
+                android:horizontalSpacing="2dp"
+                android:stretchMode="columnWidth"
+                android:scrollbars="none" />
+        </LinearLayout>
+
+    </LinearLayout>
 
 </LinearLayout>
