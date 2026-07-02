@@ -42,7 +42,19 @@ class TaskWidgetProvider : AppWidgetProvider() {
             appWidgetIds.forEach { widgetId ->
                 val views = RemoteViews(context.packageName, R.layout.widget_tasks)
 
-                val pendingIntent = es.antonborri.home_widget.HomeWidgetLaunchIntent.getActivity(context, MainActivity::class.java, Uri.parse("uomper://tasks"))
+                val listIntent = Intent(context, TaskWidgetService::class.java)
+                views.setRemoteAdapter(R.id.widget_list, listIntent)
+
+                val intent = Intent(context, MainActivity::class.java).apply {
+                    action = Intent.ACTION_VIEW
+                    data = Uri.parse("uomper://tasks")
+                }
+                val flags = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                } else {
+                    PendingIntent.FLAG_UPDATE_CURRENT
+                }
+                val pendingIntent = PendingIntent.getActivity(context, 1, intent, flags)
                 views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
                 try {
@@ -106,34 +118,14 @@ class TaskWidgetProvider : AppWidgetProvider() {
                         views.setTextViewText(R.id.task_main_due, mainDaysLeftStr)
                         // Android RemoteViews doesn't support setTextColor with hex string directly, so we just use the default XML color
                         
-                        // Sub Tasks
-                        var subList = StringBuilder()
-                        for (i in 1 until minOf(4, tasksArray.length())) {
-                            val t = tasksArray.getJSONObject(i)
-                            val title = t.getString("title")
-                            val tType = t.getString("type")
-                            val e = when (tType) {
-                                "Exam" -> "🔴"
-                                "Test" -> "🟠"
-                                "Assignment" -> "🔵"
-                                "Homework" -> "📗"
-                                "Project" -> "🟣"
-                                else -> "⚪"
-                            }
-                            subList.append("$e $title\n")
-                        }
-                        
-                        if (subList.isEmpty()) {
-                            views.setTextViewText(R.id.task_sub_list, "No other upcoming tasks")
-                        } else {
-                            views.setTextViewText(R.id.task_sub_list, "Up Next:\n" + subList.toString().trim())
-                        }
+                        // Sub Tasks are now handled by the TaskWidgetService (ListView)
                     }
 
                 } catch (e: Exception) {
                     Log.e("TaskWidget", "JSON parse error", e)
                 }
 
+                appWidgetManager.notifyAppWidgetViewDataChanged(widgetId, R.id.widget_list)
                 appWidgetManager.updateAppWidget(widgetId, views)
             }
         } catch (e: Exception) {

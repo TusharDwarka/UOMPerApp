@@ -19,8 +19,9 @@ class WidgetService {
       String classDetail = '';
       String nextLabel = 'NEXT CLASS';
 
-      // Check today's classes
-      final todaySessions = timetable.getEventsForDay(now);
+      // Check today's classes — use getClassesForDate to always show
+      // the real user's classes, regardless of the friend-swap perspective.
+      final todaySessions = timetable.getClassesForDate(now);
       todaySessions.sort((a, b) => a.startTime.compareTo(b.startTime));
 
       // Currently in class?
@@ -123,19 +124,19 @@ class WidgetService {
           : 'Pre-Semester';
 
       // ── Native Widget JSON Serialization ──
-      final todayClasses = todaySessions.map((s) => {
+      final todayClasses = todaySessions.map((s) => ({
         'subject': s.subject,
         'room': s.room,
         'startTime': s.startTime,
         'endTime': s.endTime,
-      }).toList();
+      })).toList();
 
-      final pendingTasksJson = pending.map((t) => {
+      final pendingTasksJson = pending.map((t) => ({
         'title': t.title,
         'subject': t.subject,
         'dueDate': t.dueDate.toIso8601String(),
         'type': t.type,
-      }).toList();
+      })).toList();
 
       // ── Save to SharedPreferences for native widget ──
       await HomeWidget.saveWidgetData('className', className);
@@ -152,9 +153,11 @@ class WidgetService {
       // Trigger widget update
       await HomeWidget.updateWidget(
         androidName: _androidWidgetName,
+        qualifiedAndroidName: 'com.example.uom_per_app.UomperWidgetProvider',
       );
       await HomeWidget.updateWidget(
         androidName: 'TaskWidgetProvider',
+        qualifiedAndroidName: 'com.example.uom_per_app.TaskWidgetProvider',
       );
     } catch (e) {
       // Silently fail — widget is optional

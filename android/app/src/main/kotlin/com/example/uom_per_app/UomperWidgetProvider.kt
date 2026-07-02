@@ -41,7 +41,19 @@ class UomperWidgetProvider : AppWidgetProvider() {
                     setTextViewText(R.id.widget_status, statusText)
                     setTextViewText(R.id.widget_week_badge, weekBadge)
 
-                    val pendingIntent = es.antonborri.home_widget.HomeWidgetLaunchIntent.getActivity(context, MainActivity::class.java, Uri.parse("uomper://schedule"))
+                    val listIntent = Intent(context, UomperWidgetService::class.java)
+                    setRemoteAdapter(R.id.widget_list, listIntent)
+
+                    val intent = Intent(context, MainActivity::class.java).apply {
+                        action = Intent.ACTION_VIEW
+                        data = Uri.parse("uomper://schedule")
+                    }
+                    val flags = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    } else {
+                        PendingIntent.FLAG_UPDATE_CURRENT
+                    }
+                    val pendingIntent = PendingIntent.getActivity(context, 0, intent, flags)
                     setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
                     try {
@@ -89,18 +101,29 @@ class UomperWidgetProvider : AppWidgetProvider() {
                             val className = prefs.getString("className", "Finished") ?: "Finished"
                             val classDetail = prefs.getString("classDetail", "No more classes today") ?: "No more classes today"
                             
-                            setTextViewText(R.id.widget_start_label, "Status")
-                            setTextViewText(R.id.widget_start_value, nextLabel)
-                            setTextViewText(R.id.widget_end_label, "Class")
-                            setTextViewText(R.id.widget_end_value, className)
-                            setProgressBar(R.id.widget_progress, 1000, 1000, false)
-                            setTextViewText(R.id.widget_upcoming_classes, classDetail)
-                        } else {
-                            if (upcomingText.isEmpty()) {
-                                setTextViewText(R.id.widget_upcoming_classes, "No more classes today")
+                            if (className != "Finished" && className != "No upcoming classes" && className != "Online Week") {
+                                // We have a class tomorrow or later
+                                setViewVisibility(R.id.tracker_container, android.view.View.VISIBLE)
+                                setViewVisibility(R.id.empty_state_container, android.view.View.GONE)
+                                
+                                setTextViewText(R.id.widget_start_label, "Status")
+                                setTextViewText(R.id.widget_start_value, nextLabel)
+                                setTextViewText(R.id.widget_end_label, "Class")
+                                setTextViewText(R.id.widget_end_value, className)
+                                setProgressBar(R.id.widget_progress, 1000, 1000, false)
                             } else {
-                                setTextViewText(R.id.widget_upcoming_classes, upcomingText.toString().trim())
+                                // Truly no classes
+                                setViewVisibility(R.id.tracker_container, android.view.View.GONE)
+                                setViewVisibility(R.id.empty_state_container, android.view.View.VISIBLE)
+                                
+                                val emptyTitle = if (classDetail.contains("No campus classes")) "Online Week" else "No classes right now"
+                                setTextViewText(R.id.widget_empty_text, emptyTitle)
+                                setTextViewText(R.id.widget_empty_subtext, classDetail)
                             }
+                        } else {
+                            // Show tracker, hide empty state
+                            setViewVisibility(R.id.tracker_container, android.view.View.VISIBLE)
+                            setViewVisibility(R.id.empty_state_container, android.view.View.GONE)
                         }
 
                     } catch (e: Exception) {
@@ -108,6 +131,7 @@ class UomperWidgetProvider : AppWidgetProvider() {
                     }
                 }
 
+                appWidgetManager.notifyAppWidgetViewDataChanged(widgetId, R.id.widget_list)
                 appWidgetManager.updateAppWidget(widgetId, views)
             }
         } catch (e: Exception) {

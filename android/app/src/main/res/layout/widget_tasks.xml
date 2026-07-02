@@ -76,14 +76,13 @@
     </LinearLayout>
 
     <!-- Sub tasks list -->
-    <TextView
-        android:id="@+id/task_sub_list"
+    <ListView
+        android:id="@+id/widget_list"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:layout_marginTop="12dp"
-        android:text=""
-        android:textColor="#B0BEC5"
-        android:textSize="12sp"
-        android:lineSpacingExtra="4dp" />
+        android:divider="@null"
+        android:dividerHeight="0dp"
+        android:scrollbars="none" />
 
 </LinearLayout>
