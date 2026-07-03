@@ -53,7 +53,7 @@
             android:scrollbars="none" />
 
         <!-- Vertical Divider -->
-        <View
+        <FrameLayout
             android:layout_width="1dp"
             android:layout_height="match_parent"
             android:layout_marginLeft="8dp"
