@@ -7,6 +7,7 @@ import '../models/academic_task.dart';
 import '../models/attendance_record.dart';
 import '../services/isar_service.dart';
 import '../services/widget_service.dart';
+import '../services/notification_service.dart';
 
 class TimetableProvider extends ChangeNotifier {
   final IsarService isarService;
@@ -227,6 +228,12 @@ class TimetableProvider extends ChangeNotifier {
     
     // Update home screen widget
     WidgetService.updateWidget(this);
+    
+    // Auto-schedule class reminders for the next 7 days
+    NotificationService().scheduleAllUpcomingClasses(
+      _userSessions,
+      getEventsForDay: (date) => getEventsForDay(date),
+    );
   }
   
   // --- Attendance Logic ---

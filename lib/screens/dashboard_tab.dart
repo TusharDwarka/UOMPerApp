@@ -11,6 +11,7 @@ import '../widgets/add_edit_task_sheet.dart';
 import '../models/academic_task.dart';
 import '../widgets/add_edit_task_sheet.dart'; 
 import '../widgets/end_semester_dialog.dart';
+import 'package:confetti/confetti.dart';
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
@@ -20,13 +21,28 @@ class DashboardTab extends StatefulWidget {
 }
 
 class _DashboardTabState extends State<DashboardTab> {
+  late ConfettiController _confettiController;
+  bool _isNoClassToday = false;
   
   @override
   void initState() {
     super.initState();
+    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
+    _checkNoClassStatus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<TimetableProvider>(context, listen: false).loadSessions();
     });
+  }
+
+  Future<void> _checkNoClassStatus() async {
+    final status = await NotificationService().isNoClassToday();
+    if (mounted) setState(() => _isNoClassToday = status);
+  }
+
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    super.dispose();
   }
 
   // Find the next upcoming class — may be tomorrow or later
@@ -98,9 +114,11 @@ class _DashboardTabState extends State<DashboardTab> {
       resizeToAvoidBottomInset: false,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: Consumer2<TimetableProvider, ResourceProvider>(
-          builder: (context, timetable, resourceProv, child) {
-             final today = DateFormat('EEEE').format(DateTime.now()); 
+        child: Stack(
+          children: [
+            Consumer2<TimetableProvider, ResourceProvider>(
+              builder: (context, timetable, resourceProv, child) {
+                 final today = DateFormat('EEEE').format(DateTime.now()); 
              final todayClasses = timetable.getEventsForDay(DateTime.now());
              todayClasses.sort((a,b) => a.startTime.compareTo(b.startTime));
              
@@ -456,13 +474,77 @@ class _DashboardTabState extends State<DashboardTab> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                        Text("Today's Schedule", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textPrimary)),
-                       TextButton(onPressed: () {}, child: Text("See All", style: TextStyle(color: textSecondary, fontSize: 16))),
+                       if (!_isNoClassToday && todayClasses.isNotEmpty)
+                         TextButton.icon(
+                           onPressed: () {
+                             showDialog(
+                               context: context,
+                               builder: (context) => AlertDialog(
+                                 title: const Text("No Classes Today? 🌴"),
+                                 content: const Text("Are you sure? This will cancel all class alarms for today so you can relax without notification spam!"),
+                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                 actions: [
+                                   TextButton(
+                                     onPressed: () => Navigator.pop(context),
+                                     child: const Text("Cancel"),
+                                   ),
+                                   ElevatedButton(
+                                     style: ElevatedButton.styleFrom(backgroundColor: primaryBlue, foregroundColor: Colors.white),
+                                     onPressed: () async {
+                                       Navigator.pop(context);
+                                       await NotificationService().setNoClassToday();
+                                       await NotificationService().cancelTodayReminders(todayClasses);
+                                       setState(() => _isNoClassToday = true);
+                                       _confettiController.play();
+                                     },
+                                     child: const Text("Yes, I'm Free!"),
+                                   ),
+                                 ],
+                               ),
+                             );
+                           },
+                           icon: const Icon(Icons.beach_access_rounded, size: 18),
+                           label: const Text("Day Off"),
+                           style: TextButton.styleFrom(foregroundColor: primaryBlue),
+                         )
+                       else
+                         TextButton(onPressed: () {}, child: Text("See All", style: TextStyle(color: textSecondary, fontSize: 16))),
                     ],
                   ),
                   
                   const SizedBox(height: 16),
 
-                  if (todayClasses.isEmpty)
+                  if (_isNoClassToday)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Column(
+                          children: [
+                            const Text("🌴", style: TextStyle(fontSize: 50)),
+                            const SizedBox(height: 12),
+                            const Text(
+                              "You declared a No Class Day!\nEnjoy your freedom, alarms are off.",
+                              style: TextStyle(color: Colors.green, fontSize: 16, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            TextButton(
+                              onPressed: () async {
+                                await NotificationService().clearNoClassToday();
+                                setState(() => _isNoClassToday = false);
+                                // Re-schedule just in case
+                                NotificationService().scheduleAllUpcomingClasses(
+                                  timetable.userSessions,
+                                  getEventsForDay: (date) => timetable.getEventsForDay(date),
+                                );
+                              },
+                              child: const Text("Undo"),
+                            )
+                          ],
+                        ),
+                      ),
+                    )
+                  else if (todayClasses.isEmpty)
                     Center(
                       child: Padding(
                         padding: const EdgeInsets.all(20.0),
@@ -518,10 +600,41 @@ class _DashboardTabState extends State<DashboardTab> {
                 ],
               ),
             );
-          }
+            },
+            ),
+            Align(
+              alignment: Alignment.topCenter,
+              child: ConfettiWidget(
+                confettiController: _confettiController,
+                blastDirectionality: BlastDirectionality.explosive,
+                shouldLoop: false,
+                colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
+                createParticlePath: drawStar,
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Path drawStar(Size size) {
+    // Basic star path for confetti
+    double degToRad(double deg) => deg * (3.1415926535897932 / 180.0);
+    const numberOfPoints = 5;
+    final halfWidth = size.width / 2;
+    final externalRadius = halfWidth;
+    final internalRadius = halfWidth / 2.5;
+    final degreesPerStep = degToRad(360 / numberOfPoints);
+    final halfDegreesPerStep = degreesPerStep / 2;
+    final path = Path();
+    final fullAngle = degToRad(360);
+    path.moveTo(size.width, halfWidth);
+    for (double step = 0; step < fullAngle; step += degreesPerStep) {
+      path.lineTo(halfWidth + externalRadius * 1.5 * 0.1, halfWidth + externalRadius * 1.5 * 0.1);
+    }
+    path.close();
+    return path;
   }
 
   Widget _buildStatusCard(String count, String label, Color color, bool isActive, bool isDark) {

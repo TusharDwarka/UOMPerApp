@@ -47,6 +47,15 @@ class _SettingsTabState extends State<SettingsTab> {
     setState(() {
       _remindersEnabled = value;
     });
+    
+    // When turned ON, immediately schedule reminders for all upcoming classes
+    if (value && mounted) {
+      final timetable = Provider.of<TimetableProvider>(context, listen: false);
+      NotificationService().scheduleAllUpcomingClasses(
+        timetable.userSessions,
+        getEventsForDay: (date) => timetable.getEventsForDay(date),
+      );
+    }
   }
 
   @override

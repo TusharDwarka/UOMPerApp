@@ -107,6 +107,7 @@ class BusWidgetProvider : AppWidgetProvider() {
                     }
                     
                     val upcomingBuses = mutableListOf<Int>()
+                    var nextBusName = ""
                     
                     if (tripsArray != null) {
                         for (i in 0 until tripsArray.length()) {
@@ -117,6 +118,9 @@ class BusWidgetProvider : AppWidgetProvider() {
                                 if (parts.size == 2) {
                                     val depMin = parts[0].toInt() * 60 + parts[1].toInt()
                                     if (depMin > currentMinutes) {
+                                        if (upcomingBuses.isEmpty()) {
+                                            nextBusName = trip.optString("bus_name", "")
+                                        }
                                         val diff = depMin - currentMinutes
                                         upcomingBuses.add(diff)
                                     }
@@ -128,8 +132,10 @@ class BusWidgetProvider : AppWidgetProvider() {
                     if (upcomingBuses.isEmpty()) {
                         views.setTextViewText(R.id.bus_next_time_text, "--")
                         views.setTextViewText(R.id.bus_subsequent_times_text, "--")
+                        views.setTextViewText(R.id.bus_name_text, "")
                     } else {
                         views.setTextViewText(R.id.bus_next_time_text, upcomingBuses[0].toString())
+                        views.setTextViewText(R.id.bus_name_text, nextBusName)
                         
                         var subsequent = ""
                         if (upcomingBuses.size > 1) subsequent += upcomingBuses[1].toString()
