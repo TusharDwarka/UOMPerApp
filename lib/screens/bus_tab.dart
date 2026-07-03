@@ -720,174 +720,118 @@ class BusRouteCard extends StatefulWidget {
 }
 
 class _BusRouteCardState extends State<BusRouteCard> {
-  bool _isExpanded = false;
-  int _selectedTabIndex = 0; // 0: Weekday, 1: Sat, 2: Sun
+  int _selectedTabIndex = 0;
+  final ScrollController _timelineScrollController = ScrollController();
+  Timer? _countdownTimer;
+  String _countdownText = '';
 
   @override
   void initState() {
     super.initState();
     final weekday = DateTime.now().weekday;
-    if (weekday == 7) _selectedTabIndex = 2; // Sunday
-    else if (weekday == 6) _selectedTabIndex = 1; // Saturday
-    else _selectedTabIndex = 0; // Weekday
+    if (weekday == 7) _selectedTabIndex = 2;
+    else if (weekday == 6) _selectedTabIndex = 1;
+    else _selectedTabIndex = 0;
+
+    _startCountdownTimer();
   }
 
   @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF1565C0);
-    final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+  void dispose() {
+    _timelineScrollController.dispose();
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
 
-    final locationName = widget.data['location_name'] ?? 'Unknown Location';
-    final busRoute = widget.data['bus_route'] ?? 'N/A';
+  void _startCountdownTimer() {
+    _updateCountdown();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) _updateCountdown();
+    });
+  }
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: isDark ? Colors.black.withOpacity(0.3) : const Color(0xFF1565C0).withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          )
-        ],
-        border: Border.all(color: isDark ? Colors.white10 : Colors.grey[100]!),
-      ),
-      child: Column(
-        children: [
-          // Header
-          InkWell(
-            onTap: () => setState(() => _isExpanded = !_isExpanded),
-            onLongPress: () => _showContextMenu(context, isDark),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24), bottom: Radius.circular(24)),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Row(
-                children: [
-                  Container(
-                    width: 50, height: 50,
-                    decoration: BoxDecoration(
-                      color: primaryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(Icons.directions_bus_filled_rounded, color: primaryColor, size: 28),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          locationName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1A1D1E)),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(color: primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                              child: Text(
-                                "Route $busRoute",
-                                style: TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.edit_rounded, color: isDark ? Colors.grey[400] : Colors.grey[600], size: 20),
-                        onPressed: widget.onEdit,
-                        tooltip: "Edit Route",
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        icon: Icon(Icons.delete_rounded, color: Colors.red[400], size: 20),
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                              title: const Text("Delete Route?", style: TextStyle(fontWeight: FontWeight.bold)),
-                              content: const Text("Are you sure you want to delete this bus route? This action cannot be undone."),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx), 
-                                  child: Text("Cancel", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]))
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.pop(ctx);
-                                    widget.onDelete();
-                                  },
-                                  child: const Text("Delete", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                                ),
-                              ]
-                            )
-                          );
-                        },
-                        tooltip: "Delete Route",
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        _isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                        color: isDark ? Colors.grey[400] : Colors.grey[400],
-                      ),
-                    ],
-                  )
-                ],
-              ),
-            ),
-          ),
+  void _updateCountdown() {
+    final trips = _getTrips();
+    final now = DateTime.now();
+    final currentMinutes = now.hour * 60 + now.minute;
+    final isTodayTab = _isTodayTab();
 
-          // Expanded Content
-          AnimatedCrossFade(
-            firstChild: const SizedBox(height: 0),
-            secondChild: Column(
-              children: [
-                Divider(height: 1, color: isDark ? Colors.grey[800] : Colors.grey[100]),
-                // Tabs
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  child: Row(
-                    children: [
-                       _buildTabButton("Weekdays", 0, isDark),
-                       const SizedBox(width: 10),
-                       _buildTabButton("Sat", 1, isDark),
-                       const SizedBox(width: 10),
-                       _buildTabButton("Sun", 2, isDark),
-                    ],
-                  ),
-                ),
-                
-                // Content
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                  child: _buildScheduleGrid(isDark),
-                ),
-              ],
-            ),
-            crossFadeState: _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 300),
-          ),
-        ],
-      ),
-    );
+    if (!isTodayTab || trips.isEmpty) {
+      if (mounted) setState(() => _countdownText = '');
+      return;
+    }
+
+    for (var trip in trips) {
+      final tMap = Map<String, dynamic>.from(trip);
+      final depStr = (tMap['departure'] ?? '').toString();
+      final depMin = _toMinutes(depStr);
+      if (depMin > currentMinutes) {
+        final diff = depMin - currentMinutes;
+        if (mounted) {
+          setState(() {
+            if (diff < 60) {
+              _countdownText = 'in $diff min';
+            } else {
+              final h = diff ~/ 60;
+              final m = diff % 60;
+              _countdownText = 'in ${h}h ${m}m';
+            }
+          });
+        }
+        return;
+      }
+    }
+    if (mounted) setState(() => _countdownText = 'No more buses');
+  }
+
+  List<dynamic> _getTrips() {
+    final schedules = widget.data['schedules'];
+    if (_selectedTabIndex == 0) return schedules['weekdays'] ?? [];
+    if (_selectedTabIndex == 1) return schedules['saturdays'] ?? [];
+    return schedules['sundays_public_holidays'] ?? [];
+  }
+
+  bool _isTodayTab() {
+    final weekday = DateTime.now().weekday;
+    if (weekday <= 5 && _selectedTabIndex == 0) return true;
+    if (weekday == 6 && _selectedTabIndex == 1) return true;
+    if (weekday == 7 && _selectedTabIndex == 2) return true;
+    return false;
+  }
+
+  int _toMinutes(String time) {
+    try {
+      final clean = time.replaceAll('~', '');
+      final parts = clean.split(":");
+      return int.parse(parts[0]) * 60 + int.parse(parts[1]);
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  void _scrollToNextBus(List<dynamic> trips) {
+    if (!_isTodayTab()) return;
+    final now = DateTime.now();
+    final currentMinutes = now.hour * 60 + now.minute;
+
+    for (int i = 0; i < trips.length; i++) {
+      final tMap = Map<String, dynamic>.from(trips[i]);
+      final depStr = (tMap['departure'] ?? '').toString();
+      if (_toMinutes(depStr) > currentMinutes) {
+        // Scroll so that the next bus is roughly centered
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_timelineScrollController.hasClients) {
+            final targetOffset = (i * 88.0) - 100.0; // each item ~88px wide, offset to center
+            _timelineScrollController.animateTo(
+              targetOffset.clamp(0.0, _timelineScrollController.position.maxScrollExtent),
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOutCubic,
+            );
+          }
+        });
+        return;
+      }
+    }
   }
 
   void _showContextMenu(BuildContext context, bool isDark) {
@@ -919,150 +863,327 @@ class _BusRouteCardState extends State<BusRouteCard> {
     );
   }
 
-  Widget _buildTabButton(String label, int index, bool isDark) {
-    final isSelected = _selectedTabIndex == index;
-    final activeColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF2962FF);
-    
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedTabIndex = index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? activeColor : (isDark ? Colors.grey[800] : Colors.grey[100]),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: isSelected ? Colors.white : (isDark ? Colors.grey[400] : Colors.grey[600]),
-              fontWeight: FontWeight.bold,
-              fontSize: 13
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF2962FF);
+    final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+
+    final locationName = widget.data['location_name'] ?? 'Unknown Location';
+    final busRoute = widget.data['bus_route'] ?? '';
+
+    final trips = _getTrips();
+    final isTodayTab = _isTodayTab();
+    final now = DateTime.now();
+    final currentMinutes = now.hour * 60 + now.minute;
+
+    // Find the next bus index
+    int nextBusIndex = -1;
+    if (isTodayTab) {
+      for (int i = 0; i < trips.length; i++) {
+        final tMap = Map<String, dynamic>.from(trips[i]);
+        final depStr = (tMap['departure'] ?? '').toString();
+        if (_toMinutes(depStr) > currentMinutes) {
+          nextBusIndex = i;
+          break;
+        }
+      }
+    }
+
+    // Auto-scroll to next bus
+    _scrollToNextBus(trips);
+
+    return GestureDetector(
+      onLongPress: () => _showContextMenu(context, isDark),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: isDark ? Colors.black.withOpacity(0.3) : accent.withOpacity(0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
             ),
-          ),
+          ],
+          border: Border.all(color: isDark ? Colors.white10 : Colors.grey[100]!),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 12, 0),
+              child: Row(
+                children: [
+                  // Route Badge
+                  if (busRoute.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: accent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        busRoute,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  if (busRoute.isNotEmpty) const SizedBox(width: 14),
+                  // Location Name
+                  Expanded(
+                    child: Text(
+                      locationName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : const Color(0xFF1A1D1E),
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                  // Edit & Delete
+                  IconButton(
+                    icon: Icon(Icons.edit_outlined, color: isDark ? Colors.grey[500] : Colors.grey[400], size: 18),
+                    onPressed: widget.onEdit,
+                    tooltip: "Edit Route",
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.delete_outline_rounded, color: Colors.red[300], size: 18),
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                          title: const Text("Delete Route?", style: TextStyle(fontWeight: FontWeight.bold)),
+                          content: const Text("Are you sure? This cannot be undone."),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: Text("Cancel", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                            ),
+                            TextButton(
+                              onPressed: () { Navigator.pop(ctx); widget.onDelete(); },
+                              child: const Text("Delete", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    tooltip: "Delete Route",
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── Day Tabs ──
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _buildDayPill("Weekdays", 0, isDark, accent),
+                  _buildDayPill("Sat", 1, isDark, accent),
+                  _buildDayPill("Sun/Hol", 2, isDark, accent),
+                  // Countdown badge
+                  if (_countdownText.isNotEmpty && isTodayTab)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: _countdownText == 'No more buses'
+                            ? (isDark ? Colors.grey[800] : Colors.grey[200])
+                            : accent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _countdownText,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: _countdownText == 'No more buses'
+                              ? (isDark ? Colors.grey[400] : Colors.grey[600])
+                              : accent,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Horizontal Timeline ──
+            if (trips.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                child: Center(
+                  child: Text(
+                    "No buses scheduled.",
+                    style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 13),
+                  ),
+                ),
+              )
+            else
+              SizedBox(
+                height: 140,
+                child: ListView.builder(
+                  controller: _timelineScrollController,
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  itemCount: trips.length,
+                  itemBuilder: (context, i) {
+                    final tripMap = Map<String, dynamic>.from(trips[i]);
+                    final depStr = (tripMap['departure'] ?? '').toString();
+                    final arrStr = (tripMap['arrival'] ?? '').toString();
+                    final busName = (tripMap['bus_name'] ?? '').toString();
+                    final depMin = _toMinutes(depStr);
+
+                    final bool isNext = i == nextBusIndex;
+                    final bool isPast = isTodayTab && depMin <= currentMinutes && !isNext;
+
+                    return Container(
+                      width: 95,
+                      margin: EdgeInsets.only(right: i < trips.length - 1 ? 8 : 0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
+                          // Bus Icon
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            width: isNext ? 48 : 36,
+                            height: isNext ? 48 : 36,
+                            decoration: BoxDecoration(
+                              color: isNext
+                                  ? accent
+                                  : isPast
+                                      ? (isDark ? Colors.grey[800] : Colors.grey[200])
+                                      : accent.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(isNext ? 16 : 12),
+                              boxShadow: isNext
+                                  ? [
+                                      BoxShadow(
+                                        color: accent.withOpacity(0.4),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Icon(
+                              Icons.directions_bus_rounded,
+                              size: isNext ? 24 : 18,
+                              color: isNext
+                                  ? Colors.white
+                                  : isPast
+                                      ? (isDark ? Colors.grey[600] : Colors.grey[400])
+                                      : accent,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+
+                          // Departure Time
+                          Text(
+                            depStr,
+                            style: TextStyle(
+                              fontSize: isNext ? 15 : 13,
+                              fontWeight: isNext ? FontWeight.w900 : FontWeight.w600,
+                              color: isNext
+                                  ? accent
+                                  : isPast
+                                      ? (isDark ? Colors.grey[600] : Colors.grey[400])
+                                      : (isDark ? Colors.white : Colors.black87),
+                              decoration: isPast ? TextDecoration.lineThrough : null,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+
+                          // Arrival (smaller)
+                          if (arrStr.isNotEmpty)
+                            Text(
+                              '→ $arrStr',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: isPast
+                                    ? (isDark ? Colors.grey[700] : Colors.grey[300])
+                                    : (isDark ? Colors.grey[500] : Colors.grey[400]),
+                                decoration: isPast ? TextDecoration.lineThrough : null,
+                              ),
+                            ),
+
+                          // Bus Name
+                          if (busName.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: isPast
+                                    ? Colors.transparent
+                                    : (isDark ? Colors.amber.withOpacity(0.12) : Colors.amber.withOpacity(0.15)),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                busName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w700,
+                                  color: isPast
+                                      ? (isDark ? Colors.grey[700] : Colors.grey[300])
+                                      : (isDark ? Colors.amber[200] : Colors.amber[800]),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildScheduleGrid(bool isDark) {
-    final schedules = widget.data['schedules'];
-    List<dynamic> trips = [];
-    
-    if (_selectedTabIndex == 0) trips = schedules['weekdays'] ?? [];
-    else if (_selectedTabIndex == 1) trips = schedules['saturdays'] ?? [];
-    else trips = schedules['sundays_public_holidays'] ?? [];
-
-    if (trips.isEmpty) {
-      return Center(child: Text("No buses scheduled.", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey)));
-    }
-
-    // Time Check for Highlighting
-    final now = DateTime.now();
-    final currentMinutes = now.hour * 60 + now.minute;
-    String? nextBusTime;
-    
-    // Determine if we should highlight (is it today?)
-    final weekday = now.weekday;
-    bool isTodayTab = false;
-    if (weekday <= 5 && _selectedTabIndex == 0) isTodayTab = true;
-    else if (weekday == 6 && _selectedTabIndex == 1) isTodayTab = true;
-    else if (weekday == 7 && _selectedTabIndex == 2) isTodayTab = true;
-
-    // Helper to get departure time from trip map
-    String getTime(Map<String, dynamic> trip) {
-       return (trip['departure'] ?? '').toString();
-    }
-
-    if (isTodayTab) {
-      for (var trip in trips) {
-         final tStr = getTime(Map<String, dynamic>.from(trip));
-         if (tStr.isNotEmpty && _toMinutes(tStr) > currentMinutes) {
-           nextBusTime = tStr;
-           break;
-         }
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: trips.map<Widget>((trip) {
-         final tripMap = Map<String, dynamic>.from(trip);
-         final timeStr = getTime(tripMap);
-         final busName = tripMap['bus_name']?.toString();
-         
-         bool isNext = (timeStr == nextBusTime);
-         bool isPast = isTodayTab && (_toMinutes(timeStr) <= currentMinutes);
-         
-         return Container(
-           margin: const EdgeInsets.only(bottom: 12),
-           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-           decoration: BoxDecoration(
-             color: isNext ? const Color(0xFF2962FF) : (isDark ? const Color(0xFF1E1E1E) : Colors.white),
-             borderRadius: BorderRadius.circular(20),
-             border: Border.all(color: isNext ? const Color(0xFF2962FF) : (isDark ? Colors.white10 : Colors.grey[200]!)),
-             boxShadow: isNext ? [BoxShadow(color: const Color(0xFF2962FF).withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))] : null,
-           ),
-           child: Row(
-             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-             children: [
-               Row(
-                 children: [
-                   Icon(Icons.directions_bus_rounded, color: isNext ? Colors.white : (isPast ? Colors.grey : const Color(0xFF2962FF)), size: 24),
-                   const SizedBox(width: 16),
-                   Column(
-                     crossAxisAlignment: CrossAxisAlignment.start,
-                     children: [
-                       Text(
-                         timeStr,
-                         style: TextStyle(
-                           fontSize: 20,
-                           fontWeight: FontWeight.w900,
-                           color: isNext ? Colors.white : (isPast ? Colors.grey : (isDark ? Colors.white : Colors.black87)),
-                           decoration: isPast ? TextDecoration.lineThrough : null,
-                           letterSpacing: 0.5,
-                         ),
-                       ),
-                       if (busName != null && busName.isNotEmpty) ...[
-                         const SizedBox(height: 4),
-                         Text(
-                           busName,
-                           style: TextStyle(
-                             fontSize: 14,
-                             color: isNext ? Colors.white.withOpacity(0.9) : (isPast ? Colors.grey.withOpacity(0.7) : (isDark ? Colors.grey[400] : Colors.grey[600])),
-                             fontWeight: FontWeight.w600,
-                             decoration: isPast ? TextDecoration.lineThrough : null,
-                           ),
-                         )
-                       ]
-                     ],
-                   ),
-                 ],
-               ),
-               if (isNext)
-                 Container(
-                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                   child: const Text("NEXT", style: TextStyle(color: Color(0xFF2962FF), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
-                 ),
-             ],
-           ),
-         );
-      }).toList(),
+  Widget _buildDayPill(String label, int index, bool isDark, Color accent) {
+    final isSelected = _selectedTabIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _selectedTabIndex = index);
+        _updateCountdown();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? accent : (isDark ? Colors.grey[800] : Colors.grey[100]),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: isSelected ? Colors.white : (isDark ? Colors.grey[400] : Colors.grey[600]),
+          ),
+        ),
+      ),
     );
-  }
-
-
-
-  int _toMinutes(String time) {
-    try {
-      final clean = time.replaceAll('~', '');
-      final parts = clean.split(":");
-      return int.parse(parts[0]) * 60 + int.parse(parts[1]);
-    } catch (e) {
-      return 0;
-    }
   }
 }
