@@ -23,9 +23,11 @@ class TimetableProvider extends ChangeNotifier {
   // Adaptive Timetable Fields
   String _courseName = '';
   bool _hasCompletedSetup = false;
+  bool _isSetupLoaded = false;
   
   String get courseName => _courseName;
   bool get hasCompletedSetup => _hasCompletedSetup;
+  bool get isSetupLoaded => _isSetupLoaded;
   
   TimetableProvider(this.isarService);
 
@@ -45,6 +47,8 @@ class TimetableProvider extends ChangeNotifier {
     if (semesterEndMs != null) {
       _semesterEnd = DateTime.fromMillisecondsSinceEpoch(semesterEndMs);
     }
+    
+    _isSetupLoaded = true;
     notifyListeners();
   }
 

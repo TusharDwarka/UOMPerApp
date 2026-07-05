@@ -12,9 +12,11 @@ import '../models/academic_task.dart';
 import '../widgets/add_edit_task_sheet.dart'; 
 import '../widgets/end_semester_dialog.dart';
 import 'package:confetti/confetti.dart';
+import '../services/widget_service.dart';
 
 class DashboardTab extends StatefulWidget {
-  const DashboardTab({super.key});
+  final VoidCallback? onSeeAllClicked;
+  const DashboardTab({super.key, this.onSeeAllClicked});
 
   @override
   State<DashboardTab> createState() => _DashboardTabState();
@@ -496,6 +498,7 @@ class _DashboardTabState extends State<DashboardTab> {
                                        await NotificationService().cancelTodayReminders(todayClasses);
                                        setState(() => _isNoClassToday = true);
                                        _confettiController.play();
+                                       WidgetService.updateWidget(Provider.of<TimetableProvider>(context, listen: false));
                                      },
                                      child: const Text("Yes, I'm Free!"),
                                    ),
@@ -508,7 +511,10 @@ class _DashboardTabState extends State<DashboardTab> {
                            style: TextButton.styleFrom(foregroundColor: primaryBlue),
                          )
                        else
-                         TextButton(onPressed: () {}, child: Text("See All", style: TextStyle(color: textSecondary, fontSize: 16))),
+                         TextButton(
+                           onPressed: widget.onSeeAllClicked, 
+                           child: Text("See All", style: TextStyle(color: textSecondary, fontSize: 16))
+                         ),
                     ],
                   ),
                   
@@ -533,10 +539,12 @@ class _DashboardTabState extends State<DashboardTab> {
                                 await NotificationService().clearNoClassToday();
                                 setState(() => _isNoClassToday = false);
                                 // Re-schedule just in case
-                                NotificationService().scheduleAllUpcomingClasses(
-                                  timetable.userSessions,
-                                  getEventsForDay: (date) => timetable.getEventsForDay(date),
+                                final tProvider = Provider.of<TimetableProvider>(context, listen: false);
+                                await NotificationService().scheduleAllUpcomingClasses(
+                                  tProvider.userSessions,
+                                  getEventsForDay: (date) => tProvider.getEventsForDay(date),
                                 );
+                                await WidgetService.updateWidget(tProvider);
                               },
                               child: const Text("Undo"),
                             )

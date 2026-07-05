@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:file_picker/file_picker.dart';
 import '../providers/resource_provider.dart';
 import '../models/module_resource.dart';
 
@@ -16,38 +17,69 @@ class ModuleResourcesScreen extends StatelessWidget {
 
     return DefaultTabController(
       length: 6,
-      child: Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: AppBar(
-          title: Text(moduleName, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          elevation: 0,
-          iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
-          bottom: TabBar(
-            isScrollable: true,
-            labelColor: const Color(0xFF2962FF),
-            unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey,
-            indicatorColor: const Color(0xFF2962FF),
-            tabs: const [
-              Tab(text: "Lectures"),
-              Tab(text: "Tutorials"),
-              Tab(text: "Past Papers"),
-              Tab(text: "Assignments"),
-              Tab(text: "General"),
-              Tab(text: "Module Catalogue"),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _CategoryList(moduleName: moduleName, category: "Lectures"),
-            _CategoryList(moduleName: moduleName, category: "Tutorials"),
-            _CategoryList(moduleName: moduleName, category: "Past Papers"),
-            _CategoryList(moduleName: moduleName, category: "Assignments"),
-            _CategoryList(moduleName: moduleName, category: "General"),
-            _CategoryList(moduleName: moduleName, category: "Module Catalogue"),
-          ],
-        ),
+      child: Builder(
+        builder: (context) {
+          return Scaffold(
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            appBar: AppBar(
+              title: Text(moduleName, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              elevation: 0,
+              iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
+              bottom: TabBar(
+                isScrollable: true,
+                labelColor: const Color(0xFF2962FF),
+                unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey,
+                indicatorColor: const Color(0xFF2962FF),
+                tabs: const [
+                  Tab(text: "Lectures"),
+                  Tab(text: "Tutorials"),
+                  Tab(text: "Past Papers"),
+                  Tab(text: "Assignments"),
+                  Tab(text: "General"),
+                  Tab(text: "Module Catalogue"),
+                ],
+              ),
+            ),
+            body: TabBarView(
+              children: [
+                _CategoryList(moduleName: moduleName, category: "Lectures"),
+                _CategoryList(moduleName: moduleName, category: "Tutorials"),
+                _CategoryList(moduleName: moduleName, category: "Past Papers"),
+                _CategoryList(moduleName: moduleName, category: "Assignments"),
+                _CategoryList(moduleName: moduleName, category: "General"),
+                _CategoryList(moduleName: moduleName, category: "Module Catalogue"),
+              ],
+            ),
+            floatingActionButton: FloatingActionButton(
+              backgroundColor: const Color(0xFF2962FF),
+              foregroundColor: Colors.white,
+              onPressed: () async {
+                final tabController = DefaultTabController.of(context);
+                final categories = ['Lectures', 'Tutorials', 'Past Papers', 'Assignments', 'General', 'Module Catalogue'];
+                final currentCategory = categories[tabController.index];
+                
+                final result = await FilePicker.platform.pickFiles();
+                if (result != null && result.files.single.path != null) {
+                  final file = result.files.single;
+                  // Save to resource provider
+                  final resourceProv = Provider.of<ResourceProvider>(context, listen: false);
+                  await resourceProv.addResource(
+                    sourceFilePath: file.path!,
+                    fileName: file.name,
+                    moduleName: moduleName,
+                    category: currentCategory,
+                    sourceApp: 'manual',
+                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Added to $currentCategory")));
+                  }
+                }
+              },
+              child: const Icon(Icons.add),
+            ),
+          );
+        },
       ),
     );
   }

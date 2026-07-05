@@ -420,7 +420,9 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
   Widget _buildTimePicker(String label, TimeOfDay time, Function(TimeOfDay) onChanged, bool isDark, Color accentColor, {bool hasError = false}) {
     return GestureDetector(
       onTap: () async {
-        FocusScope.of(context).unfocus(); // Prevent keyboard from reappearing
+        FocusManager.instance.primaryFocus?.unfocus(); // Fully drop focus
+        await Future.delayed(const Duration(milliseconds: 150)); // Wait for keyboard to retract
+        if (!context.mounted) return;
         final picked = await showScrollTimePicker(context: context, initialTime: time);
         if (picked != null) onChanged(picked);
       },

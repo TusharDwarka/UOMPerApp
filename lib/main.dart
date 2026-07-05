@@ -104,7 +104,12 @@ class UOMPerApp extends StatelessWidget {
           unselectedItemColor: Colors.grey,
         ),
       ),
-      home: timetableProvider.hasCompletedSetup ? const HomeScreen() : const OnboardingScreen(),
+      home: !timetableProvider.isSetupLoaded 
+            ? Scaffold(
+                backgroundColor: themeProvider.themeMode == ThemeMode.dark ? const Color(0xFF121212) : const Color(0xFF1A237E), 
+                body: const Center(child: CircularProgressIndicator(color: Colors.white))
+              ) 
+            : (timetableProvider.hasCompletedSetup ? const HomeScreen() : const OnboardingScreen()),
     );
   }
 }

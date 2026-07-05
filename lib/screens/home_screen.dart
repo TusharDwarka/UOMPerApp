@@ -178,14 +178,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  static const List<Widget> _pages = <Widget>[
-    DashboardTab(),
-    ScheduleTab(),
-    AcademicTab(), 
-    TodoBoardTab(),
-    ResourcesTab(),
-    BusTab(),
-    SettingsTab(), // New Settings Tab
+  List<Widget> get _pages => <Widget>[
+    DashboardTab(onSeeAllClicked: () => _onItemTapped(1)),
+    const ScheduleTab(),
+    const AcademicTab(), 
+    const TodoBoardTab(),
+    const ResourcesTab(),
+    const BusTab(),
+    const SettingsTab(), // New Settings Tab
   ];
 
   void _onItemTapped(int index) {
