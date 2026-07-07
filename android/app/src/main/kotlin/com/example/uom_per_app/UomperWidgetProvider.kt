@@ -68,10 +68,17 @@ class UomperWidgetProvider : AppWidgetProvider() {
                             val startStr = c.getString("startTime")
                             val endStr = c.getString("endTime")
                             
-                            val startParts = startStr.split(":")
-                            val startMins = startParts[0].toInt() * 60 + startParts[1].toInt()
-                            val endParts = endStr.split(":")
-                            val endMins = endParts[0].toInt() * 60 + endParts[1].toInt()
+                            var startMins = 0
+                            var endMins = 0
+                            try {
+                                val startParts = startStr.split(":")
+                                startMins = startParts[0].toInt() * 60 + startParts[1].toInt()
+                                val endParts = endStr.split(":")
+                                endMins = endParts[0].toInt() * 60 + endParts[1].toInt()
+                            } catch (e: Exception) {
+                                // Skip this class if time is invalid
+                                continue
+                            }
                             
                             if (!currentOrNextFound && currentMinutes < endMins) {
                                 currentOrNextFound = true
