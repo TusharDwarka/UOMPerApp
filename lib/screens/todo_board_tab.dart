@@ -765,7 +765,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    Text(task.title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, decoration: task.isCompleted ? TextDecoration.lineThrough : null, color: task.isCompleted ? Colors.grey : (isDark ? Colors.white : Colors.black87))),
+                    Text(task.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, decoration: task.isCompleted ? TextDecoration.lineThrough : null, color: task.isCompleted ? Colors.grey : (isDark ? Colors.white : Colors.black87))),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -774,7 +774,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                           const SizedBox(width: 8),
                           Icon(Icons.location_on, size: 12, color: Colors.grey[400]),
                           const SizedBox(width: 2),
-                          Text(room, style: TextStyle(color: Colors.grey[400], fontSize: 12, fontWeight: FontWeight.w500)),
+                          Expanded(child: Text(room, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey[400], fontSize: 12, fontWeight: FontWeight.w500))),
                         ],
                       ],
                     ),

@@ -146,7 +146,7 @@ class UnsortedInboxScreen extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: modules.map((m) => ActionChip(
-                  label: Text(m),
+                  label: Container(constraints: const BoxConstraints(maxWidth: 150), child: Text(m, maxLines: 1, overflow: TextOverflow.ellipsis)),
                   onPressed: () {
                     Navigator.pop(context);
                     _showCategoryDialog(context, file, m, resourceProv);

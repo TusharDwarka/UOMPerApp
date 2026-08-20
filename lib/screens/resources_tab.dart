@@ -87,7 +87,7 @@ class _FilesView extends StatelessWidget {
                   crossAxisCount: 2,
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: 1.1,
+                  childAspectRatio: 0.8,
                 ),
                 itemCount: allModules.length,
                 itemBuilder: (context, index) {
@@ -165,7 +165,9 @@ class _FilesView extends StatelessWidget {
               child: Icon(Icons.folder_shared_rounded, color: color),
             ),
             const Spacer(),
-            Text(moduleName, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
+            Flexible(
+              child: Text(moduleName, maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, height: 1.2, color: isDark ? Colors.white : Colors.black87)),
+            ),
             const SizedBox(height: 4),
             Text("$fileCount files", style: TextStyle(fontSize: 13, color: Colors.grey[500], fontWeight: FontWeight.w500)),
           ],

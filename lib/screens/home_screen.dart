@@ -99,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const Text("Save Shared File", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text("File: ${file.path.split('/').last}", style: const TextStyle(fontSize: 14, color: Colors.grey)),
+              Text("File: ${file.path.split('/').last}", maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, color: Colors.grey)),
               const SizedBox(height: 24),
               const Text("Which module is this for?", style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
@@ -108,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 runSpacing: 8,
                 children: [
                   ...modules.map((m) => ActionChip(
-                    label: Text(m),
+                    label: Container(constraints: const BoxConstraints(maxWidth: 150), child: Text(m, maxLines: 1, overflow: TextOverflow.ellipsis)),
                     onPressed: () {
                       Navigator.pop(context);
                       _showCategoryDialog(file, m, resourceProv);

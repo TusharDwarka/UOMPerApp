@@ -22,7 +22,7 @@ class ModuleResourcesScreen extends StatelessWidget {
           return Scaffold(
             backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             appBar: AppBar(
-              title: Text(moduleName, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
+              title: Text(moduleName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
               backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               elevation: 0,
               iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),

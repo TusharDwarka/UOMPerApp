@@ -331,7 +331,7 @@ class _DashboardTabState extends State<DashboardTab> {
                           ),
                           const SizedBox(height: 4),
                            Text(
-                            timetable.courseName.isNotEmpty ? "Hey, ${timetable.courseName}!" : "Hey there!",
+                            "Welcome back!",
                             style: TextStyle(color: textPrimary, fontSize: 28, fontWeight: FontWeight.bold),
                           ),
                         ],
