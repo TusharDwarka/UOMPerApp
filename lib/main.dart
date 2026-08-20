@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'services/isar_service.dart';
+import 'services/firestore_service.dart';
+import 'services/sync_service.dart';
 import 'providers/timetable_provider.dart';
 import 'providers/theme_provider.dart';
 
@@ -9,29 +12,40 @@ import 'providers/note_provider.dart';
 import 'providers/resource_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/login_screen.dart';
 
 import 'services/bus_service.dart';
 import 'services/notification_service.dart';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   await dotenv.load(fileName: ".env");
   
   final notificationService = NotificationService();
   await notificationService.init();
 
   final isarService = IsarService();
+  final firestoreService = FirestoreService();
+  final syncService = SyncService(isarService);
 
   runApp(
     MultiProvider(
       providers: [
         Provider<IsarService>.value(value: isarService),
-        Provider<BusService>(create: (_) => BusService(isarService)),
+        Provider<FirestoreService>.value(value: firestoreService),
+        Provider<SyncService>.value(value: syncService),
+        Provider<BusService>(create: (_) => BusService(isarService, syncService)),
         ChangeNotifierProvider(
-          create: (_) => TimetableProvider(isarService)..loadSetupState(),
+          create: (_) => TimetableProvider(isarService, syncService)..loadSetupState(),
         ),
         ChangeNotifierProvider(
-          create: (_) => NoteProvider(isarService),
+          create: (_) => NoteProvider(isarService, syncService),
         ),
         ChangeNotifierProvider(
           create: (_) => ResourceProvider(isarService),
@@ -104,12 +118,43 @@ class UOMPerApp extends StatelessWidget {
           unselectedItemColor: Colors.grey,
         ),
       ),
-      home: !timetableProvider.isSetupLoaded 
-            ? Scaffold(
-                backgroundColor: themeProvider.themeMode == ThemeMode.dark ? const Color(0xFF121212) : const Color(0xFF1A237E), 
-                body: const Center(child: CircularProgressIndicator(color: Colors.white))
-              ) 
-            : (timetableProvider.hasCompletedSetup ? const HomeScreen() : const OnboardingScreen()),
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, authSnapshot) {
+          // Still checking auth state
+          if (authSnapshot.connectionState == ConnectionState.waiting) {
+            return Scaffold(
+              backgroundColor: themeProvider.themeMode == ThemeMode.dark
+                  ? const Color(0xFF121212)
+                  : const Color(0xFF1A237E),
+              body: const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            );
+          }
+
+          // Not logged in → show login screen
+          if (authSnapshot.data == null) {
+            return const LoginScreen();
+          }
+
+          // Logged in → show the normal app flow
+          if (!timetableProvider.isSetupLoaded) {
+            return Scaffold(
+              backgroundColor: themeProvider.themeMode == ThemeMode.dark
+                  ? const Color(0xFF121212)
+                  : const Color(0xFF1A237E),
+              body: const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            );
+          }
+
+          return timetableProvider.hasCompletedSetup
+              ? const HomeScreen()
+              : const OnboardingScreen();
+        },
+      ),
     );
   }
 }

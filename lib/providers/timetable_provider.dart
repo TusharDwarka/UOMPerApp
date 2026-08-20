@@ -8,6 +8,7 @@ import '../models/attendance_record.dart';
 import '../services/isar_service.dart';
 import '../services/widget_service.dart';
 import '../services/notification_service.dart';
+import '../services/sync_service.dart';
 
 class TimetableProvider extends ChangeNotifier {
   final IsarService isarService;
@@ -29,7 +30,9 @@ class TimetableProvider extends ChangeNotifier {
   bool get hasCompletedSetup => _hasCompletedSetup;
   bool get isSetupLoaded => _isSetupLoaded;
   
-  TimetableProvider(this.isarService);
+  final SyncService _syncService;
+  
+  TimetableProvider(this.isarService, this._syncService);
 
   /// Load setup state from SharedPreferences (called early in app init)
   Future<void> loadSetupState() async {
@@ -93,6 +96,7 @@ class TimetableProvider extends ChangeNotifier {
         await isar.classSessions.put(session);
       }
     });
+    await _syncService.pushToCloud();
     await loadSessions();
   }
 
@@ -112,6 +116,7 @@ class TimetableProvider extends ChangeNotifier {
     await isar.writeTxn(() async {
       await isar.classSessions.clear();
     });
+    await _syncService.pushToCloud();
     await loadSessions();
   }
 
@@ -155,6 +160,7 @@ class TimetableProvider extends ChangeNotifier {
       await isar.writeTxn(() async => await isar.attendanceRecords.put(newRecord));
     }
     
+    await _syncService.pushToCloud();
     await loadAttendance();
   }
 
@@ -181,6 +187,7 @@ class TimetableProvider extends ChangeNotifier {
       }
     });
     
+    await _syncService.pushToCloud();
     await loadAttendance();
     notifyListeners();
   }
@@ -247,6 +254,7 @@ class TimetableProvider extends ChangeNotifier {
     await isar.writeTxn(() async {
       await isar.attendanceRecords.clear();
     });
+    await _syncService.pushToCloud();
     await loadAttendance();
   }
 
@@ -567,6 +575,7 @@ class TimetableProvider extends ChangeNotifier {
        isCompleted: false
      );
      await isar.writeTxn(() async => await isar.academicTasks.put(newTask));
+     await _syncService.pushToCloud();
      await loadSessions(); 
   }
 
@@ -584,6 +593,7 @@ class TimetableProvider extends ChangeNotifier {
          await isar.academicTasks.put(task);
        }
      });
+     await _syncService.pushToCloud();
      await loadSessions();
   }
 
@@ -597,6 +607,7 @@ class TimetableProvider extends ChangeNotifier {
   Future<void> deleteTask(int id) async {
      final isar = await isarService.db;
      await isar.writeTxn(() async => await isar.academicTasks.delete(id));
+     await _syncService.pushToCloud();
      await loadSessions();
   }
 
@@ -606,6 +617,7 @@ class TimetableProvider extends ChangeNotifier {
     await isar.writeTxn(() async {
       await isar.classSessions.put(session);
     });
+    await _syncService.pushToCloud();
     await loadSessions();
   }
   
@@ -614,6 +626,7 @@ class TimetableProvider extends ChangeNotifier {
     await isar.writeTxn(() async {
       await isar.classSessions.delete(id);
     });
+    await _syncService.pushToCloud();
     await loadSessions();
   }
 

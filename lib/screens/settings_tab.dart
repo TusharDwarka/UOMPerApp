@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/theme_provider.dart';
 import '../providers/timetable_provider.dart';
 import '../widgets/end_semester_dialog.dart';
@@ -320,6 +321,68 @@ class _SettingsTabState extends State<SettingsTab> {
                     onTap: () async {
                       // Placeholder logic
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Opening Student Portal...")));
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            // Account Section
+            const Text("ACCOUNT", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey, letterSpacing: 1.2)),
+            const SizedBox(height: 10),
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))
+                ]
+              ),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), shape: BoxShape.circle),
+                      child: const Icon(Icons.person_rounded, color: Colors.green),
+                    ),
+                    title: const Text("Signed In As", style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(
+                      FirebaseAuth.instance.currentUser?.email ?? 
+                      (FirebaseAuth.instance.currentUser?.isAnonymous == true ? "Guest (no sync)" : "Not signed in"),
+                      style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13),
+                    ),
+                  ),
+                  Divider(height: 1, color: isDark ? Colors.grey[800] : Colors.grey[100]),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), shape: BoxShape.circle),
+                      child: const Icon(Icons.logout_rounded, color: Colors.red),
+                    ),
+                    title: const Text("Sign Out", style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text("Switch accounts or sign out"),
+                    trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text("Sign Out?"),
+                          content: const Text("You will need to sign back in to sync your data."),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                            TextButton(
+                              onPressed: () async {
+                                Navigator.pop(context);
+                                await FirebaseAuth.instance.signOut();
+                              },
+                              child: const Text("Sign Out", style: TextStyle(color: Colors.red)),
+                            ),
+                          ],
+                        ),
+                      );
                     },
                   ),
                 ],

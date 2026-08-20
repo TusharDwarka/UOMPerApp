@@ -5,6 +5,9 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/scroll_time_picker.dart';
 
+import 'package:provider/provider.dart';
+import '../services/sync_service.dart';
+
 class BusTab extends StatefulWidget {
   const BusTab({super.key});
 
@@ -43,6 +46,10 @@ class _BusTabState extends State<BusTab> {
   Future<void> _saveData() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('bus_locations_json', jsonEncode(_locations));
+    if (mounted) {
+      final syncService = Provider.of<SyncService>(context, listen: false);
+      await syncService.pushToCloud();
+    }
   }
 
   void _addRoute() async {
@@ -502,9 +509,18 @@ class _AddEditRouteSheetState extends State<_AddEditRouteSheet> {
                       ],
                     ),
                   )
-                : ListView.builder(
+                : ReorderableListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     itemCount: _activeTrips.length,
+                    onReorder: (oldIndex, newIndex) {
+                      setState(() {
+                        if (newIndex > oldIndex) {
+                          newIndex -= 1;
+                        }
+                        final item = _activeTrips.removeAt(oldIndex);
+                        _activeTrips.insert(newIndex, item);
+                      });
+                    },
                     itemBuilder: (ctx, i) => _buildTripRow(i, isDark, accent, cardBg),
                   ),
           ),
@@ -562,6 +578,7 @@ class _AddEditRouteSheetState extends State<_AddEditRouteSheet> {
   Widget _buildTripRow(int index, bool isDark, Color accent, Color cardBg) {
     final trip = _activeTrips[index];
     return Container(
+      key: ValueKey(trip),
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(

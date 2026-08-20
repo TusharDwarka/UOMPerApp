@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:isar_community/isar.dart';
 import '../models/note.dart';
 import '../services/isar_service.dart';
+import '../services/sync_service.dart';
 
 class NoteProvider extends ChangeNotifier {
   final IsarService _isarService;
+  final SyncService _syncService;
   List<Note> _notes = [];
   
-  NoteProvider(this._isarService);
+  NoteProvider(this._isarService, this._syncService);
   
   List<Note> get notes => _notes;
   
@@ -22,7 +24,9 @@ class NoteProvider extends ChangeNotifier {
     await isar.writeTxn(() async {
       await isar.notes.put(note);
     });
-    await loadNotes(); // Reload and notify
+    
+    await _syncService.pushToCloud();
+    await loadNotes();
   }
   
   Future<void> updateNote(Note note) async {
@@ -30,7 +34,9 @@ class NoteProvider extends ChangeNotifier {
     await isar.writeTxn(() async {
       await isar.notes.put(note);
     });
-    await loadNotes(); // Reload and notify
+
+    await _syncService.pushToCloud();
+    await loadNotes();
   }
   
   Future<void> deleteNote(int id) async {
@@ -38,6 +44,8 @@ class NoteProvider extends ChangeNotifier {
     await isar.writeTxn(() async {
       await isar.notes.delete(id);
     });
-    await loadNotes(); // Reload and notify
+    
+    await _syncService.pushToCloud();
+    await loadNotes();
   }
 }

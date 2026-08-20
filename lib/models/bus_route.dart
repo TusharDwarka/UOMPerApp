@@ -21,4 +21,25 @@ class BusRoute {
     this.arrivalTime = '',
     this.busName,
   });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'routeNumber': routeNumber,
+        'destination': destination,
+        'arrivalTime': arrivalTime,
+        'busName': busName,
+      };
+
+  factory BusRoute.fromJson(Map<String, dynamic> json) {
+    final route = BusRoute(
+      routeNumber: json['routeNumber'] ?? '',
+      destination: json['destination'] ?? '',
+      arrivalTime: json['arrivalTime'] ?? '',
+      busName: json['busName'],
+    );
+    if (json['id'] != null) {
+      route.id = json['id'];
+    }
+    return route;
+  }
 }

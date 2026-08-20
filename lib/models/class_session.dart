@@ -47,4 +47,35 @@ class ClassSession {
       isUser: isUser,
     );
   }
+
+  Map<String, dynamic> toSyncJson() => {
+        'id': id,
+        'subject': subject,
+        'startTime': startTime,
+        'endTime': endTime,
+        'day': day,
+        'room': room,
+        'moduleCode': moduleCode,
+        'isUser': isUser,
+        'specificDate': specificDate?.toIso8601String(),
+        'weeks': weeks,
+      };
+
+  factory ClassSession.fromSyncJson(Map<String, dynamic> json) {
+    final session = ClassSession(
+      subject: json['subject'] ?? '',
+      startTime: json['startTime'] ?? '',
+      endTime: json['endTime'] ?? '',
+      day: json['day'] ?? '',
+      room: json['room'] ?? '',
+      moduleCode: json['moduleCode'] ?? '',
+      isUser: json['isUser'] ?? true,
+      specificDate: json['specificDate'] != null ? DateTime.parse(json['specificDate']) : null,
+      weeks: json['weeks'] != null ? List<int>.from(json['weeks']) : null,
+    );
+    if (json['id'] != null) {
+      session.id = json['id'];
+    }
+    return session;
+  }
 }

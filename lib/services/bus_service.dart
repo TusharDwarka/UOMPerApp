@@ -4,11 +4,13 @@ import 'package:http/http.dart' as http;
 import '../models/bus_route.dart';
 import 'package:isar_community/isar.dart';
 import 'isar_service.dart';
+import 'sync_service.dart';
 
 class BusService {
   final IsarService isarService;
+  final SyncService _syncService;
 
-  BusService(this.isarService);
+  BusService(this.isarService, this._syncService);
 
   // Parse the specific JSON format provided by user
   Future<void> fetchAndParseBusSchedule(String jsonString) async {
@@ -55,6 +57,8 @@ class BusService {
         await isar.busRoutes.clear();
         await isar.busRoutes.putAll(busRoutes);
       });
+      
+      await _syncService.pushToCloud();
       
     } catch (e) {
       print("Error parsing bus JSON: $e");

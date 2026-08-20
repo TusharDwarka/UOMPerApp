@@ -12,6 +12,8 @@ import 'package:provider/provider.dart';
 import 'package:home_widget/home_widget.dart';
 import '../providers/resource_provider.dart';
 import '../providers/timetable_provider.dart';
+import '../providers/note_provider.dart';
+import '../services/sync_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -49,6 +51,18 @@ class _HomeScreenState extends State<HomeScreen> {
     // Handle home widget intents
     HomeWidget.initiallyLaunchedFromHomeWidget().then(_loadFromWidget);
     _homeWidgetSubscription = HomeWidget.widgetClicked.listen(_loadFromWidget);
+
+    // Initial Sync
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final syncService = Provider.of<SyncService>(context, listen: false);
+      await syncService.pullFromCloud();
+      
+      // Reload providers after pulling
+      if (mounted) {
+         Provider.of<TimetableProvider>(context, listen: false).loadSessions();
+         Provider.of<NoteProvider>(context, listen: false).loadNotes();
+      }
+    });
   }
 
   void _loadFromWidget(Uri? uri) {
