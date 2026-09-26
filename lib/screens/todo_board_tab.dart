@@ -638,11 +638,16 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
 
     // Helper: Sanitize string to remove unsupported characters (emojis, etc.) for PDF
     String sanitize(String input) {
-      // Remove characters outside standard Latin/Latin-1 range (keep only basic text + basic punctuation)
-      // This regex keeps ASCII + common accented characters (Latin-1 Supplement 0x80-0xFF roughly)
-      // But PDF default font usually only reliably supports Windows-1252 or ASCII.
-      // Easiest is to strip non-ascii for stability, or replace.
-      return input.replaceAll(RegExp(r'[^\x20-\x7E\n\r\t]'), '?'); // Replace non-ascii with ?
+      // The built-in PDF fonts cover Latin-1 (so "é" is fine). Map common
+      // typographic characters to plain ones; intl's time formats use a
+      // narrow no-break space (U+202F) before AM/PM.
+      final mapped = input
+          .replaceAll(RegExp('[   ]'), ' ')
+          .replaceAll(RegExp('[‘’]'), "'")
+          .replaceAll(RegExp('[“”]'), '"')
+          .replaceAll(RegExp('[–—]'), '-')
+          .replaceAll('→', '->');
+      return mapped.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\n\r\t]'), '?');
     }
     
     final pdf = pw.Document();
@@ -846,7 +851,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                         ),
                         pw.SizedBox(width: 10),
                         pw.Text(
-                          DateFormat('EEE, MMM d @ h:mm a').format(task.dueDate),
+                          sanitize(DateFormat('EEE, MMM d @ h:mm a').format(task.dueDate)),
                           style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
                         ),
                         if (room.isNotEmpty) ...[

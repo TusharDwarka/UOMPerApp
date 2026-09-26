@@ -23,10 +23,9 @@ class _ResourcesTabState extends State<ResourcesTab> {
   int _tab = 0;
 
   Future<void> _newFolder() async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
+    final name = await showControllerDialog<String>(
+      context,
+      builder: (ctx, controller) => AlertDialog(
         title: const Text('New folder'),
         content: TextField(
           controller: controller,
@@ -40,7 +39,6 @@ class _ResourcesTabState extends State<ResourcesTab> {
         ],
       ),
     );
-    controller.dispose();
     if (name == null || !mounted) return;
     final ok = await context.read<ResourceProvider>().addCustomFolder(name);
     if (!ok && mounted) {

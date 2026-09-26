@@ -25,10 +25,9 @@ class _ModuleResourcesScreenState extends State<ModuleResourcesScreen> {
   String get _folder => widget.moduleName;
 
   Future<String?> _askName(String title, {String initial = ''}) async {
-    final controller = TextEditingController(text: initial);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
+    final result = await showControllerDialog<String>(
+      context,
+      initial: initial, builder: (ctx, controller) => AlertDialog(
         title: Text(title),
         content: TextField(
           controller: controller,
@@ -42,7 +41,6 @@ class _ModuleResourcesScreenState extends State<ModuleResourcesScreen> {
         ],
       ),
     );
-    controller.dispose();
     return result;
   }
 
@@ -288,10 +286,9 @@ class _FileRow extends StatelessWidget {
   }
 
   Future<void> _rename(BuildContext context) async {
-    final controller = TextEditingController(text: file.fileName);
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
+    final name = await showControllerDialog<String>(
+      context,
+      initial: file.fileName, builder: (ctx, controller) => AlertDialog(
         title: const Text('Rename file'),
         content: TextField(controller: controller, autofocus: true),
         actions: [
@@ -300,7 +297,6 @@ class _FileRow extends StatelessWidget {
         ],
       ),
     );
-    controller.dispose();
     if (name != null && name.isNotEmpty && name != file.fileName && context.mounted) {
       await context.read<ResourceProvider>().renameResource(file.id, name);
     }
