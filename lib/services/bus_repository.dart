@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show gzip;
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,17 +11,13 @@ import 'sync_service.dart';
 class BusRepository {
   static const _selectedKey = 'bus_selected_route';
 
-  /// Loads routes, seeding defaults on first launch. Every schedule is
-  /// returned sorted by departure (older data was stored in insertion order,
-  /// which is why new timings always appeared at the end).
+  /// Loads routes (none for new users — everyone lives somewhere different;
+  /// see [presets] and [decodeRoute] for adding them). Every schedule is
+  /// returned sorted by departure.
   static Future<List<Map<String, dynamic>>> load() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(SyncService.busPrefsKey);
-    if (jsonStr == null) {
-      final seeded = defaultData().map(normalizeRoute).toList();
-      await prefs.setString(SyncService.busPrefsKey, jsonEncode(seeded));
-      return seeded;
-    }
+    if (jsonStr == null) return [];
     final decoded = jsonDecode(jsonStr) as List;
     final routes = decoded.map((e) => normalizeRoute(Map<String, dynamic>.from(e as Map))).toList();
     final normalized = jsonEncode(routes);
@@ -48,6 +45,41 @@ class BusRepository {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_selectedKey, i);
   }
+
+  // ───────────── Sharing ─────────────
+  // A route is shared as text: "UOMBUS1:" + base64url(gzip(json)). It fits in
+  // a WhatsApp message or a group chat, and import tolerates surrounding text.
+
+  static const _codePrefix = 'UOMBUS1:';
+
+  static String encodeRoute(Map<String, dynamic> route) {
+    final json = jsonEncode(normalizeRoute(route));
+    return '$_codePrefix${base64Url.encode(gzip.encode(utf8.encode(json)))}';
+  }
+
+  /// Parses a shared route from any text containing a code, or null.
+  static Map<String, dynamic>? decodeRoute(String text) {
+    final m = RegExp(RegExp.escape(_codePrefix) + r'([A-Za-z0-9_=-]+)').firstMatch(text);
+    if (m == null) return null;
+    try {
+      final json = utf8.decode(gzip.decode(base64Url.decode(m.group(1)!)));
+      final map = Map<String, dynamic>.from(jsonDecode(json) as Map);
+      if (map['location_name'] is! String || map['schedules'] is! Map) return null;
+      return normalizeRoute(map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String shareMessage(Map<String, dynamic> route) {
+    final name = route['location_name'] ?? 'Bus route';
+    final number = (route['bus_route'] ?? '').toString();
+    return 'Bus timetable for "$name"${number.isEmpty ? '' : ' (route $number)'} from UOMPerApp.\n'
+        'Open the app → Bus → Import, and paste this whole message:\n\n${encodeRoute(route)}';
+  }
+
+  /// Ready-made routes new users can add with one tap.
+  static List<Map<String, dynamic>> get presets => defaultData().map(normalizeRoute).toList();
 
   static List<Map<String, dynamic>> defaultData() {
     return [

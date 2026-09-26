@@ -18,7 +18,7 @@
             android:layout_weight="1"
             android:layout_height="wrap_content"
             android:text="--"
-            android:textColor="#E0E0E0"
+            android:textColor="@color/widget_text_primary"
             android:textSize="14sp"
             android:textStyle="normal" />
         <TextView
@@ -26,7 +26,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Week 1"
-            android:textColor="#B0BEC5"
+            android:textColor="@color/widget_text_secondary"
             android:textSize="11sp"
             android:background="@drawable/widget_badge_bg"
             android:paddingStart="6dp"
@@ -71,14 +71,14 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Room"
-                    android:textColor="#9E9E9E"
+                    android:textColor="@color/widget_label"
                     android:textSize="11sp"/>
                 <TextView
                     android:id="@+id/widget_start_value"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="--:--"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/widget_text_primary"
                     android:textSize="20sp"
                     android:textStyle="bold"
                     android:layout_marginTop="2dp"/>
@@ -96,14 +96,14 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Class"
-                    android:textColor="#9E9E9E"
+                    android:textColor="@color/widget_label"
                     android:textSize="11sp"/>
                 <TextView
                     android:id="@+id/widget_end_value"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="--:--"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/widget_text_primary"
                     android:textSize="20sp"
                     android:textStyle="bold"
                     android:maxLines="1"
@@ -127,14 +127,14 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:src="@android:drawable/ic_menu_today"
-            android:tint="#B0BEC5"/>
+            android:tint="@color/widget_text_secondary"/>
 
         <TextView
             android:id="@+id/widget_empty_text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="No more classes"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/widget_text_primary"
             android:textSize="22sp"
             android:textStyle="bold"
             android:layout_marginTop="12dp"/>
@@ -144,7 +144,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Enjoy your free time!"
-            android:textColor="#90A4AE"
+            android:textColor="@color/widget_label"
             android:textSize="14sp"
             android:layout_marginTop="4dp"/>
     </LinearLayout>
@@ -155,7 +155,7 @@
         android:layout_height="1dp"
         android:layout_marginTop="16dp"
         android:layout_marginBottom="12dp"
-        android:background="#33FFFFFF" />
+        android:background="@color/widget_divider" />
 
     <ListView
         android:id="@+id/widget_list"

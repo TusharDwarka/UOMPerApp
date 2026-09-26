@@ -7,11 +7,10 @@ import '../providers/timetable_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ui.dart';
 import 'module_resources_screen.dart';
-import 'notes_tab.dart';
 import 'unsorted_inbox_screen.dart';
+import 'pdf_viewer_screen.dart';
 
-/// Files & Notes, one header, one toggle (previously Notes was a whole
-/// second Scaffold nested inside a tab, with its own app bar and FAB).
+/// Files: module folders and custom folders (Notes has its own page).
 class ResourcesTab extends StatefulWidget {
   const ResourcesTab({super.key});
 
@@ -20,7 +19,6 @@ class ResourcesTab extends StatefulWidget {
 }
 
 class _ResourcesTabState extends State<ResourcesTab> {
-  int _tab = 0;
 
   Future<void> _newFolder() async {
     final name = await showControllerDialog<String>(
@@ -55,27 +53,14 @@ class _ResourcesTabState extends State<ResourcesTab> {
         child: Column(
           children: [
             ScreenHeader(
-              title: _tab == 0 ? 'Files' : 'Notes',
-              eyebrow: _tab == 0 ? 'Lecture slides, past papers & more' : 'Your creative notes',
+              title: 'Files',
+              eyebrow: 'Lecture slides, past papers & more',
               actions: [
-                CircleIconButton(
-                  icon: _tab == 0 ? Icons.create_new_folder_rounded : Icons.add_rounded,
-                  filled: true,
-                  tooltip: _tab == 0 ? 'New folder' : 'New note',
-                  onPressed: _tab == 0 ? _newFolder : () => showNoteEditor(context),
-                ),
+                CircleIconButton(icon: Icons.create_new_folder_rounded, filled: true, tooltip: 'New folder', onPressed: _newFolder),
               ],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-              child: PillSegmented<int>(
-                values: const [0, 1],
-                selected: _tab,
-                labelOf: (i) => i == 0 ? 'Files & folders' : 'Notes',
-                onChanged: (i) => setState(() => _tab = i),
-              ),
-            ),
-            Expanded(child: IndexedStack(index: _tab, children: const [_FilesView(), NotesView()])),
+            const SizedBox(height: 8),
+            const Expanded(child: _FilesView()),
           ],
         ),
       ),
@@ -164,7 +149,9 @@ class _FilesViewState extends State<_FilesView> {
           child: SoftCard(
             radius: 20,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            onTap: () => OpenFilex.open(f.filePath),
+            onTap: () => PdfViewerScreen.isPdf(f.fileName)
+                ? PdfViewerScreen.openFile(context, f.filePath, title: f.fileName)
+                : OpenFilex.open(f.filePath),
             child: Row(
               children: [
                 Icon(fileIcon(f.fileName), color: fileIconColor(f.fileName)),

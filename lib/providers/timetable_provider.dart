@@ -41,11 +41,18 @@ class TimetableProvider extends ChangeNotifier {
   bool _hasCompletedSetup = false;
   bool _isSetupLoaded = false;
   int _reminderMinutes = 15;
+  int _studyYear = 1; // 1..5
+  int _semester = 1; // 1..2
+  int _clearDoneAfterDays = 14; // 0 = never
+  DateTime? _lastPurge;
 
   String get courseName => _courseName;
   bool get hasCompletedSetup => _hasCompletedSetup;
   bool get isSetupLoaded => _isSetupLoaded;
   int get reminderMinutes => _reminderMinutes;
+  int get studyYear => _studyYear;
+  int get semester => _semester;
+  int get clearDoneAfterDays => _clearDoneAfterDays;
 
   TimetableProvider(this.isarService, this._syncService) {
     // Remote 'settings' changes are applied by SignedInGate (main.dart),
@@ -69,6 +76,9 @@ class TimetableProvider extends ChangeNotifier {
     _courseName = prefs.getString('courseName') ?? '';
     _hasCompletedSetup = prefs.getBool('hasCompletedSetup') ?? false;
     _reminderMinutes = prefs.getInt('reminder_minutes') ?? 15;
+    _studyYear = prefs.getInt('study_year') ?? 1;
+    _semester = prefs.getInt('semester') ?? 1;
+    _clearDoneAfterDays = prefs.getInt('clear_done_days') ?? 14;
 
     final semesterStartMs = prefs.getInt('semesterStartMs');
     if (semesterStartMs != null) {
@@ -89,6 +99,9 @@ class TimetableProvider extends ChangeNotifier {
         'semesterStartMs': _semesterStart.millisecondsSinceEpoch,
         'semesterEndMs': _semesterEnd?.millisecondsSinceEpoch,
         'reminderMinutes': _reminderMinutes,
+        'studyYear': _studyYear,
+        'semester': _semester,
+        'clearDoneAfterDays': _clearDoneAfterDays,
       };
 
   /// Applies settings pulled from the cloud. This is what lets a second
@@ -115,6 +128,18 @@ class TimetableProvider extends ChangeNotifier {
       } else {
         await prefs.remove('semesterEndMs');
       }
+    }
+    if (s['studyYear'] is int) {
+      _studyYear = s['studyYear'];
+      await prefs.setInt('study_year', _studyYear);
+    }
+    if (s['semester'] is int) {
+      _semester = s['semester'];
+      await prefs.setInt('semester', _semester);
+    }
+    if (s['clearDoneAfterDays'] is int) {
+      _clearDoneAfterDays = s['clearDoneAfterDays'];
+      await prefs.setInt('clear_done_days', _clearDoneAfterDays);
     }
     if (s['reminderMinutes'] is int) {
       _reminderMinutes = s['reminderMinutes'];
@@ -153,6 +178,43 @@ class TimetableProvider extends ChangeNotifier {
     await prefs.setBool('hasCompletedSetup', completed);
     _pushSettings();
     notifyListeners();
+  }
+
+  Future<void> setStudyPeriod({int? year, int? semester}) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (year != null) {
+      _studyYear = year.clamp(1, 5);
+      await prefs.setInt('study_year', _studyYear);
+    }
+    if (semester != null) {
+      _semester = semester.clamp(1, 2);
+      await prefs.setInt('semester', _semester);
+    }
+    _pushSettings();
+    notifyListeners();
+  }
+
+  Future<void> setClearDoneAfterDays(int days) async {
+    _clearDoneAfterDays = days;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('clear_done_days', days);
+    _pushSettings();
+    notifyListeners();
+    await purgeOldDoneTasks();
+  }
+
+  /// Deletes board items finished more than [clearDoneAfterDays] days ago.
+  Future<int> purgeOldDoneTasks() async {
+    if (_clearDoneAfterDays <= 0) return 0;
+    final cutoff = DateTime.now().subtract(Duration(days: _clearDoneAfterDays));
+    final old = _tasks.where((t) => t.isCompleted && (t.updatedAt ?? t.dueDate).isBefore(cutoff)).toList();
+    if (old.isEmpty) return 0;
+    final isar = await isarService.db;
+    await isar.writeTxn(() => isar.academicTasks.deleteAll(old.map((t) => t.id).toList()));
+    await _syncService.pushDeleteMany(SyncService.tasksCol, old.map((t) => t.syncId));
+    _tasks = await isar.academicTasks.where().sortByDueDateDesc().findAll();
+    notifyListeners();
+    return old.length;
   }
 
   Future<void> setReminderMinutes(int minutes) async {
@@ -282,6 +344,13 @@ class TimetableProvider extends ChangeNotifier {
     _attendanceRecords = await isar.attendanceRecords.where().findAll();
 
     notifyListeners();
+
+    // Tidy the Done column (at most hourly).
+    final now = DateTime.now();
+    if (_lastPurge == null || now.difference(_lastPurge!) > const Duration(hours: 1)) {
+      _lastPurge = now;
+      unawaited(purgeOldDoneTasks());
+    }
 
     WidgetService.updateWidget(this);
     rescheduleReminders();

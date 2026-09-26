@@ -105,9 +105,7 @@ class _ClassDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final timetable = context.watch<TimetableProvider>();
-    final record = timetable.getAttendanceRecord(session.subject, date);
     final colors = moduleColors(session.subject, p.isDark);
-    final isPastOrToday = !date.isAfter(dateOnly(DateTime.now()));
 
     Widget action(IconData icon, String label, VoidCallback onTap, {Color? color}) => Expanded(
           child: SoftCard(
@@ -153,17 +151,6 @@ class _ClassDetails extends StatelessWidget {
             if (session.meetingLink != null) ...[
               const SizedBox(height: 16),
               Align(alignment: Alignment.centerLeft, child: JoinMeetingButton(url: session.meetingLink!)),
-            ],
-            if (isPastOrToday) ...[
-              const SizedBox(height: 22),
-              Text('Attendance', style: TextStyle(fontWeight: FontWeight.w700, color: p.textPrimary)),
-              const SizedBox(height: 10),
-              PillSegmented<int>(
-                values: const [1, 0],
-                selected: record == null ? -1 : (record.isPresent ? 1 : 0),
-                labelOf: (v) => v == 1 ? 'Present' : 'Absent',
-                onChanged: (v) => timetable.setAttendance(session.subject, date, v == 1),
-              ),
             ],
             const SizedBox(height: 22),
             Row(

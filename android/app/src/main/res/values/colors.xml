@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="widget_background">#FFFFFF</color>
-    <color name="widget_text_primary">#1A1D1E</color>
-    <color name="widget_text_secondary">#78909C</color>
-    <color name="widget_divider">#E0E0E0</color>
-    <color name="widget_app_name">#1565C0</color>
-    <color name="widget_badge_bg">#1565C0</color>
+    <!-- Home-screen widgets use the app's dark "ink" card in both themes, so
+         white text is always readable (it used to be white-on-white in light mode). -->
+    <color name="widget_background">#111318</color>
+    <color name="widget_surface">#1F2229</color>
+    <color name="widget_text_primary">#FFFFFF</color>
+    <color name="widget_text_secondary">#A3A6AD</color>
+    <color name="widget_divider">#26FFFFFF</color>
+    <color name="widget_app_name">#8FB0FF</color>
+    <color name="widget_accent">#2962FF</color>
+    <color name="widget_accent_light">#8FB0FF</color>
+    <color name="widget_badge_bg">#2962FF</color>
     <color name="widget_badge_text">#FFFFFF</color>
-    <color name="widget_label">#90A4AE</color>
+    <color name="widget_label">#8A8E96</color>
+    <color name="widget_danger">#FF5A5F</color>
     <color name="ic_launcher_background">#1A237E</color>
 </resources>

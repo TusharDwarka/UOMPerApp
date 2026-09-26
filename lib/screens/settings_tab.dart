@@ -279,19 +279,14 @@ class _SettingsTabState extends State<SettingsTab> {
                 ),
 
                 _group(p, 'Appearance', [
-                  ListTile(
-                    leading: _icon(Icons.dark_mode_rounded, Colors.purple),
-                    title: const Text('Theme', style: TextStyle(fontWeight: FontWeight.w600)),
-                    trailing: Consumer<ThemeProvider>(
-                      builder: (context, provider, _) => DropdownButton<ThemeMode>(
-                        value: provider.themeMode,
-                        underline: const SizedBox(),
-                        items: const [
-                          DropdownMenuItem(value: ThemeMode.system, child: Text('System')),
-                          DropdownMenuItem(value: ThemeMode.light, child: Text('Light')),
-                          DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark')),
-                        ],
-                        onChanged: (m) => m == null ? null : provider.setTheme(m),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                    child: Consumer<ThemeProvider>(
+                      builder: (context, provider, _) => PillSegmented<ThemeMode>(
+                        values: const [ThemeMode.light, ThemeMode.system, ThemeMode.dark],
+                        selected: provider.themeMode,
+                        labelOf: (m) => const {ThemeMode.light: 'Light', ThemeMode.system: 'System', ThemeMode.dark: 'Dark'}[m]!,
+                        onChanged: provider.setTheme,
                       ),
                     ),
                   ),
@@ -310,11 +305,12 @@ class _SettingsTabState extends State<SettingsTab> {
                     ListTile(
                       leading: _icon(Icons.timer_outlined, Colors.orange),
                       title: const Text('How early', style: TextStyle(fontWeight: FontWeight.w600)),
-                      trailing: DropdownButton<int>(
+                      trailing: ChoicePill<int>(
+                        title: 'Remind me before class',
                         value: const [5, 10, 15, 20, 30, 45, 60].contains(tp.reminderMinutes) ? tp.reminderMinutes : 15,
-                        underline: const SizedBox(),
-                        items: [for (final m in const [5, 10, 15, 20, 30, 45, 60]) DropdownMenuItem(value: m, child: Text('$m min'))],
-                        onChanged: (m) => m == null ? null : tp.setReminderMinutes(m),
+                        options: const [5, 10, 15, 20, 30, 45, 60],
+                        labelOf: (m) => '$m min',
+                        onChanged: tp.setReminderMinutes,
                       ),
                     ),
                   ]),
@@ -322,6 +318,43 @@ class _SettingsTabState extends State<SettingsTab> {
 
                 Consumer<TimetableProvider>(
                   builder: (context, tp, _) => _group(p, 'Academic', [
+                    ListTile(
+                      leading: _icon(Icons.stairs_rounded, AppColors.accent),
+                      title: const Text('Year & semester', style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: const Text('Used to suggest your cohort groups'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ChoicePill<int>(
+                            title: 'Year of study',
+                            value: tp.studyYear,
+                            options: const [1, 2, 3, 4, 5],
+                            labelOf: (y) => 'Y$y',
+                            onChanged: (y) => tp.setStudyPeriod(year: y),
+                          ),
+                          const SizedBox(width: 6),
+                          ChoicePill<int>(
+                            title: 'Semester',
+                            value: tp.semester,
+                            options: const [1, 2],
+                            labelOf: (s) => 'S$s',
+                            onChanged: (s) => tp.setStudyPeriod(semester: s),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ListTile(
+                      leading: _icon(Icons.auto_delete_outlined, AppColors.accent),
+                      title: const Text('Clear finished tasks', style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: const Text('Removes items from Done automatically'),
+                      trailing: ChoicePill<int>(
+                        title: 'Clear finished tasks after',
+                        value: const [0, 7, 14, 30].contains(tp.clearDoneAfterDays) ? tp.clearDoneAfterDays : 14,
+                        options: const [7, 14, 30, 0],
+                        labelOf: (d) => d == 0 ? 'Never' : '$d days',
+                        onChanged: tp.setClearDoneAfterDays,
+                      ),
+                    ),
                     ListTile(
                       leading: _icon(Icons.school_rounded, AppColors.accent),
                       title: const Text('Programme', style: TextStyle(fontWeight: FontWeight.w600)),

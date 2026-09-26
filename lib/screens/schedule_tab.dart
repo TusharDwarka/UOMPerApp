@@ -224,7 +224,6 @@ class _ScheduleTabState extends State<ScheduleTab> {
           final colors = moduleColors(s.subject, p.isDark);
           final inProgress = isToday && nowMin >= b.start && nowMin < b.end;
           final done = isToday && nowMin >= b.end;
-          final record = timetable.getAttendanceRecord(s.subject, _selectedDate);
 
           return Positioned(
             top: top + 1.5,
@@ -267,12 +266,6 @@ class _ScheduleTabState extends State<ScheduleTab> {
                                           color: p.isDark ? Colors.white : const Color(0xFF15171A))),
                                 ),
                                 if (s.meetingLink != null) Icon(Icons.videocam_rounded, size: 15, color: colors.$2),
-                                if (record != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 4),
-                                    child: Icon(record.isPresent ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                                        size: 15, color: record.isPresent ? Colors.green : Colors.redAccent),
-                                  ),
                               ],
                             ),
                             if (height > 40)

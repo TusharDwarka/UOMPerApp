@@ -8,6 +8,7 @@ import '../models/note.dart';
 import '../providers/note_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ui.dart';
+import 'print_center_screen.dart';
 
 /// Pastel note colours (text on them stays dark in both themes).
 const noteColors = <Color>[
@@ -30,7 +31,41 @@ void showNoteEditor(BuildContext context, {Note? note}) {
   );
 }
 
-/// Notes grid, embedded in the Files & Notes page (it no longer brings its
+/// Notes as their own section (no longer tucked under Files).
+class NotesScreen extends StatelessWidget {
+  const NotesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final count = context.select<NoteProvider, int>((n) => n.notes.length);
+    return Scaffold(
+      backgroundColor: p.canvas,
+      body: SafeArea(
+        child: Column(
+          children: [
+            ScreenHeader(
+              title: 'Notes',
+              badge: CountBadge(count),
+              eyebrow: 'Ideas, formulas, checklists',
+              actions: [
+                CircleIconButton(
+                  icon: Icons.print_rounded,
+                  tooltip: 'Print note paper',
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrintCenterScreen(initialTab: 1))),
+                ),
+                CircleIconButton(icon: Icons.add_rounded, filled: true, tooltip: 'New note', onPressed: () => showNoteEditor(context)),
+              ],
+            ),
+            const Expanded(child: NotesView()),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Notes grid (it no longer brings its
 /// own Scaffold/AppBar, which caused the doubled header).
 class NotesView extends StatefulWidget {
   const NotesView({super.key});
@@ -98,9 +133,8 @@ class _NotesViewState extends State<NotesView> {
                   icon: Icons.sticky_note_2_outlined,
                   title: notes.isEmpty ? 'Empty canvas' : 'No matches',
                   subtitle: notes.isEmpty ? 'Jot down ideas, formulas, lecture takeaways.' : null,
-                  action: notes.isEmpty
-                      ? InkPillButton(label: 'New note', icon: Icons.add, onPressed: () => showNoteEditor(context))
-                      : null,
+                  action:
+                      notes.isEmpty ? InkPillButton(label: 'New note', icon: Icons.add, onPressed: () => showNoteEditor(context)) : null,
                 )
               : LayoutBuilder(builder: (context, c) {
                   final cols = c.maxWidth > 900 ? 4 : (c.maxWidth > 600 ? 3 : 2);
@@ -155,7 +189,9 @@ class _NoteCard extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(20)),
-                          child: Text(note.subject.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis,
+                          child: Text(note.subject.toUpperCase(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Colors.black87)),
                         ),
                       )
@@ -171,11 +207,31 @@ class _NoteCard extends StatelessWidget {
                 Text(note.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, height: 1.2, color: Colors.black)),
                 if (note.content.isNotEmpty) ...[
                   const SizedBox(height: 6),
-                  Text(note.content, maxLines: 8, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 14, color: Colors.black.withValues(alpha: 0.7), height: 1.45)),
+                  NoteBody(
+                    text: note.content,
+                    maxLines: 10,
+                    fontSize: 14,
+                    onToggle: (line) {
+                      note.content = toggleChecklistLine(note.content, line);
+                      context.read<NoteProvider>().updateNote(note);
+                    },
+                  ),
+                  if (checklistProgress(note.content) != null) ...[
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: checklistProgress(note.content),
+                        minHeight: 5,
+                        backgroundColor: Colors.black.withValues(alpha: 0.08),
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 10),
-                Text(DateFormat('d MMM').format(note.timestamp), style: TextStyle(fontSize: 11, color: Colors.black.withValues(alpha: 0.4))),
+                Text(DateFormat('d MMM').format(note.timestamp),
+                    style: TextStyle(fontSize: 11, color: Colors.black.withValues(alpha: 0.4))),
               ],
             ),
           ),
@@ -202,6 +258,8 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
   late int _selectedColorIndex;
   late bool _isNew;
   late bool _pinned;
+  bool _preview = false;
+  final _contentFocus = FocusNode();
 
   @override
   void initState() {
@@ -211,9 +269,7 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
     _contentController = TextEditingController(text: widget.note?.content ?? '');
     _subjectController = TextEditingController(text: widget.note?.subject == 'General' ? '' : (widget.note?.subject ?? ''));
     _pinned = widget.note?.isPinned ?? false;
-    _selectedColorIndex = widget.note != null
-        ? widget.note!.colorIndex % widget.colors.length
-        : Random().nextInt(widget.colors.length);
+    _selectedColorIndex = widget.note != null ? widget.note!.colorIndex % widget.colors.length : Random().nextInt(widget.colors.length);
   }
 
   @override
@@ -221,8 +277,81 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
     _titleController.dispose();
     _contentController.dispose();
     _subjectController.dispose();
+    _contentFocus.dispose();
     super.dispose();
   }
+
+  // ── Formatting helpers (markdown-like, stored as plain text) ──
+
+  static const _linePrefixes = ['# ', '• ', '☐ ', '☑ '];
+
+  /// Toggles [prefix] on the line under the cursor (replacing another list
+  /// prefix if present).
+  void _toggleLinePrefix(String prefix) {
+    final c = _contentController;
+    final text = c.text;
+    final sel = c.selection.isValid ? c.selection : TextSelection.collapsed(offset: text.length);
+    final lineStart = sel.start <= 0 ? 0 : text.lastIndexOf('\n', sel.start - 1) + 1;
+    final line = text.substring(lineStart);
+    var existing = '';
+    for (final p in _linePrefixes) {
+      if (line.startsWith(p)) existing = p;
+    }
+    final same = existing == prefix || (prefix == '☐ ' && existing == '☑ ');
+    final insert = same ? '' : prefix;
+    final newText = text.replaceRange(lineStart, lineStart + existing.length, insert);
+    final delta = insert.length - existing.length;
+    c.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: (sel.end + delta).clamp(lineStart, newText.length)),
+    );
+    setState(() {});
+  }
+
+  void _toggleBold() {
+    final c = _contentController;
+    final text = c.text;
+    final sel = c.selection.isValid ? c.selection : TextSelection.collapsed(offset: text.length);
+    final selected = text.substring(sel.start, sel.end);
+    final newText = text.replaceRange(sel.start, sel.end, '**$selected**');
+    c.value = TextEditingValue(
+      text: newText,
+      selection: selected.isEmpty
+          ? TextSelection.collapsed(offset: sel.start + 2)
+          : TextSelection(baseOffset: sel.start, extentOffset: sel.end + 4),
+    );
+    setState(() {});
+  }
+
+  /// Pressing Enter on a bullet/checklist line continues the list; Enter on
+  /// an empty item ends it.
+  void _continueList(String value) {
+    final c = _contentController;
+    final pos = c.selection.baseOffset;
+    if (pos <= 0 || pos > value.length || value[pos - 1] != '\n') return;
+    final prevStart = pos - 1 <= 0 ? 0 : value.lastIndexOf('\n', pos - 2) + 1;
+    final prev = value.substring(prevStart, pos - 1);
+    for (final p in const ['• ', '☐ ', '☑ ']) {
+      if (prev.startsWith(p)) {
+        if (prev.trim() == p.trim()) {
+          final t = value.replaceRange(prevStart, pos, '');
+          c.value = TextEditingValue(text: t, selection: TextSelection.collapsed(offset: prevStart));
+        } else {
+          final cont = p == '☑ ' ? '☐ ' : p;
+          final t = value.replaceRange(pos, pos, cont);
+          c.value = TextEditingValue(text: t, selection: TextSelection.collapsed(offset: pos + cont.length));
+        }
+        return;
+      }
+    }
+  }
+
+  Widget _tool(IconData icon, String tip, VoidCallback? onTap) => IconButton(
+        tooltip: tip,
+        onPressed: onTap,
+        visualDensity: VisualDensity.compact,
+        icon: Icon(icon, color: onTap == null ? Colors.black26 : Colors.black87),
+      );
 
   Future<void> _save() async {
     final title = _titleController.text.trim();
@@ -326,21 +455,181 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
           TextField(
             controller: _subjectController,
             style: const TextStyle(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w600),
-            decoration: const InputDecoration.collapsed(hintText: 'Module / tag', hintStyle: TextStyle(color: Colors.black26), filled: false),
+            decoration:
+                const InputDecoration.collapsed(hintText: 'Module / tag', hintStyle: TextStyle(color: Colors.black26), filled: false),
           ),
           Divider(height: 26, color: p.isDark ? Colors.black26 : Colors.black12),
           Expanded(
-            child: TextField(
-              controller: _contentController,
-              maxLines: null,
-              expands: true,
-              textAlignVertical: TextAlignVertical.top,
-              style: const TextStyle(fontSize: 17, height: 1.5, color: Colors.black),
-              decoration: const InputDecoration.collapsed(hintText: 'Start writing…', hintStyle: TextStyle(color: Colors.black38), filled: false),
+            child: _preview
+                ? SingleChildScrollView(
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: NoteBody(
+                        text: _contentController.text,
+                        fontSize: 17,
+                        onToggle: (line) => setState(() {
+                          _contentController.text = toggleChecklistLine(_contentController.text, line);
+                        }),
+                      ),
+                    ),
+                  )
+                : TextField(
+                    controller: _contentController,
+                    focusNode: _contentFocus,
+                    maxLines: null,
+                    expands: true,
+                    keyboardType: TextInputType.multiline,
+                    textAlignVertical: TextAlignVertical.top,
+                    onChanged: _continueList,
+                    style: const TextStyle(fontSize: 17, height: 1.5, color: Colors.black),
+                    decoration: const InputDecoration.collapsed(
+                        hintText: 'Start writing… the toolbar below adds headings, bold, lists and checklists',
+                        hintStyle: TextStyle(color: Colors.black38),
+                        filled: false),
+                  ),
+          ),
+          // Formatting toolbar sits just above the keyboard.
+          Container(
+            margin: const EdgeInsets.only(top: 8, bottom: 10, right: 8),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(40)),
+            child: Row(
+              children: [
+                _tool(Icons.title_rounded, 'Heading', _preview ? null : () => _toggleLinePrefix('# ')),
+                _tool(Icons.format_bold_rounded, 'Bold', _preview ? null : _toggleBold),
+                _tool(Icons.format_list_bulleted_rounded, 'Bullet list', _preview ? null : () => _toggleLinePrefix('• ')),
+                _tool(Icons.check_box_outlined, 'Checklist', _preview ? null : () => _toggleLinePrefix('☐ ')),
+                const Spacer(),
+                Flexible(
+                  child: Material(
+                    color: _preview ? Colors.black : Colors.transparent,
+                    shape: const StadiumBorder(),
+                    child: InkWell(
+                      customBorder: const StadiumBorder(),
+                      onTap: () => setState(() {
+                        _preview = !_preview;
+                        if (_preview) FocusScope.of(context).unfocus();
+                      }),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        child: Text(_preview ? 'Edit' : 'Preview',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontWeight: FontWeight.w700, color: _preview ? Colors.white : Colors.black87)),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+// ───────────── Lightweight note formatting ─────────────
+// Stored as plain text so it syncs and searches as before:
+//   "# " heading · "• " or "- " bullet · "☐ "/"☑ " checklist · **bold**
+
+String toggleChecklistLine(String text, int lineIndex) {
+  final lines = text.split('\n');
+  if (lineIndex < 0 || lineIndex >= lines.length) return text;
+  final l = lines[lineIndex];
+  if (l.startsWith('☐ ')) {
+    lines[lineIndex] = '☑ ${l.substring(2)}';
+  } else if (l.startsWith('☑ ')) {
+    lines[lineIndex] = '☐ ${l.substring(2)}';
+  }
+  return lines.join('\n');
+}
+
+/// Fraction of checklist items ticked, or null if the note has none.
+double? checklistProgress(String text) {
+  var total = 0, done = 0;
+  for (final l in text.split('\n')) {
+    if (l.startsWith('☐ ')) total++;
+    if (l.startsWith('☑ ')) {
+      total++;
+      done++;
+    }
+  }
+  return total == 0 ? null : done / total;
+}
+
+class NoteBody extends StatelessWidget {
+  final String text;
+  final int? maxLines;
+  final double fontSize;
+  final ValueChanged<int>? onToggle;
+
+  const NoteBody({super.key, required this.text, this.maxLines, this.fontSize = 15, this.onToggle});
+
+  List<TextSpan> _inline(String s) {
+    final spans = <TextSpan>[];
+    final re = RegExp(r'\*\*(.+?)\*\*');
+    var last = 0;
+    for (final m in re.allMatches(s)) {
+      if (m.start > last) spans.add(TextSpan(text: s.substring(last, m.start)));
+      spans.add(TextSpan(text: m.group(1), style: const TextStyle(fontWeight: FontWeight.w800)));
+      last = m.end;
+    }
+    if (last < s.length) spans.add(TextSpan(text: s.substring(last)));
+    return spans;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = TextStyle(fontSize: fontSize, height: 1.45, color: Colors.black.withValues(alpha: 0.78));
+    final lines = text.split('\n');
+    final shown = maxLines == null ? lines.length : lines.length.clamp(0, maxLines!);
+    final children = <Widget>[];
+    for (var i = 0; i < shown; i++) {
+      final l = lines[i];
+      if (l.startsWith('# ')) {
+        children.add(Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 2),
+          child: Text.rich(TextSpan(children: _inline(l.substring(2))),
+              style: base.copyWith(fontSize: fontSize + 4, fontWeight: FontWeight.w800, color: Colors.black)),
+        ));
+      } else if (l.startsWith('☐ ') || l.startsWith('☑ ')) {
+        final done = l.startsWith('☑ ');
+        children.add(InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onToggle == null ? null : () => onToggle!(i),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(done ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                    size: fontSize + 4, color: done ? Colors.black87 : Colors.black45),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text.rich(TextSpan(children: _inline(l.substring(2))),
+                      style: base.copyWith(
+                        decoration: done ? TextDecoration.lineThrough : null,
+                        color: done ? Colors.black38 : base.color,
+                      )),
+                ),
+              ],
+            ),
+          ),
+        ));
+      } else if (l.startsWith('• ') || l.startsWith('- ')) {
+        children.add(Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('•  ', style: base.copyWith(fontWeight: FontWeight.w900)),
+            Expanded(child: Text.rich(TextSpan(children: _inline(l.substring(2))), style: base)),
+          ],
+        ));
+      } else {
+        children.add(Text.rich(TextSpan(children: _inline(l)), style: base));
+      }
+    }
+    if (shown < lines.length) children.add(Text('…', style: base.copyWith(color: Colors.black38)));
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
   }
 }

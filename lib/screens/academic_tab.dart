@@ -11,6 +11,7 @@ import '../utils/meeting_links.dart';
 import '../utils/time_utils.dart';
 import '../widgets/add_edit_task_sheet.dart';
 import '../widgets/ui.dart';
+import 'print_center_screen.dart';
 
 Color taskColor(AcademicTask t) => t.colorValue != null ? Color(t.colorValue!) : AppColors.forType(t.type);
 
@@ -25,7 +26,6 @@ class _AcademicTabState extends State<AcademicTab> {
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = dateOnly(DateTime.now());
-  int _tab = 0; // 0 = calendar, 1 = attendance
 
   @override
   Widget build(BuildContext context) {
@@ -38,35 +38,30 @@ class _AcademicTabState extends State<AcademicTab> {
         child: Column(
           children: [
             ScreenHeader(
-              title: _tab == 0 ? 'Hub' : 'Attendance',
-              eyebrow: _tab == 0 ? DateFormat('MMMM yyyy').format(_focusedDay) : 'Survival mode · 10 lives per module',
+              title: 'Hub',
+              eyebrow: DateFormat('MMMM yyyy').format(_focusedDay),
               actions: [
-                if (_tab == 0)
-                  CircleIconButton(
-                    icon: _calendarFormat == CalendarFormat.month ? Icons.view_week_rounded : Icons.calendar_view_month_rounded,
-                    tooltip: _calendarFormat == CalendarFormat.month ? 'Week view' : 'Month view',
-                    onPressed: () => setState(() => _calendarFormat =
-                        _calendarFormat == CalendarFormat.month ? CalendarFormat.twoWeeks : CalendarFormat.month),
-                  ),
-                if (_tab == 0)
-                  CircleIconButton(
-                    icon: Icons.add_rounded,
-                    filled: true,
-                    tooltip: 'Add event',
-                    onPressed: () => showTaskSheet(context, initialDate: _selectedDay, initialType: 'Event'),
-                  ),
+                CircleIconButton(
+                  icon: Icons.print_rounded,
+                  tooltip: 'Print & export',
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrintCenterScreen())),
+                ),
+                CircleIconButton(
+                  icon: _calendarFormat == CalendarFormat.month ? Icons.view_week_rounded : Icons.calendar_view_month_rounded,
+                  tooltip: _calendarFormat == CalendarFormat.month ? 'Week view' : 'Month view',
+                  onPressed: () => setState(() => _calendarFormat =
+                      _calendarFormat == CalendarFormat.month ? CalendarFormat.twoWeeks : CalendarFormat.month),
+                ),
+                CircleIconButton(
+                  icon: Icons.add_rounded,
+                  filled: true,
+                  tooltip: 'Add',
+                  onPressed: () => showTaskSheet(context, initialDate: _selectedDay, initialType: 'Other'),
+                ),
               ],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
-              child: PillSegmented<int>(
-                values: const [0, 1],
-                selected: _tab,
-                labelOf: (i) => i == 0 ? 'Calendar' : 'Attendance',
-                onChanged: (i) => setState(() => _tab = i),
-              ),
-            ),
-            Expanded(child: _tab == 0 ? _buildCalendarTab(p, timetable) : _AttendanceView(timetable: timetable)),
+            const SizedBox(height: 8),
+            Expanded(child: _buildCalendarTab(p, timetable)),
           ],
         ),
       ),
@@ -151,7 +146,7 @@ class _AcademicTabState extends State<AcademicTab> {
             isSameDate(_selectedDay, DateTime.now()) ? 'Today' : DateFormat('EEEE d MMMM').format(_selectedDay),
             padding: const EdgeInsets.fromLTRB(4, 0, 0, 10),
             trailing: TextButton.icon(
-              onPressed: () => showTaskSheet(context, initialDate: _selectedDay, initialType: 'Event'),
+              onPressed: () => showTaskSheet(context, initialDate: _selectedDay, initialType: 'Other'),
               icon: const Icon(Icons.add_rounded, size: 18),
               label: const Text('Add'),
             ),
@@ -385,211 +380,6 @@ class _AcademicTabState extends State<AcademicTab> {
             Text(days == 0 ? 'Today' : (days == 1 ? 'Tomorrow' : 'In $days days'),
                 style: TextStyle(color: fg.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.w600)),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ───────────────────────── Attendance ─────────────────────────
-
-class _AttendanceView extends StatelessWidget {
-  final TimetableProvider timetable;
-  const _AttendanceView({required this.timetable});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = Palette.of(context);
-    final subjects = timetable.userSessions.map((s) => s.subject).toSet().toList()..sort();
-    final todaySubjects = timetable.getClassesForDate(DateTime.now()).map((s) => s.subject).toSet().toList();
-
-    if (subjects.isEmpty) {
-      return const EmptyState(icon: Icons.fact_check_outlined, title: 'No modules yet', subtitle: 'Add classes in the Schedule tab first.');
-    }
-
-    var presents = 0, absences = 0;
-    for (final s in subjects) {
-      final st = timetable.getAttendanceStats(s);
-      presents += st['presents'] as int;
-      absences += st['absences'] as int;
-    }
-    final total = presents + absences;
-    final rate = total == 0 ? 100 : (presents * 100 / total).round();
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-      children: [
-        SoftCard(
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Overall attendance', style: TextStyle(color: p.textSecondary, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Text('$rate%', style: TextStyle(fontSize: 52, fontWeight: FontWeight.w300, letterSpacing: -2, color: p.textPrimary)),
-                    Text('$presents present · $absences missed', style: TextStyle(color: p.textSecondary, fontSize: 13)),
-                  ],
-                ),
-              ),
-              SizedBox(
-                width: 76,
-                height: 76,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CircularProgressIndicator(
-                      value: rate / 100,
-                      strokeWidth: 9,
-                      strokeCap: StrokeCap.round,
-                      backgroundColor: p.surfaceAlt,
-                      color: rate >= 80 ? p.accent : (rate >= 60 ? Colors.orange : Colors.red),
-                    ),
-                    Center(child: Icon(Icons.favorite_rounded, color: p.textPrimary)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (todaySubjects.isNotEmpty) ...[
-          const SizedBox(height: 18),
-          const SectionLabel("Today's roll call"),
-          for (final subject in todaySubjects) _rollCall(context, p, subject),
-        ],
-        const SizedBox(height: 18),
-        const SectionLabel('Module survival'),
-        for (final subject in subjects) _moduleCard(context, p, subject),
-        const SizedBox(height: 20),
-        Center(
-          child: TextButton.icon(
-            onPressed: () async {
-              final ok = await confirmDestructive(context,
-                  title: 'Reset survival mode?',
-                  message: 'This clears all attendance records and restores your lives. This cannot be undone.',
-                  action: 'Reset');
-              if (ok) timetable.resetAttendance();
-            },
-            icon: Icon(Icons.refresh_rounded, color: p.textSecondary),
-            label: Text('Reset all progress', style: TextStyle(color: p.textSecondary)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _rollCall(BuildContext context, Palette p, String subject) {
-    final record = timetable.getAttendanceRecord(subject, DateTime.now());
-    final has = record != null;
-    final present = record?.isPresent ?? false;
-    Widget choice(bool value) {
-      final active = has && present == value;
-      final c = value ? Colors.green : Colors.redAccent;
-      return Material(
-        color: active ? c : p.surfaceAlt,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: () => timetable.setAttendance(subject, DateTime.now(), value),
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Icon(value ? Icons.check_rounded : Icons.close_rounded, color: active ? Colors.white : p.textSecondary),
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: SoftCard(
-        radius: 24,
-        padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(subject, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
-                  Text(has ? (present ? 'Marked present' : 'Marked absent') : 'Are you in class?',
-                      style: TextStyle(fontSize: 12, color: has ? (present ? Colors.green : Colors.redAccent) : Colors.amber[800])),
-                ],
-              ),
-            ),
-            choice(true),
-            const SizedBox(width: 8),
-            choice(false),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _moduleCard(BuildContext context, Palette p, String subject) {
-    final stats = timetable.getAttendanceStats(subject);
-    final lives = stats['lives'] as int;
-    final maxLives = stats['maxLives'] as int;
-    final color = lives <= 2 ? Colors.redAccent : (lives <= 5 ? Colors.orange : Colors.green);
-    final history = timetable.getPastClassDates(subject);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: SoftCard(
-        radius: 24,
-        padding: EdgeInsets.zero,
-        child: Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            tilePadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-            childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-            title: Text(subject, style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: LinearProgressIndicator(
-                        value: lives / maxLives,
-                        minHeight: 8,
-                        backgroundColor: p.surfaceAlt,
-                        color: color,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Icon(Icons.favorite_rounded, size: 14, color: color),
-                  const SizedBox(width: 3),
-                  Text('$lives/$maxLives', style: TextStyle(fontWeight: FontWeight.w700, color: color, fontSize: 13)),
-                ],
-              ),
-            ),
-            children: [
-              if (history.isEmpty) Text('No past classes yet.', style: TextStyle(color: p.textSecondary)),
-              for (final date in history)
-                InkWell(
-                  onTap: () => timetable.setAttendance(subject, date, !(timetable.getAttendanceRecord(subject, date)?.isPresent ?? false)),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: Row(
-                      children: [
-                        Text(DateFormat('EEE d MMM').format(date), style: TextStyle(color: p.textPrimary)),
-                        const Spacer(),
-                        Builder(builder: (_) {
-                          final r = timetable.getAttendanceRecord(subject, date);
-                          if (r == null) return Text('Unmarked', style: TextStyle(color: p.textMuted, fontSize: 12));
-                          return Icon(r.isPresent ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                              size: 20, color: r.isPresent ? Colors.green : Colors.redAccent);
-                        }),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
         ),
       ),
     );

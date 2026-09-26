@@ -9,7 +9,10 @@ import '../utils/time_utils.dart';
 import 'scroll_time_picker.dart';
 import 'ui.dart';
 
-const taskTypes = ['Assignment', 'Homework', 'Test', 'Exam', 'Project', 'Event', 'Other'];
+/// Selectable types. "Other" lets the user name their own (stored as the
+/// type string, e.g. "Lab report"). Older items may still carry "Event" or
+/// "Project"; they keep displaying and edit as "Other" with that name.
+const taskTypes = ['Assignment', 'Homework', 'Test', 'Exam', 'Other'];
 
 /// Opens the task/event editor. Used by the board, Academic Hub, dashboard
 /// and schedule quick actions so they all behave the same.
@@ -83,6 +86,7 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
   late final TextEditingController _link;
   final _subjectFocus = FocusNode();
   late String _type;
+  late final TextEditingController _customType;
   late DateTime _dueDate;
   late TimeOfDay _dueTime;
   DateTime? _startDate;
@@ -98,8 +102,9 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
     final t = widget.taskToEdit;
     _title = TextEditingController(text: t?.title ?? '');
     _subject = TextEditingController(text: t?.subject == 'General' ? '' : (t?.subject ?? widget.initialModule ?? ''));
-    _type = t?.type ?? widget.initialCategory ?? 'Assignment';
-    if (!taskTypes.contains(_type)) _type = 'Other';
+    final initialType = t?.type ?? widget.initialCategory ?? 'Assignment';
+    _type = taskTypes.contains(initialType) ? initialType : 'Other';
+    _customType = TextEditingController(text: _type == 'Other' && initialType != 'Other' ? initialType : '');
 
     final base = t?.dueDate ?? widget.initialDate ?? DateTime.now();
     _dueDate = dateOnly(base);
@@ -129,6 +134,7 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
     _note.dispose();
     _room.dispose();
     _link.dispose();
+    _customType.dispose();
     _subjectFocus.dispose();
     super.dispose();
   }
@@ -170,7 +176,7 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
     task
       ..title = title
       ..subject = _subject.text.trim().isEmpty ? 'General' : _subject.text.trim()
-      ..type = _type
+      ..type = _type == 'Other' ? (_customType.text.trim().isEmpty ? 'Other' : _customType.text.trim()) : _type
       ..dueDate = due
       ..description = _buildDescription()
       ..startDate = start
@@ -189,9 +195,12 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
     final p = Palette.of(context);
     final isEditing = widget.taskToEdit != null;
     final subjects = context.read<TimetableProvider>().savedSubjects;
-    final showRoom = _type == 'Exam' || _type == 'Test' || _type == 'Event' || _room.text.isNotEmpty;
+    final showRoom = _type == 'Exam' || _type == 'Test' || _type == 'Other' || _room.text.isNotEmpty;
 
-    return DraggableScrollableSheet(
+    return Padding(
+      // Lift the sheet above the keyboard so the focused field stays visible.
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.9,
       maxChildSize: 0.95,
@@ -209,7 +218,7 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(isEditing ? 'Edit' : 'New ${_type.toLowerCase()}',
+                        child: Text(isEditing ? 'Edit' : (_type == 'Other' ? 'New item' : 'New ${_type.toLowerCase()}'),
                             style: TextStyle(fontSize: 26, fontWeight: FontWeight.w300, letterSpacing: -0.8, color: p.textPrimary)),
                       ),
                       if (isEditing)
@@ -236,7 +245,7 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
             Expanded(
               child: ListView(
                 controller: scroll,
-                padding: EdgeInsets.fromLTRB(22, 6, 22, 24 + MediaQuery.of(context).viewInsets.bottom),
+                padding: const EdgeInsets.fromLTRB(22, 6, 22, 24),
                 children: [
                   TextField(
                     controller: _title,
@@ -263,6 +272,18 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
                       );
                     }).toList(),
                   ),
+                  if (_type == 'Other') ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _customType,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        labelText: 'Name this type',
+                        hintText: 'e.g. Lab report, Presentation, Meeting',
+                        prefixIcon: Icon(Icons.label_outline_rounded),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   RawAutocomplete<String>(
                     textEditingController: _subject,
@@ -433,6 +454,7 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

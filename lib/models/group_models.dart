@@ -13,7 +13,8 @@ class StudyGroup {
   final String name;
   final String description;
   final String programme;
-  final int year;
+  final int year; // 1..5
+  final int semester; // 1..2
   final bool isPublic;
   final String ownerId;
   final bool membersCanPost;
@@ -25,6 +26,7 @@ class StudyGroup {
     this.description = '',
     this.programme = '',
     this.year = 1,
+    this.semester = 1,
     this.isPublic = true,
     required this.ownerId,
     this.membersCanPost = false,
@@ -39,6 +41,7 @@ class StudyGroup {
       description: d['description'] ?? '',
       programme: d['programme'] ?? '',
       year: (d['year'] as num?)?.toInt() ?? 1,
+      semester: (d['semester'] as num?)?.toInt() ?? 1,
       isPublic: d['isPublic'] ?? true,
       ownerId: d['ownerId'] ?? '',
       membersCanPost: d['membersCanPost'] ?? false,
@@ -52,13 +55,14 @@ class StudyGroup {
         'description': description,
         'programme': programme,
         'year': year,
+        'semester': semester,
         'isPublic': isPublic,
         'ownerId': ownerId,
         'membersCanPost': membersCanPost,
         'colorValue': colorValue,
       };
 
-  String get subtitle => [if (programme.isNotEmpty) programme, 'Year $year'].join(' · ');
+  String get subtitle => [if (programme.isNotEmpty) programme, 'Y$year S$semester'].join(' · ');
 }
 
 class GroupMember {

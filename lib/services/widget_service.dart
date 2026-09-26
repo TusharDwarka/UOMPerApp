@@ -98,6 +98,7 @@ class WidgetService {
         'subject': t.subject,
         'dueDate': t.dueDate.toIso8601String(),
         'type': t.type,
+        if (t.colorValue != null) 'color': t.colorValue,
       })).toList();
 
       // ── Save to SharedPreferences for native widget ──

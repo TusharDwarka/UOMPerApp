@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/group_models.dart';
+import '../providers/timetable_provider.dart';
 import '../services/group_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ui.dart';
@@ -21,6 +22,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
   int _tab = 0;
   String _query = '';
   int? _yearFilter;
+  int? _semesterFilter;
 
   // Streams are created once per signed-in user, not on every rebuild.
   String? _streamsUid;
@@ -207,16 +209,29 @@ class _GroupsScreenState extends State<GroupsScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 20),
             children: [
-              for (final y in [null, 1, 2, 3, 4])
+              for (final y in [null, 1, 2, 3, 4, 5])
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
-                    label: Text(y == null ? 'All years' : 'Year $y'),
+                    label: Text(y == null ? 'All years' : 'Y$y'),
                     selected: _yearFilter == y,
                     showCheckmark: false,
                     selectedColor: p.ink,
                     labelStyle: TextStyle(color: _yearFilter == y ? p.onInk : p.textPrimary, fontWeight: FontWeight.w600),
                     onSelected: (_) => setState(() => _yearFilter = y),
+                  ),
+                ),
+              Container(width: 1, margin: const EdgeInsets.fromLTRB(4, 10, 12, 10), color: p.border),
+              for (final sem in [null, 1, 2])
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(sem == null ? 'Any sem' : 'S$sem'),
+                    selected: _semesterFilter == sem,
+                    showCheckmark: false,
+                    selectedColor: p.ink,
+                    labelStyle: TextStyle(color: _semesterFilter == sem ? p.onInk : p.textPrimary, fontWeight: FontWeight.w600),
+                    onSelected: (_) => setState(() => _semesterFilter = sem),
                   ),
                 ),
             ],
@@ -232,6 +247,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
               if (!snap.hasData) return const Center(child: CircularProgressIndicator());
               final list = snap.data!.where((g) {
                 if (_yearFilter != null && g.year != _yearFilter) return false;
+                if (_semesterFilter != null && g.semester != _semesterFilter) return false;
                 if (_query.isEmpty) return true;
                 return g.name.toLowerCase().contains(_query) ||
                     g.programme.toLowerCase().contains(_query) ||
@@ -456,9 +472,10 @@ class _CreateGroupSheet extends StatefulWidget {
 
 class _CreateGroupSheetState extends State<_CreateGroupSheet> {
   final _name = TextEditingController();
-  final _programme = TextEditingController();
+  late final _programme = TextEditingController(text: context.read<TimetableProvider>().courseName);
   final _desc = TextEditingController();
-  int _year = 1;
+  late int _year = context.read<TimetableProvider>().studyYear;
+  late int _semester = context.read<TimetableProvider>().semester;
   bool _public = true;
   bool _membersCanPost = false;
   int _color = AppColors.eventPalette.first.toARGB32();
@@ -488,6 +505,7 @@ class _CreateGroupSheetState extends State<_CreateGroupSheet> {
             programme: _programme.text,
             description: _desc.text,
             year: _year,
+            semester: _semester,
             isPublic: _public,
             membersCanPost: _membersCanPost,
             colorValue: _color,
@@ -521,7 +539,11 @@ class _CreateGroupSheetState extends State<_CreateGroupSheet> {
             const SizedBox(height: 14),
             Text('Year', style: TextStyle(fontWeight: FontWeight.w600, color: p.textSecondary)),
             const SizedBox(height: 8),
-            PillSegmented<int>(values: const [1, 2, 3, 4], selected: _year, labelOf: (y) => 'Y$y', onChanged: (y) => setState(() => _year = y)),
+            PillSegmented<int>(values: const [1, 2, 3, 4, 5], selected: _year, labelOf: (y) => 'Y$y', onChanged: (y) => setState(() => _year = y)),
+            const SizedBox(height: 12),
+            Text('Semester', style: TextStyle(fontWeight: FontWeight.w600, color: p.textSecondary)),
+            const SizedBox(height: 8),
+            PillSegmented<int>(values: const [1, 2], selected: _semester, labelOf: (s) => 'Semester $s', onChanged: (s) => setState(() => _semester = s)),
             const SizedBox(height: 10),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,

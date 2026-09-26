@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/timetable_provider.dart';
+import '../theme/app_theme.dart';
 import '../utils/meeting_links.dart';
 import '../utils/time_utils.dart';
 import 'scroll_time_picker.dart';
+import 'ui.dart';
 
+/// Add / edit a class. Returns a map (moduleName, moduleCode, location, day,
+/// startTime, endTime, weeks, specificDate, meetingLink) or {'delete': true}.
 class AddEditClassSheet extends StatefulWidget {
   final Map<String, dynamic>? initialData;
   final bool isEditing;
@@ -17,19 +22,19 @@ class AddEditClassSheet extends StatefulWidget {
 }
 
 class _AddEditClassSheetState extends State<AddEditClassSheet> {
-  late TextEditingController _moduleNameCtrl;
-  late TextEditingController _moduleCodeCtrl;
-  late TextEditingController _locationCtrl;
-  late TextEditingController _linkCtrl;
-  bool _allowConflict = false;
-  late String _selectedDay;
-  late TimeOfDay _startTime;
-  late TimeOfDay _endTime;
-  bool _isTemporary = false;
-  DateTime? _specificDate;
-  String? _errorMessage;
+  late final TextEditingController _moduleNameCtrl;
+  late final TextEditingController _moduleCodeCtrl;
+  late final TextEditingController _locationCtrl;
+  late final TextEditingController _linkCtrl;
+  final _moduleFocus = FocusNode();
 
-  final List<String> _days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  late String _selectedDay;
+  late int _start; // minutes from midnight
+  late int _end;
+  bool _isOneOff = false;
+  late DateTime _specificDate;
+  bool _allowConflict = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -37,25 +42,16 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
     final d = widget.initialData;
     _moduleNameCtrl = TextEditingController(text: d?['moduleName'] ?? '');
     _moduleCodeCtrl = TextEditingController(text: d?['moduleCode'] ?? '');
-    _locationCtrl = TextEditingController(text: d?['location'] ?? '');
+    _locationCtrl = TextEditingController(text: (d?['location'] == 'TBD') ? '' : (d?['location'] ?? ''));
     _linkCtrl = TextEditingController(text: d?['meetingLink'] ?? '');
-    _selectedDay = d?['day'] ?? 'Monday';
 
-    if (!_days.contains(_selectedDay)) {
-      _selectedDay = 'Monday';
-    }
+    _selectedDay = WeekdayPicker.days.contains(d?['day']) ? d!['day'] : 'Monday';
+    final parsedDate = d?['specificDate'] != null ? DateTime.tryParse(d!['specificDate'].toString()) : null;
+    _isOneOff = d?['isTemporary'] ?? (parsedDate != null && widget.isEditing);
+    _specificDate = dateOnly(parsedDate ?? DateTime.now());
 
-    _specificDate = d?['specificDate'] != null ? DateTime.tryParse(d!['specificDate'].toString()) : null;
-    _isTemporary = d?['isTemporary'] ?? (_specificDate != null);
-
-    _startTime = _parseTime(d?['startTime']) ?? const TimeOfDay(hour: 9, minute: 0);
-    _endTime = _parseTime(d?['endTime']) ?? const TimeOfDay(hour: 10, minute: 0);
-  }
-
-  TimeOfDay? _parseTime(String? timeStr) {
-    final m = parseMinutes(timeStr);
-    if (m == null) return null;
-    return TimeOfDay(hour: (m ~/ 60) % 24, minute: m % 60);
+    _start = parseMinutes(d?['startTime']) ?? 9 * 60;
+    _end = parseMinutes(d?['endTime']) ?? _start + 60;
   }
 
   @override
@@ -64,69 +60,62 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
     _moduleCodeCtrl.dispose();
     _locationCtrl.dispose();
     _linkCtrl.dispose();
+    _moduleFocus.dispose();
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _pickTime(bool start) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final m = start ? _start : _end;
+    final picked = await showScrollTimePicker(context: context, initialTime: TimeOfDay(hour: (m ~/ 60) % 24, minute: m % 60));
+    if (picked == null) return;
     setState(() {
-      _errorMessage = null;
-    });
-
-    if (_moduleNameCtrl.text.trim().isEmpty) {
-      setState(() {
-        _errorMessage = 'Module Name is required';
-      });
-      return;
-    }
-
-    if (_isTemporary && _specificDate == null) {
-      setState(() {
-        _errorMessage = 'Please select a date for the one-off class';
-      });
-      return;
-    }
-
-    final dayToSave = _isTemporary ? DateFormat('EEEE').format(_specificDate!) : _selectedDay;
-
-    // Conflict Detection
-    final provider = Provider.of<TimetableProvider>(context, listen: false);
-    final newStart = _startTime.hour * 60 + _startTime.minute;
-    final newEnd = _endTime.hour * 60 + _endTime.minute;
-    final editId = widget.initialData?['id'];
-
-    final sessionsToCheck = provider.userSessions.where((s) {
-      if (editId != null && s.id == editId) return false;
-
-      if (_isTemporary && _specificDate != null) {
-        if (s.specificDate != null) {
-          return s.specificDate!.year == _specificDate!.year &&
-              s.specificDate!.month == _specificDate!.month &&
-              s.specificDate!.day == _specificDate!.day;
-        } else {
-          return s.day == dayToSave;
-        }
+      final v = picked.hour * 60 + picked.minute;
+      _allowConflict = false;
+      if (start) {
+        final length = _end - _start;
+        _start = v;
+        _end = v + (length > 0 ? length : 60);
       } else {
-        return s.day == dayToSave && s.specificDate == null;
+        _end = v;
       }
-    }).toList();
+    });
+  }
 
-    final myWeeks = List<int>.from(widget.initialData?['weeks'] ?? const []);
-    bool weeksOverlap(List<int>? other) {
-      // Empty/null week lists mean "every week".
-      if (myWeeks.isEmpty || other == null || other.isEmpty) return true;
-      return other.any(myWeeks.contains);
+  void _save() {
+    setState(() => _errorMessage = null);
+    final name = _moduleNameCtrl.text.trim();
+    if (name.isEmpty) {
+      setState(() => _errorMessage = 'Enter the module name');
+      return;
     }
-
+    if (_end <= _start) {
+      setState(() => _errorMessage = 'The class must end after it starts');
+      return;
+    }
     final link = _linkCtrl.text.trim();
     if (link.isNotEmpty && !MeetingLinks.isValid(link)) {
       setState(() => _errorMessage = "That meeting link doesn't look right");
       return;
     }
 
+    final dayToSave = _isOneOff ? DateFormat('EEEE').format(_specificDate) : _selectedDay;
+
+    // Conflict check (week-aware; a clash is a warning, tap Save again to keep both).
     if (!_allowConflict) {
-      for (final s in sessionsToCheck) {
-        if (!weeksOverlap(s.weeks)) continue;
-        if (newStart < s.endMinutes && newEnd > s.startMinutes) {
+      final provider = context.read<TimetableProvider>();
+      final editId = widget.initialData?['id'];
+      final myWeeks = List<int>.from(widget.initialData?['weeks'] ?? const []);
+      bool weeksOverlap(List<int>? other) =>
+          myWeeks.isEmpty || other == null || other.isEmpty || other.any(myWeeks.contains);
+
+      for (final s in provider.userSessions) {
+        if (editId != null && s.id == editId) continue;
+        final sameSlot = _isOneOff
+            ? (s.specificDate != null ? isSameDate(s.specificDate!, _specificDate) : s.day == dayToSave)
+            : (s.day == dayToSave && s.specificDate == null);
+        if (!sameSlot || !weeksOverlap(s.weeks)) continue;
+        if (_start < s.endMinutes && _end > s.startMinutes) {
           setState(() {
             _errorMessage = 'Clashes with ${s.subject} (${s.startTime}–${s.endTime}). Tap Save again to keep both.';
             _allowConflict = true;
@@ -136,364 +125,278 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
       }
     }
 
-    final result = {
-      'moduleName': _moduleNameCtrl.text.trim(),
+    Navigator.of(context).pop({
+      'moduleName': name,
       'moduleCode': _moduleCodeCtrl.text.trim(),
       'location': _locationCtrl.text.trim().isEmpty ? 'TBD' : _locationCtrl.text.trim(),
       'day': dayToSave,
-      'startTime': '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}',
-      'endTime': '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}',
+      'startTime': formatMinutes(_start),
+      'endTime': formatMinutes(_end),
       'weeks': widget.initialData?['weeks'] ?? [],
-      'specificDate': _isTemporary ? _specificDate?.toIso8601String() : null,
+      'specificDate': _isOneOff ? _specificDate.toIso8601String() : null,
       'meetingLink': MeetingLinks.normalize(link),
-    };
+    });
+  }
 
-    Navigator.of(context).pop(result);
+  Future<void> _confirmDelete() async {
+    final ok = await confirmDestructive(context,
+        title: 'Delete class?', message: 'Remove ${_moduleNameCtrl.text} from your timetable?');
+    if (ok && mounted) Navigator.of(context).pop({'delete': true});
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accentColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF2962FF);
-    final isEditing = widget.isEditing;
+    final p = Palette.of(context);
+    final subjects = context.read<TimetableProvider>().savedSubjects;
+    final length = _end - _start;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Header
-            Text(
-              isEditing ? "Edit Class" : "Add Class",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
-            ),
-            const SizedBox(height: 24),
-
-            // Details section
-            _buildSectionHeader("Details", Icons.info_outline),
-            const SizedBox(height: 16),
-            _buildTextField("Module Name", "e.g. Programming", _moduleNameCtrl, isDark),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _buildTextField("Code (Opt)", "e.g. CS101", _moduleCodeCtrl, isDark)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildTextField("Room", "e.g. NAC 2.12", _locationCtrl, isDark)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _linkCtrl,
-              keyboardType: TextInputType.url,
-              style: TextStyle(color: isDark ? Colors.white : Colors.black),
-              decoration: InputDecoration(
-                labelText: "Online link (optional)",
-                hintText: "Google Meet / Teams / Zoom",
-                prefixIcon: const Icon(Icons.videocam_outlined),
-                filled: true,
-                fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Timing section
-            _buildSectionHeader("Timing", Icons.access_time_rounded),
-            const SizedBox(height: 16),
-
-            // Toggle Regular vs One-Off
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text("Regular", style: TextStyle(color: !_isTemporary ? accentColor : Colors.grey, fontWeight: FontWeight.bold)),
-                Switch(
-                  value: _isTemporary,
-                  activeThumbColor: accentColor,
-                  onChanged: (v) => setState(() => _isTemporary = v),
-                ),
-                Text("One-Off", style: TextStyle(color: _isTemporary ? accentColor : Colors.grey, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Day Dropdown OR Date Picker
-            if (!_isTemporary)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedDay,
-                    isExpanded: true,
-                    dropdownColor: isDark ? const Color(0xFF2A2A3C) : Colors.white,
-                    icon: Icon(Icons.keyboard_arrow_down_rounded, color: isDark ? Colors.white54 : Colors.grey),
-                    style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 16, fontWeight: FontWeight.w600),
-                    items: _days.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                    onChanged: (val) {
-                      if (val == null) return;
-                      setState(() {
-                        _selectedDay = val;
-                        _allowConflict = false;
-                      });
-                    },
-                  ),
-                ),
-              )
-            else
-              GestureDetector(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _specificDate ?? DateTime.now(),
-                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (picked != null) {
-                    setState(() => _specificDate = picked);
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: _specificDate == null ? Colors.red.withValues(alpha: 0.5) : Colors.transparent),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.event, color: isDark ? Colors.white54 : Colors.grey),
-                      const SizedBox(width: 12),
-                      Text(
-                        _specificDate != null ? DateFormat('EEEE, MMM d, yyyy').format(_specificDate!) : "Select Date",
-                        style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 16, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            const SizedBox(height: 16),
-
-            // Time Pickers
-            Row(
-              children: [
-                Expanded(
-                  child: _buildTimePicker("Start Time", _startTime, (t) {
-                    setState(() {
-                      _allowConflict = false;
-                      _startTime = t;
-                      // Automatically add 1 hour to end time
-                      _endTime = TimeOfDay(hour: (t.hour + 1) % 24, minute: t.minute);
-                    });
-                  }, isDark, accentColor),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildTimePicker(
-                      "End Time",
-                      _endTime,
-                      (t) => setState(() {
-                            _allowConflict = false;
-                            _endTime = t;
-                          }),
-                      isDark,
-                      accentColor,
-                      hasError: _endTime.hour * 60 + _endTime.minute <= _startTime.hour * 60 + _startTime.minute),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-
-            // Error Message
-            if (_errorMessage != null)
-              Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
-                ),
-                child: Row(
+    return Padding(
+      // Lifts the whole sheet above the keyboard so the field being typed in stays visible.
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.92,
+        maxChildSize: 0.95,
+        minChildSize: 0.5,
+        builder: (context, scroll) => Container(
+          decoration: BoxDecoration(color: p.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 10, 12, 0),
+                child: Column(
                   children: [
-                    const Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _errorMessage!,
-                        style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
+                    Container(width: 40, height: 4, decoration: BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(widget.isEditing ? 'Edit class' : 'Add class',
+                              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w300, letterSpacing: -0.8, color: p.textPrimary)),
+                        ),
+                        if (widget.isEditing)
+                          IconButton(
+                            tooltip: 'Delete class',
+                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                            onPressed: _confirmDelete,
+                          ),
+                        IconButton(tooltip: 'Close', icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(context)),
+                      ],
                     ),
                   ],
                 ),
               ),
+              Expanded(
+                child: ListView(
+                  controller: scroll,
+                  padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
+                  children: [
+                    // ── When (at the top) ──
+                    _label(p, 'When'),
+                    PillSegmented<bool>(
+                      values: const [false, true],
+                      selected: _isOneOff,
+                      labelOf: (v) => v ? 'One-off date' : 'Every week',
+                      onChanged: (v) => setState(() {
+                        _isOneOff = v;
+                        _allowConflict = false;
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    if (!_isOneOff)
+                      WeekdayPicker(
+                        selected: _selectedDay,
+                        onChanged: (d) => setState(() {
+                          _selectedDay = d;
+                          _allowConflict = false;
+                        }),
+                      )
+                    else
+                      Container(
+                        decoration: BoxDecoration(color: p.surfaceAlt, borderRadius: BorderRadius.circular(28)),
+                        child: CalendarDatePicker(
+                          initialDate: _specificDate,
+                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                          lastDate: DateTime.now().add(const Duration(days: 730)),
+                          onDateChanged: (d) => setState(() {
+                            _specificDate = dateOnly(d);
+                            _allowConflict = false;
+                          }),
+                        ),
+                      ),
+                    const SizedBox(height: 18),
 
-            // Action Buttons
-            Row(
-              children: [
-                if (isEditing)
-                  IconButton.filledTonal(
-                    tooltip: 'Delete class',
-                    style: IconButton.styleFrom(foregroundColor: Colors.redAccent, padding: const EdgeInsets.all(14)),
-                    icon: const Icon(Icons.delete_outline_rounded),
-                    onPressed: () async {
-                      final ok = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Delete class?'),
-                          content: Text('Remove ${_moduleNameCtrl.text} from your timetable?'),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                            TextButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                child: const Text('Delete', style: TextStyle(color: Colors.red))),
+                    // ── Time ──
+                    _label(p, 'Time'),
+                    Row(
+                      children: [
+                        Expanded(child: _timeBox(p, 'Starts', _start, () => _pickTime(true))),
+                        const SizedBox(width: 10),
+                        Expanded(child: _timeBox(p, 'Ends', _end, () => _pickTime(false), error: _end <= _start)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        for (final len in const [60, 90, 120, 180])
+                          ChoiceChip(
+                            showCheckmark: false,
+                            label: Text(formatCountdown(len)),
+                            selected: length == len,
+                            selectedColor: p.ink,
+                            backgroundColor: p.surfaceAlt,
+                            labelStyle: TextStyle(color: length == len ? p.onInk : p.textPrimary, fontWeight: FontWeight.w600),
+                            onSelected: (_) => setState(() {
+                              _end = _start + len;
+                              _allowConflict = false;
+                            }),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+
+                    // ── Details ──
+                    _label(p, 'Details'),
+                    RawAutocomplete<String>(
+                      textEditingController: _moduleNameCtrl,
+                      focusNode: _moduleFocus,
+                      optionsBuilder: (v) {
+                        final q = v.text.toLowerCase();
+                        if (q.isEmpty) return const Iterable<String>.empty();
+                        return subjects.where((s) => s.toLowerCase().contains(q) && s.toLowerCase() != q);
+                      },
+                      fieldViewBuilder: (context, controller, focus, onSubmit) => TextField(
+                        controller: controller,
+                        focusNode: focus,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(labelText: 'Module name', prefixIcon: Icon(Icons.menu_book_rounded)),
+                      ),
+                      optionsViewBuilder: (context, onSelected, options) => Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 6,
+                          color: p.surface,
+                          borderRadius: BorderRadius.circular(20),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 200, maxWidth: 360),
+                            child: ListView(
+                              shrinkWrap: true,
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              children: options
+                                  .map((o) => ListTile(dense: true, title: Text(o), onTap: () => onSelected(o)))
+                                  .toList(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _moduleCodeCtrl,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: const InputDecoration(labelText: 'Code', hintText: 'CS1010'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _locationCtrl,
+                            decoration: const InputDecoration(labelText: 'Room', hintText: 'NAC 2.12'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _linkCtrl,
+                      keyboardType: TextInputType.url,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        labelText: 'Online link (optional)',
+                        hintText: 'Google Meet / Teams / Zoom',
+                        prefixIcon: const Icon(Icons.videocam_outlined),
+                        suffixIcon: MeetingLinks.isValid(_linkCtrl.text)
+                            ? Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: TagPill(MeetingLinks.label(_linkCtrl.text).replaceFirst('Join ', ''),
+                                    color: MeetingLinks.color(_linkCtrl.text)),
+                              )
+                            : null,
+                      ),
+                    ),
+                    if (_errorMessage != null)
+                      Container(
+                        margin: const EdgeInsets.only(top: 14),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: (_allowConflict ? Colors.orange : Colors.red).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(_allowConflict ? Icons.warning_amber_rounded : Icons.error_outline,
+                                color: _allowConflict ? Colors.orange[800] : Colors.redAccent, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(_errorMessage!,
+                                  style: TextStyle(
+                                      color: _allowConflict ? Colors.orange[900] : Colors.redAccent, fontWeight: FontWeight.w600)),
+                            ),
                           ],
                         ),
-                      );
-                      if (ok == true && context.mounted) Navigator.of(context).pop({'delete': true});
-                    },
-                  ),
-                if (isEditing) const SizedBox(width: 8),
-                Expanded(
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                    const SizedBox(height: 22),
+                    InkPillButton(
+                      label: _allowConflict ? 'Save anyway' : (widget.isEditing ? 'Save changes' : 'Add class'),
+                      icon: Icons.check_rounded,
+                      expand: true,
+                      onPressed: _save,
                     ),
-                    child: Text("Cancel",
-                        style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      final startMins = _startTime.hour * 60 + _startTime.minute;
-                      final endMins = _endTime.hour * 60 + _endTime.minute;
-                      if (endMins <= startMins) {
-                        setState(() {
-                          _errorMessage = "End time must be after start time.";
-                        });
-                        return;
-                      }
-                      _save();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    child: const Text("Save", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: Colors.grey),
-        const SizedBox(width: 8),
-        Text(
-          title.toUpperCase(),
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2),
-        ),
-      ],
-    );
-  }
+  Widget _label(Palette p, String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 8, left: 2),
+        child: Text(text.toUpperCase(),
+            style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w800, color: p.textMuted)),
+      );
 
-  Widget _buildTextField(String label, String hint, TextEditingController ctrl, bool isDark) {
-    return TextField(
-      controller: ctrl,
-      textCapitalization: TextCapitalization.words,
-      style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.w600),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        labelStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[700]),
-        hintStyle: TextStyle(color: isDark ? Colors.grey[700] : Colors.grey[400]),
-        filled: true,
-        fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      ),
-    );
-  }
-
-  Widget _buildTimePicker(String label, TimeOfDay time, Function(TimeOfDay) onChanged, bool isDark, Color accentColor,
-      {bool hasError = false}) {
-    return GestureDetector(
-      onTap: () async {
-        FocusManager.instance.primaryFocus?.unfocus(); // Fully drop focus
-        await Future.delayed(const Duration(milliseconds: 150)); // Wait for keyboard to retract
-        if (!mounted) return;
-        final picked = await showScrollTimePicker(context: context, initialTime: time);
-        if (picked != null) onChanged(picked);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        decoration: BoxDecoration(
-          color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
-          borderRadius: BorderRadius.circular(16),
-          border: hasError ? Border.all(color: Colors.redAccent, width: 1.5) : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[500] : Colors.grey[700])),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.access_time, size: 16, color: accentColor),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      time.format(context),
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+  Widget _timeBox(Palette p, String label, int minutes, VoidCallback onTap, {bool error = false}) {
+    return SoftCard(
+      color: p.surfaceAlt,
+      radius: 22,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      border: error ? Border.all(color: Colors.redAccent, width: 1.5) : null,
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.schedule_rounded, size: 14, color: p.textSecondary),
+            const SizedBox(width: 4),
+            Text(label, style: TextStyle(fontSize: 12, color: p.textSecondary, fontWeight: FontWeight.w600)),
+          ]),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(formatMinutes(minutes),
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w300, letterSpacing: -1, color: p.textPrimary)),
+          ),
+        ],
       ),
     );
   }
