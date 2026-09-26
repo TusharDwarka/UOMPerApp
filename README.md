@@ -8,7 +8,7 @@ timer and study groups — on Android and Windows, synced through one account.
 ### 📅 Schedule
 - AI timetable import (photo/PDF), week-aware classes, one-off classes.
 - Day view with correct hour alignment, early/late classes, side-by-side overlapping classes and a live "now" line.
-- Tap a class for attendance, homework, reminder and **Join Meet/Teams/Zoom** (paste a link on any class or event).
+- Tap a class for homework, a reminder and **Join Meet/Teams/Zoom** (paste a link on any class or event).
 
 ### 🗓 Academic Hub
 - Calendar with **per-event colours** and **multi-day (spanning) events** drawn as continuous bars.
