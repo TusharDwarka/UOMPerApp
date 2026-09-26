@@ -31,19 +31,43 @@ def resolve_uid(value: str) -> tuple[str, str]:
     return user.uid, user.email or "(no email / guest)"
 
 
+def resolve_or_create(value: str, create: bool, apply: bool) -> tuple[str | None, str]:
+    """Destination lookup; with --create a missing email account is created
+    and a link is printed for the owner to choose their own password."""
+    try:
+        return resolve_uid(value)
+    except auth.UserNotFoundError:
+        if "@" not in value or not create:
+            print(f"No account found for {value}. Sign up with it in the app first, or add --create.")
+            raise SystemExit(1)
+    if not apply:
+        print(f"(dry run) would create the account {value}")
+        return None, value
+    user = auth.create_user(email=value, email_verified=False)
+    link = auth.generate_password_reset_link(value)
+    print(f"Created account {value} ({user.uid}).")
+    print("Open this link to choose its password (valid about 1 hour):")
+    print(link)
+    print()
+    return user.uid, value
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--key", required=True, help="service account JSON downloaded from the Firebase console")
     ap.add_argument("--from", dest="src", required=True, help="source UID (the old account)")
     ap.add_argument("--to", dest="dst", required=True, help="destination UID or email")
     ap.add_argument("--apply", action="store_true", help="actually write (otherwise dry run)")
+    ap.add_argument("--create", action="store_true", help="create the destination email account if it doesn't exist")
     args = ap.parse_args()
 
     firebase_admin.initialize_app(credentials.Certificate(args.key))
     db = firestore.client()
 
     src_uid, src_email = resolve_uid(args.src)
-    dst_uid, dst_email = resolve_uid(args.dst)
+    dst_uid, dst_email = resolve_or_create(args.dst, args.create, args.apply)
+    if dst_uid is None:
+        dst_uid = "<new account>"
     if src_uid == dst_uid:
         print("Source and destination are the same account - nothing to do.")
         return 1
