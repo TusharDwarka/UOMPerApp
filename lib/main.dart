@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -23,6 +26,7 @@ import 'theme/app_theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await _activateAppCheck();
 
   await NotificationService().init();
 
@@ -44,6 +48,22 @@ void main() async {
       child: const UOMPerApp(),
     ),
   );
+}
+
+/// App Check proves requests come from the genuine app. Phone builds only:
+/// Windows has no real attestation provider. Debug (USB) builds use the
+/// debug provider, which prints a token to register in Firebase → App Check
+/// → Manage debug tokens. Nothing is blocked until "Enforce" is turned on.
+Future<void> _activateAppCheck() async {
+  if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) return;
+  try {
+    await FirebaseAppCheck.instance.activate(
+      providerAndroid: kDebugMode ? const AndroidDebugProvider() : const AndroidPlayIntegrityProvider(),
+      providerApple: kDebugMode ? const AppleDebugProvider() : const AppleDeviceCheckProvider(),
+    );
+  } catch (e) {
+    debugPrint('App Check activation failed: $e');
+  }
 }
 
 class UOMPerApp extends StatelessWidget {
