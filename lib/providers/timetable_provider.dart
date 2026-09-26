@@ -354,6 +354,10 @@ class TimetableProvider extends ChangeNotifier {
 
     WidgetService.updateWidget(this);
     rescheduleReminders();
+    NotificationService().scheduleWeeklySummary([
+      for (final t in _tasks)
+        if (!t.isCompleted) (title: t.title, type: t.type, due: t.dueDate)
+    ]);
   }
 
   Future<void> resetAttendance() async {
@@ -595,6 +599,18 @@ class TimetableProvider extends ChangeNotifier {
 
   Future<void> toggleTaskDone(AcademicTask task) =>
       setTaskStatus(task, task.isCompleted ? TaskStatus.todo : TaskStatus.done);
+
+  /// Modules on the user's timetable (the source for subject pickers).
+  List<String> get scheduleSubjects {
+    final seen = <String>{};
+    final list = <String>[];
+    for (final s in _userSessions) {
+      final name = s.subject.trim();
+      if (name.isNotEmpty && seen.add(name.toLowerCase())) list.add(name);
+    }
+    list.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return list;
+  }
 
   // Unique subjects from tasks and classes for autocomplete
   List<String> get savedSubjects {

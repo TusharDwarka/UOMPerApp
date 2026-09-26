@@ -83,6 +83,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
       ..showSnackBar(SnackBar(
         content: Text('Moved to ${TaskStatus.label(status)}'),
         duration: const Duration(seconds: 3),
+        persist: false, // Flutter keeps action snackbars forever by default
         action: SnackBarAction(label: 'Undo', onPressed: () => tp.setTaskStatus(t, previous)),
       ));
   }
@@ -101,6 +102,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('Cleared ${removed.length} items'),
+      persist: false, // Flutter keeps action snackbars forever by default
       action: SnackBarAction(label: 'Undo', onPressed: () async {
         for (final r in removed) {
           await tp.restoreTask(r);

@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/bus_repository.dart';
+import '../services/pdf_export.dart';
 import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/bus_utils.dart';
@@ -252,6 +254,7 @@ class _BusTabState extends State<BusTab> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: const Text('Route deleted'),
+      persist: false, // Flutter keeps action snackbars forever by default
       action: SnackBarAction(
         label: 'Undo',
         onPressed: () async {
@@ -281,6 +284,19 @@ class _BusTabState extends State<BusTab> {
               onTap: () {
                 Navigator.pop(ctx);
                 _shareRoute();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf_outlined),
+              title: const Text('Share as PDF'),
+              subtitle: const Text('A printable timetable'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final r = _route;
+                if (r == null) return;
+                final bytes = await PdfExport.busTimetable(r);
+                final name = 'Bus_${(r['bus_route'] ?? 'route').toString()}_${_shortName(r['location_name'].toString()).replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}.pdf';
+                await Printing.sharePdf(bytes: bytes, filename: name);
               },
             ),
             ListTile(
@@ -395,6 +411,7 @@ class _BusTabState extends State<BusTab> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Removed ${removed['departure']}'),
+        persist: false, // Flutter keeps action snackbars forever by default
         action: SnackBarAction(
           label: 'Undo',
           onPressed: () async {

@@ -138,7 +138,10 @@ class _ScheduleTabState extends State<ScheduleTab> {
                       child: LayoutBuilder(builder: (context, c) {
                         final gridWidth = c.maxWidth - _gutter;
                         final height = (endHour - startHour) * _hourHeight;
+                        // Explicit width: a Stack with only Positioned children
+                        // collapses to zero width under loose constraints.
                         return SizedBox(
+                          width: c.maxWidth,
                           height: height,
                           child: Stack(
                             clipBehavior: Clip.none,

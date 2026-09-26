@@ -26,6 +26,11 @@ class ResourceProvider extends ChangeNotifier {
   List<String> _customFolders = [];
   List<String> get customFolders => List.unmodifiable(_customFolders);
 
+  /// Module folders (which come from the timetable) the user deleted/hid.
+  List<String> _hiddenFolders = [];
+  List<String> get hiddenFolders => List.unmodifiable(_hiddenFolders);
+  bool isHidden(String folder) => _hiddenFolders.contains(folder);
+
   ResourceProvider(this.isarService, [this._syncService]) {
     loadResources();
     _loadStructure();
@@ -74,6 +79,7 @@ class ResourceProvider extends ChangeNotifier {
       _sections = decoded.map((k, v) => MapEntry(k, List<String>.from(v as List)));
     }
     _customFolders = prefs.getStringList('custom_folders') ?? [];
+    _hiddenFolders = prefs.getStringList('hidden_folders') ?? [];
     notifyListeners();
   }
 
@@ -81,6 +87,7 @@ class ResourceProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('resource_sections', jsonEncode(_sections));
     await prefs.setStringList('custom_folders', _customFolders);
+    await prefs.setStringList('hidden_folders', _hiddenFolders);
     _syncService?.pushSettings(settingsSnapshot());
     notifyListeners();
   }
@@ -88,6 +95,7 @@ class ResourceProvider extends ChangeNotifier {
   Map<String, dynamic> settingsSnapshot() => {
         'resourceSections': _sections,
         'customFolders': _customFolders,
+        'hiddenFolders': _hiddenFolders,
       };
 
   Future<void> applyCloudSettings(Map<String, dynamic> s) async {
@@ -96,10 +104,31 @@ class ResourceProvider extends ChangeNotifier {
       _sections = sections.map((k, v) => MapEntry(k.toString(), List<String>.from(v as List)));
     }
     if (s['customFolders'] is List) _customFolders = List<String>.from(s['customFolders']);
+    if (s['hiddenFolders'] is List) _hiddenFolders = List<String>.from(s['hiddenFolders']);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('resource_sections', jsonEncode(_sections));
     await prefs.setStringList('custom_folders', _customFolders);
+    await prefs.setStringList('hidden_folders', _hiddenFolders);
     notifyListeners();
+  }
+
+  /// Deletes a folder and every file in it. Timetable-module folders are
+  /// hidden (they would otherwise reappear from the schedule).
+  Future<int> deleteFolder(String folder) async {
+    final files = getResourcesForModule(folder);
+    for (final f in files) {
+      await deleteResource(f.id);
+    }
+    _customFolders = _customFolders.where((f) => f != folder).toList();
+    _sections.remove(folder);
+    if (!_hiddenFolders.contains(folder)) _hiddenFolders = [..._hiddenFolders, folder];
+    await _saveStructure();
+    return files.length;
+  }
+
+  Future<void> unhideFolder(String folder) async {
+    _hiddenFolders = _hiddenFolders.where((f) => f != folder).toList();
+    await _saveStructure();
   }
 
   Future<bool> addSection(String folder, String name) async {
@@ -139,6 +168,7 @@ class ResourceProvider extends ChangeNotifier {
   Future<bool> addCustomFolder(String name) async {
     final n = name.trim();
     if (n.isEmpty || n == 'Unsorted' || _customFolders.contains(n)) return false;
+    _hiddenFolders = _hiddenFolders.where((f) => f != n).toList();
     _customFolders = [..._customFolders, n];
     await _saveStructure();
     return true;

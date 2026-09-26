@@ -346,6 +346,105 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
     }
   }
 
+  /// Jumps the editor to [offset] (switching out of preview).
+  void _jumpTo(int offset) {
+    setState(() => _preview = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _contentFocus.requestFocus();
+      _contentController.selection = TextSelection.collapsed(offset: offset.clamp(0, _contentController.text.length));
+    });
+  }
+
+  /// Outline (headings) + find-in-note, for long notes.
+  Future<void> _openNavigator() async {
+    FocusScope.of(context).unfocus();
+    final text = _contentController.text;
+    final lines = text.split('\n');
+    final starts = <int>[];
+    var pos = 0;
+    for (final l in lines) {
+      starts.add(pos);
+      pos += l.length + 1;
+    }
+    final words = text.trim().isEmpty ? 0 : text.trim().split(RegExp(r'\s+')).length;
+
+    final target = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        var query = '';
+        return StatefulBuilder(builder: (ctx, setSheet) {
+          final p = Palette.of(ctx);
+          final results = <(int, String, bool)>[]; // offset, label, isHeading
+          if (query.isEmpty) {
+            for (var i = 0; i < lines.length; i++) {
+              if (lines[i].startsWith('# ')) results.add((starts[i], lines[i].substring(2), true));
+            }
+          } else {
+            final q = query.toLowerCase();
+            for (var i = 0; i < lines.length; i++) {
+              final idx = lines[i].toLowerCase().indexOf(q);
+              if (idx >= 0) results.add((starts[i] + idx, lines[i].trim(), false));
+            }
+          }
+          return ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+            child: SheetScaffold(
+              title: 'Outline & find',
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('${lines.length} lines · $words words', style: TextStyle(color: p.textSecondary, fontSize: 12)),
+                  const SizedBox(height: 10),
+                  TextField(
+                    autofocus: false,
+                    decoration: const InputDecoration(hintText: 'Find in this note…', prefixIcon: Icon(Icons.search_rounded)),
+                    onChanged: (v) => setSheet(() => query = v.trim()),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(child: InkPillButton(label: 'Top', icon: Icons.vertical_align_top_rounded, onPressed: () => Navigator.pop(ctx, 0))),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: InkPillButton(
+                          label: 'Bottom', icon: Icons.vertical_align_bottom_rounded, onPressed: () => Navigator.pop(ctx, text.length)),
+                    ),
+                  ]),
+                  const SizedBox(height: 12),
+                  if (results.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        query.isEmpty ? 'Add headings with the H button to build an outline.' : 'No matches',
+                        style: TextStyle(color: p.textSecondary),
+                      ),
+                    ),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final r in results)
+                          ListTile(
+                            dense: true,
+                            leading: Icon(r.$3 ? Icons.title_rounded : Icons.subdirectory_arrow_right_rounded, size: 18),
+                            title: Text(r.$2, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            onTap: () => Navigator.pop(ctx, r.$1),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        });
+      },
+    );
+    if (target != null) _jumpTo(target);
+  }
+
   Widget _tool(IconData icon, String tip, VoidCallback? onTap) => IconButton(
         tooltip: tip,
         onPressed: onTap,
@@ -381,6 +480,7 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
     if (removed == null) return;
     messenger.showSnackBar(SnackBar(
       content: const Text('Note deleted'),
+      persist: false, // Flutter keeps action snackbars forever by default
       action: SnackBarAction(label: 'Undo', onPressed: () => provider.restoreNote(removed)),
     ));
   }
@@ -401,6 +501,11 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
             children: [
               IconButton(icon: const Icon(Icons.close_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
               const Spacer(),
+              IconButton(
+                tooltip: 'Outline & find',
+                icon: const Icon(Icons.toc_rounded, color: Colors.black87),
+                onPressed: _openNavigator,
+              ),
               IconButton(
                 tooltip: _pinned ? 'Unpin' : 'Pin',
                 icon: Icon(_pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, color: Colors.black87),

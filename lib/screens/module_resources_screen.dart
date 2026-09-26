@@ -8,7 +8,7 @@ import '../providers/resource_provider.dart';
 import '../providers/timetable_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ui.dart';
-import 'resources_tab.dart' show fileIcon, fileIconColor;
+import 'resources_tab.dart' show fileIcon, fileIconColor, confirmDeleteFolder;
 import 'pdf_viewer_screen.dart';
 
 /// One folder (module or custom) split into user-editable sections.
@@ -138,6 +138,14 @@ class _ModuleResourcesScreenState extends State<ModuleResourcesScreen> {
               child: Row(
                 children: [
                   CircleIconButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => Navigator.pop(context)),
+                  const Spacer(),
+                  CircleIconButton(
+                    icon: Icons.delete_outline_rounded,
+                    tooltip: 'Delete folder',
+                    onPressed: () async {
+                      if (await confirmDeleteFolder(context, _folder) && context.mounted) Navigator.pop(context);
+                    },
+                  ),
                 ],
               ),
             ),

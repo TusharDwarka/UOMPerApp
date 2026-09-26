@@ -75,6 +75,9 @@ class GroupMember {
   final int tasksDone;
   final int streak;
 
+  /// 'full' (name + progress), 'nameOnly', or 'hidden' from the ranking.
+  final String rankVisibility;
+
   const GroupMember({
     required this.uid,
     required this.displayName,
@@ -84,6 +87,7 @@ class GroupMember {
     this.statsWeek,
     this.tasksDone = 0,
     this.streak = 0,
+    this.rankVisibility = 'full',
   });
 
   bool get isLeader => role == 'leader';
@@ -100,13 +104,14 @@ class GroupMember {
       statsWeek: stats['week'] as String?,
       tasksDone: (stats['tasksDone'] as num?)?.toInt() ?? 0,
       streak: (stats['streak'] as num?)?.toInt() ?? 0,
+      rankVisibility: d['rankVisibility'] ?? 'full',
     );
   }
 
   /// Leaderboard score: focus minutes this week + 20 per finished task +
   /// 10 per streak day. Stale stats from a previous week count as zero.
   int scoreFor(String currentWeek) {
-    if (statsWeek != currentWeek) return 0;
+    if (statsWeek != currentWeek || rankVisibility != 'full') return 0;
     return weeklyFocusMinutes + tasksDone * 20 + streak * 10;
   }
 }

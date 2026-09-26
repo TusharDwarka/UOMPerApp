@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/academic_task.dart';
 import '../models/class_session.dart';
@@ -42,11 +43,157 @@ class _DashboardTabState extends State<DashboardTab> {
   Timer? _ticker;
   ({String route, String departure, int minutes, String? bus})? _nextBus;
 
+  // Home sections the user can show/hide and reorder.
+  static const _sectionLabels = {
+    'next': 'Next class',
+    'cards': 'Next deadline & bus',
+    'focus': 'Weekly focus',
+    'deadlines': 'Upcoming deadlines',
+    'today': "Today's schedule",
+  };
+  List<String> _order = const ['next', 'cards', 'focus', 'deadlines', 'today'];
+  Set<String> _enabled = const {'next', 'cards', 'focus', 'today'};
+
+  Future<void> _loadSections() async {
+    final prefs = await SharedPreferences.getInstance();
+    final order = prefs.getStringList('home_sections_order');
+    final enabled = prefs.getStringList('home_sections_enabled');
+    if (!mounted) return;
+    setState(() {
+      if (order != null) {
+        // Keep saved order, append any sections added in newer versions.
+        _order = [...order.where(_sectionLabels.containsKey), ..._sectionLabels.keys.where((k) => !order.contains(k))];
+      }
+      if (enabled != null) _enabled = enabled.toSet();
+    });
+  }
+
+  Future<void> _saveSections() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('home_sections_order', _order);
+    await prefs.setStringList('home_sections_enabled', _enabled.toList());
+  }
+
+  void _customize() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          final p = Palette.of(ctx);
+          void update(VoidCallback fn) {
+            setSheet(fn);
+            setState(() {});
+            _saveSections();
+          }
+
+          return SheetScaffold(
+            title: 'Customise home',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Turn sections on or off, and drag ☰ to reorder.', style: TextStyle(color: p.textSecondary)),
+                const SizedBox(height: 10),
+                Flexible(
+                  child: ReorderableListView(
+                    shrinkWrap: true,
+                    buildDefaultDragHandles: false,
+                    onReorder: (from, to) => update(() {
+                      final list = [..._order];
+                      final item = list.removeAt(from);
+                      list.insert(to > from ? to - 1 : to, item);
+                      _order = list;
+                    }),
+                    children: [
+                      for (var i = 0; i < _order.length; i++)
+                        Padding(
+                          key: ValueKey(_order[i]),
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Material(
+                            color: p.surfaceAlt,
+                            borderRadius: BorderRadius.circular(22),
+                            child: Row(
+                              children: [
+                                ReorderableDragStartListener(
+                                  index: i,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(14),
+                                    child: Icon(Icons.drag_handle_rounded, color: p.textSecondary),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(_sectionLabels[_order[i]]!,
+                                      style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
+                                ),
+                                Switch(
+                                  value: _enabled.contains(_order[i]),
+                                  onChanged: (v) => update(() {
+                                    final set = {..._enabled};
+                                    v ? set.add(_order[i]) : set.remove(_order[i]);
+                                    _enabled = set;
+                                  }),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  List<Widget> _upcomingDeadlines(Palette p, List<AcademicTask> pending) {
+    final items = pending.take(4).toList();
+    return [
+      const SectionLabel('Upcoming deadlines', padding: EdgeInsets.fromLTRB(4, 0, 0, 8)),
+      if (items.isEmpty)
+        SoftCard(child: Text('Nothing due — nice.', style: TextStyle(color: p.textSecondary)))
+      else
+        for (final t in items)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SoftCard(
+              radius: 22,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              onTap: () => showTaskSheet(context, task: t),
+              child: Row(
+                children: [
+                  Container(width: 4, height: 32, decoration: BoxDecoration(color: taskColor(t), borderRadius: BorderRadius.circular(4))),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
+                        Text('${t.type}${t.subject != 'General' ? ' · ${t.subject}' : ''}',
+                            maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: p.textSecondary)),
+                      ],
+                    ),
+                  ),
+                  Text(DateFormat('EEE d MMM').format(t.dueDate), style: TextStyle(fontSize: 12, color: p.textSecondary)),
+                ],
+              ),
+            ),
+          ),
+    ];
+  }
+
   @override
   void initState() {
     super.initState();
     _checkNoClassStatus();
     _refreshBus();
+    _loadSections();
     // Countdowns ("starts in 5 min") used to freeze until something else
     // triggered a rebuild.
     _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -228,70 +375,79 @@ class _DashboardTabState extends State<DashboardTab> {
                     const SizedBox(height: 12),
                   ],
 
-                  // ── Hero: next / current class ──
-                  _buildHero(p, timetable, next, now),
-                  const SizedBox(height: 14),
-
-                  // ── Deadline + bus ──
-                  IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: _deadlineCard(p, nextDeadline)),
-                        const SizedBox(width: 12),
-                        Expanded(child: _busCard(p)),
-                      ],
+                  for (final id in _order)
+                    if (_enabled.contains(id)) ...switch (id) {
+                      'next' => [_buildHero(p, timetable, next, now, todayClasses), const SizedBox(height: 14)],
+                      'cards' => [
+                          IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(child: _deadlineCard(p, nextDeadline)),
+                                const SizedBox(width: 12),
+                                Expanded(child: _busCard(p)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+                      'focus' => [_buildProductivity(p, focus, timetable), const SizedBox(height: 24)],
+                      'deadlines' => [..._upcomingDeadlines(p, pending), const SizedBox(height: 14)],
+                      'today' => [
+                      SectionLabel(
+                        "Today's schedule",
+                        padding: const EdgeInsets.fromLTRB(4, 0, 0, 8),
+                        trailing: todayClasses.isEmpty
+                            ? null
+                            : (_isNoClassToday
+                                ? TextButton(onPressed: () => _undoDayOff(timetable), child: const Text('Undo day off'))
+                                : TextButton.icon(
+                                    onPressed: () => _declareDayOff(timetable, todayClasses),
+                                    icon: const Icon(Icons.beach_access_rounded, size: 18),
+                                    label: const Text('Day off'),
+                                  )),
+                      ),
+                      if (_isNoClassToday)
+                        SoftCard(
+                          child: Row(
+                            children: [
+                              const Text('🌴', style: TextStyle(fontSize: 34)),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text('Day off declared — alarms are muted for today.',
+                                    style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w600)),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (todayClasses.isEmpty)
+                        SoftCard(
+                          child: Row(
+                            children: [
+                              Icon(now.weekday >= 6 ? Icons.weekend_rounded : Icons.free_breakfast_rounded, color: p.textSecondary),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(now.weekday >= 6 ? "It's the weekend!" : 'No classes today.',
+                                    style: TextStyle(color: p.textSecondary)),
+                              ),
+                              TextButton(onPressed: widget.onSeeAllClicked, child: const Text('Week')),
+                            ],
+                          ),
+                        )
+                      else
+                        for (final s in todayClasses) _timelineRow(p, s, nowMin),
+                          const SizedBox(height: 14),
+                        ],
+                      _ => const <Widget>[],
+                    },
+                  const SizedBox(height: 8),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _customize,
+                      icon: const Icon(Icons.tune_rounded, size: 18),
+                      label: const Text('Customise home'),
                     ),
                   ),
-                  const SizedBox(height: 14),
-
-                  // ── Weekly productivity ──
-                  _buildProductivity(p, focus, timetable),
-                  const SizedBox(height: 24),
-
-                  // ── Today timeline ──
-                  SectionLabel(
-                    "Today's schedule",
-                    padding: const EdgeInsets.fromLTRB(4, 0, 0, 8),
-                    trailing: todayClasses.isEmpty
-                        ? null
-                        : (_isNoClassToday
-                            ? TextButton(onPressed: () => _undoDayOff(timetable), child: const Text('Undo day off'))
-                            : TextButton.icon(
-                                onPressed: () => _declareDayOff(timetable, todayClasses),
-                                icon: const Icon(Icons.beach_access_rounded, size: 18),
-                                label: const Text('Day off'),
-                              )),
-                  ),
-                  if (_isNoClassToday)
-                    SoftCard(
-                      child: Row(
-                        children: [
-                          const Text('🌴', style: TextStyle(fontSize: 34)),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Text('Day off declared — alarms are muted for today.',
-                                style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w600)),
-                          ),
-                        ],
-                      ),
-                    )
-                  else if (todayClasses.isEmpty)
-                    SoftCard(
-                      child: Row(
-                        children: [
-                          Icon(now.weekday >= 6 ? Icons.weekend_rounded : Icons.free_breakfast_rounded, color: p.textSecondary),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Text(now.weekday >= 6 ? "It's the weekend!" : 'No classes today.',
-                                style: TextStyle(color: p.textSecondary)),
-                          ),
-                          TextButton(onPressed: widget.onSeeAllClicked, child: const Text('Week')),
-                        ],
-                      ),
-                    )
-                  else
-                    for (final s in todayClasses) _timelineRow(p, s, nowMin),
                 ],
               ),
             ),
@@ -387,30 +543,10 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildHero(Palette p, TimetableProvider timetable, UpcomingClass? next, DateTime now) {
-    if (next == null) {
-      return SoftCard(
-        radius: 36,
-        padding: const EdgeInsets.all(24),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const TagPill('Free', outlined: true),
-                  const SizedBox(height: 14),
-                  Text('No upcoming classes', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w300, color: p.textPrimary)),
-                  const SizedBox(height: 4),
-                  Text('Nothing in the next 7 days.', style: TextStyle(color: p.textSecondary)),
-                ],
-              ),
-            ),
-            CircleIconButton(icon: Icons.add_rounded, filled: true, size: 56, onPressed: () => showTaskSheet(context)),
-          ],
-        ),
-      );
-    }
+  Widget _buildHero(Palette p, TimetableProvider timetable, UpcomingClass? next, DateTime now, List<ClassSession> todayClasses) {
+    // Cosy card once today's classes are over (or nothing is coming up).
+    if (next == null) return _cosyCard(p, null, now);
+    if (!isSameDate(next.date, now) && (todayClasses.isNotEmpty || now.hour >= 16)) return _cosyCard(p, next, now);
 
     final s = next.session;
     // Open work for this module (replaces the old attendance %).
@@ -481,6 +617,75 @@ class _DashboardTabState extends State<DashboardTab> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  /// Warm, calm card once classes are over for the day.
+  Widget _cosyCard(Palette p, UpcomingClass? next, DateTime now) {
+    final evening = now.hour >= 18 || now.hour < 5;
+    final bg = p.isDark ? const Color(0xFF2A221B) : const Color(0xFFFFF1E2);
+    final ink = p.isDark ? const Color(0xFFF3DCC4) : const Color(0xFF5B3A1E);
+    final soft = ink.withValues(alpha: 0.7);
+    String? nextLine;
+    if (next != null) {
+      final days = next.date.difference(dateOnly(now)).inDays;
+      final when = days == 1 ? 'Tomorrow' : DateFormat('EEEE').format(next.date);
+      nextLine = 'Next: $when ${next.session.startTime} · ${next.session.subject}';
+    }
+    return SoftCard(
+      radius: 36,
+      color: bg,
+      padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(border: Border.all(color: ink, width: 1.2), borderRadius: BorderRadius.circular(40)),
+                child: Text('Classes done for today', style: TextStyle(color: ink, fontWeight: FontWeight.w600, fontSize: 12)),
+              ),
+              const Spacer(),
+              Text(evening ? '🌙' : '☕', style: const TextStyle(fontSize: 30)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(evening ? 'Time to unwind' : 'Nice work today',
+              style: TextStyle(fontSize: 34, height: 1.08, fontWeight: FontWeight.w300, letterSpacing: -1.2, color: ink)),
+          const SizedBox(height: 6),
+          Text(nextLine ?? 'No classes coming up this week.', style: TextStyle(color: soft, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _cosyChip(Icons.timer_outlined, 'Focus a bit', ink, () => HomeNavigation.of(context, AppPage.focus)),
+              _cosyChip(Icons.sticky_note_2_outlined, 'Jot a note', ink, () => HomeNavigation.of(context, AppPage.notes)),
+              _cosyChip(Icons.view_kanban_outlined, 'Plan tomorrow', ink, () => HomeNavigation.of(context, AppPage.board)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cosyChip(IconData icon, String label, Color ink, VoidCallback onTap) {
+    return Material(
+      color: ink.withValues(alpha: 0.08),
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 16, color: ink),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(color: ink, fontWeight: FontWeight.w600, fontSize: 13)),
+          ]),
+        ),
       ),
     );
   }

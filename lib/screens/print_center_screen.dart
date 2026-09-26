@@ -41,7 +41,11 @@ class _PrintCenterScreenState extends State<PrintCenterScreen> {
   bool _checkboxes = true;
 
   // Planner
-  int _plannerKind = 0; // 0 paper, 1 month, 2 week
+  int _plannerKind = 3; // 3 to-do list, 0 paper, 1 month, 2 week
+  String _todoGroup = 'date';
+  int _todoDays = 14; // 0 = all
+  int _todoBlank = 12;
+  final Set<String> _todoStatuses = {TaskStatus.todo, TaskStatus.doing};
   String _paperStyle = 'lined';
   int _pages = 3;
   String _paperModule = '';
@@ -95,6 +99,13 @@ class _PrintCenterScreenState extends State<PrintCenterScreen> {
       return (bytes, 'UOMPer_${_title.text.trim().replaceAll(RegExp(r'\s+'), '_')}.pdf');
     }
     switch (_plannerKind) {
+      case 3:
+        final horizon = DateTime.now().add(Duration(days: _todoDays));
+        final tasks = tp.tasks
+            .where((t) => _todoStatuses.contains(t.effectiveStatus))
+            .where((t) => _todoDays == 0 || !dateOnly(t.startDate ?? t.dueDate).isAfter(dateOnly(horizon)))
+            .toList();
+        return (await PdfExport.todoPages(tasks: tasks, groupBy: _todoGroup, blankLines: _todoBlank), 'UOMPer_todo.pdf');
       case 0:
         return (await PdfExport.notePaper(style: _paperStyle, pages: _pages, module: _paperModule), 'UOMPer_notes_$_paperStyle.pdf');
       case 1:
@@ -318,12 +329,48 @@ class _PrintCenterScreenState extends State<PrintCenterScreen> {
     final modules = {...tp.userSessions.map((s) => s.subject)}.toList()..sort();
     return [
       PillSegmented<int>(
-        values: const [0, 1, 2],
+        values: const [3, 0, 1, 2],
         selected: _plannerKind,
-        labelOf: (i) => const ['Note paper', 'Month', 'Week'][i],
+        labelOf: (i) => const ['Paper', 'Month', 'Week', 'To-do'][i],
         onChanged: (i) => setState(() => _plannerKind = i),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 8),
+      Text(
+        const {
+          3: 'Your tasks written on lined paper with tick boxes, plus empty lines to add more.',
+          0: 'Blank lined, dotted or grid paper with module / topic / date boxes.',
+          1: 'A month grid (optionally with your deadlines) and a notes column.',
+          2: 'One box per day with your classes printed in, and lines to plan.',
+        }[_plannerKind]!,
+        style: TextStyle(fontSize: 12, color: p.textSecondary),
+      ),
+      const SizedBox(height: 6),
+      if (_plannerKind == 3) ...[
+        _label(p, 'Which tasks'),
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final st in [TaskStatus.todo, TaskStatus.doing])
+            _chip(p, TaskStatus.label(st), _todoStatuses.contains(st), () => setState(() {
+                  if (_todoStatuses.contains(st)) {
+                    if (_todoStatuses.length > 1) _todoStatuses.remove(st);
+                  } else {
+                    _todoStatuses.add(st);
+                  }
+                })),
+        ]),
+        _label(p, 'Due within'),
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final d in const [7, 14, 30, 0]) _chip(p, d == 0 ? 'Any time' : '$d days', _todoDays == d, () => setState(() => _todoDays = d)),
+        ]),
+        _label(p, 'Group by'),
+        PillSegmented<String>(
+          values: const ['date', 'module'],
+          selected: _todoGroup,
+          labelOf: (g) => g == 'date' ? 'Due date' : 'Module',
+          onChanged: (g) => setState(() => _todoGroup = g),
+        ),
+        _label(p, 'Empty lines at the end'),
+        _stepper(p, _todoBlank, 0, 40, (v) => setState(() => _todoBlank = v), unit: 'lines'),
+      ],
       if (_plannerKind == 0) ...[
         _label(p, 'Paper'),
         Row(children: [
