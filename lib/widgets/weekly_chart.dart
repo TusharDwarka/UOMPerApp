@@ -38,13 +38,17 @@ class WeeklyBarsChart extends StatelessWidget {
 
         return Stack(
           children: [
-            Row(
+            // Fill the card so bars stand on the bottom edge (a bare Row
+            // shrank to the tallest bar and floated in the middle).
+            Positioned.fill(
+              child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 for (var i = 0; i < 7; i++)
                   SizedBox(
                     width: slot,
-                    child: Center(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
                       child: _Bar(
                         width: barW,
                         height: barHeight(values[i]),
@@ -57,7 +61,17 @@ class WeeklyBarsChart extends StatelessWidget {
                   ),
               ],
             ),
-            IgnorePointer(child: CustomPaint(size: Size(c.maxWidth, barAreaH), painter: _TrendPainter(tops, todayIndex))),
+            ),
+            if (values.any((v) => v > 0))
+              IgnorePointer(child: CustomPaint(size: Size(c.maxWidth, barAreaH), painter: _TrendPainter(tops, todayIndex)))
+            else
+              const Positioned(
+                left: 12,
+                top: 8,
+                right: 12,
+                child: Text('Start a focus session to fill your week',
+                    style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
+              ),
           ],
         );
       }),

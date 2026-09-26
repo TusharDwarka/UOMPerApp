@@ -204,17 +204,53 @@ class GroupService {
 
   Future<void> removeMember(String gid, String memberUid) => _group(gid).collection('members').doc(memberUid).delete();
 
-  /// Publishes this user's weekly productivity for the leaderboard.
-  Future<void> publishStats(String gid, {required int focusMinutes, required int tasksDone, required int streak}) async {
+  /// Publishes this user's weekly productivity for the leaderboard (unless
+  /// they chose to keep their progress private).
+  Future<void> publishStats(String gid,
+      {required int focusMinutes, required int tasksDone, required int streak, String visibility = 'full'}) async {
     final me = uid;
     if (me == null) return;
     try {
       await _group(gid).collection('members').doc(me).update({
         'displayName': displayName,
-        'stats': {'week': weekKey(), 'focusMinutes': focusMinutes, 'tasksDone': tasksDone, 'streak': streak},
+        'stats': visibility == 'full'
+            ? {'week': weekKey(), 'focusMinutes': focusMinutes, 'tasksDone': tasksDone, 'streak': streak}
+            : FieldValue.delete(),
       });
     } catch (e) {
       debugPrint('publishStats failed: $e');
+    }
+  }
+
+  /// Ranking privacy: 'full', 'nameOnly' or 'hidden'. Progress is removed
+  /// from the member doc when not 'full'.
+  Future<void> setRankVisibility(String gid, String visibility) async {
+    final me = uid;
+    if (me == null) return;
+    await _group(gid).collection('members').doc(me).update({
+      'rankVisibility': visibility,
+      if (visibility != 'full') 'stats': FieldValue.delete(),
+    });
+  }
+
+  // ───────────── "I'm done" on shared events ─────────────
+
+  /// Who has marked a shared event as done (uid -> display name).
+  Stream<Map<String, String>> eventDone(String gid, String eventId) => _group(gid)
+      .collection('events')
+      .doc(eventId)
+      .collection('done')
+      .snapshots()
+      .map((s) => {for (final d in s.docs) d.id: (d.data()['name'] as String?) ?? 'Student'});
+
+  Future<void> setEventDone(String gid, String eventId, bool done) async {
+    final me = uid;
+    if (me == null) return;
+    final ref = _group(gid).collection('events').doc(eventId).collection('done').doc(me);
+    if (done) {
+      await ref.set({'name': displayName, 'at': FieldValue.serverTimestamp()});
+    } else {
+      await ref.delete();
     }
   }
 
@@ -291,6 +327,77 @@ class GroupService {
       }
     }
     return null;
+  }
+
+  // ───────────── Announcement notifications ─────────────
+  // While the app is alive (open or in the background) new leader
+  // announcements in any of the user's groups show as local notifications.
+  // Notifications while the app is fully closed would need FCM + a Cloud
+  // Function (Blaze plan).
+
+  StreamSubscription? _userSub;
+  final List<StreamSubscription> _announcementSubs = [];
+
+  void startAnnouncementWatcher() {
+    stopAnnouncementWatcher();
+    final ref = _userDoc;
+    if (ref == null || !canUseGroups) return;
+    _userSub = ref.snapshots().listen((snap) {
+      for (final s in _announcementSubs) {
+        s.cancel();
+      }
+      _announcementSubs.clear();
+      final ids = List<String>.from(snap.data()?['groupIds'] ?? const []);
+      for (final gid in ids) {
+        _announcementSubs.add(_group(gid)
+            .collection('messages')
+            .orderBy('createdAt', descending: true)
+            .limit(5)
+            .snapshots()
+            .listen((ms) => _onMessages(gid, ms), onError: (_) {}));
+      }
+    }, onError: (_) {});
+  }
+
+  void stopAnnouncementWatcher() {
+    _userSub?.cancel();
+    _userSub = null;
+    for (final s in _announcementSubs) {
+      s.cancel();
+    }
+    _announcementSubs.clear();
+  }
+
+  Future<void> _onMessages(String gid, QuerySnapshot<Map<String, dynamic>> ms) async {
+    if (ms.metadata.hasPendingWrites) return;
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'announcement_seen_$gid';
+    final seen = prefs.getInt(key);
+    final anns = ms.docs
+        .map(GroupMessage.fromDoc)
+        .where((m) => m.isAnnouncement && m.createdAt != null && m.senderId != uid)
+        .toList();
+    final newest = anns.isEmpty ? null : anns.map((m) => m.createdAt!.millisecondsSinceEpoch).reduce((a, b) => a > b ? a : b);
+    if (seen == null) {
+      // First run: don't replay old announcements.
+      await prefs.setInt(key, newest ?? DateTime.now().millisecondsSinceEpoch);
+      return;
+    }
+    final fresh = anns.where((m) => m.createdAt!.millisecondsSinceEpoch > seen).toList();
+    if (fresh.isEmpty) return;
+    await prefs.setInt(key, newest!);
+    String groupName = 'Your group';
+    try {
+      groupName = ((await _group(gid).get()).data()?['name'] as String?) ?? groupName;
+    } catch (_) {}
+    for (final m in fresh) {
+      await NotificationService().scheduleOneOff(
+        key: 'announcement|$gid|${m.id}',
+        title: '📣 $groupName',
+        body: '${m.senderName}: ${m.text}',
+        at: DateTime.now().add(const Duration(seconds: 2)),
+      );
+    }
   }
 
   static String _remindKey(String gid) => 'group_remind_$gid';

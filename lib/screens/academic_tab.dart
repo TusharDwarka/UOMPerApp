@@ -208,7 +208,8 @@ class _AcademicTabState extends State<AcademicTab> {
     return Positioned(
       left: 0,
       right: 0,
-      bottom: 4,
+      // Directly under the date number, so bars clearly belong to that day.
+      top: 42,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -217,8 +218,8 @@ class _AcademicTabState extends State<AcademicTab> {
               final c = taskColor(e);
               if (!e.isSpanning) {
                 return Container(
-                  width: 18,
-                  height: 4,
+                  width: 24,
+                  height: 6,
                   margin: const EdgeInsets.only(top: 2),
                   decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(4)),
                 );
@@ -228,7 +229,7 @@ class _AcademicTabState extends State<AcademicTab> {
               final weekStart = day.weekday == DateTime.monday;
               final weekEnd = day.weekday == DateTime.sunday;
               return Container(
-                height: 5,
+                height: 6,
                 margin: EdgeInsets.only(top: 2, left: isStart ? 6 : 0, right: isEnd ? 6 : 0),
                 decoration: BoxDecoration(
                   color: c,

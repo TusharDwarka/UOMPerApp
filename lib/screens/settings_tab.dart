@@ -25,6 +25,7 @@ class SettingsTab extends StatefulWidget {
 
 class _SettingsTabState extends State<SettingsTab> {
   bool _remindersEnabled = true;
+  bool _weeklySummary = true;
   String? _portalUrl;
 
   @override
@@ -39,6 +40,7 @@ class _SettingsTabState extends State<SettingsTab> {
     setState(() {
       _remindersEnabled = prefs.getBool('class_reminders_enabled') ?? true;
       _portalUrl = prefs.getString('student_portal_url');
+      _weeklySummary = prefs.getBool('weekly_summary_enabled') ?? true;
     });
   }
 
@@ -301,6 +303,19 @@ class _SettingsTabState extends State<SettingsTab> {
                           style: const TextStyle(fontSize: 12)),
                       value: _remindersEnabled,
                       onChanged: NotificationService().isSupported ? _toggleReminders : null,
+                    ),
+                    SwitchListTile(
+                      secondary: _icon(Icons.calendar_view_week_rounded, Colors.orange),
+                      title: const Text('Sunday summary', style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: const Text("Sunday 6pm: next week's deadlines & exams", style: TextStyle(fontSize: 12)),
+                      value: _weeklySummary,
+                      onChanged: NotificationService().isSupported
+                          ? (v) async {
+                              await NotificationService().setWeeklySummaryEnabled(v);
+                              setState(() => _weeklySummary = v);
+                              if (v && context.mounted) await context.read<TimetableProvider>().loadSessions();
+                            }
+                          : null,
                     ),
                     ListTile(
                       leading: _icon(Icons.timer_outlined, Colors.orange),

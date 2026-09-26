@@ -68,6 +68,12 @@ service cloud.firestore {
       match /events/{id} {
         allow read: if isMember(gid);
         allow create, update, delete: if canPost(gid);
+
+        // Each member ticks off shared homework for themselves only.
+        match /done/{uid} {
+          allow read: if isMember(gid);
+          allow create, update, delete: if isSelf(uid) && isMember(gid);
+        }
       }
 
       match /messages/{id} {

@@ -154,6 +154,29 @@ void main() {
     }
   }
 
+  testWidgets('Schedule grid has real width and shows class blocks', (tester) async {
+    // Regression: the day grid collapsed to zero width (only dots visible).
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final isar = FakeIsarService();
+    final sync = SyncService(isar);
+    await tester.pumpWidget(MultiProvider(
+      providers: [
+        Provider<SyncService>.value(value: sync),
+        ChangeNotifierProvider(create: (_) => seededTimetable(sync, isar)),
+      ],
+      child: MaterialApp(theme: AppTheme.light(), home: const ScheduleTab()),
+    ));
+    await tester.pump(const Duration(milliseconds: 600));
+    final block = find.text('Databases');
+    expect(block, findsOneWidget);
+    expect(tester.getSize(block).width, greaterThan(40));
+    expect(tester.getTopLeft(block).dx, greaterThan(50), reason: 'blocks sit right of the hour gutter');
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('Board columns render on a small phone', (tester) async {
     tester.view.physicalSize = const Size(320, 640);
     tester.view.devicePixelRatio = 1.0;

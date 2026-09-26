@@ -117,6 +117,26 @@ void main() {
       });
     }
 
+    test('to-do list on lined paper renders (by date and by module)', () async {
+      for (final g in ['date', 'module']) {
+        final bytes = await PdfExport.todoPages(tasks: tasks, groupBy: g, blankLines: 30);
+        expect(String.fromCharCodes(bytes.take(4)), '%PDF');
+      }
+    });
+
+    test('bus timetable PDF renders', () async {
+      final bytes = await PdfExport.busTimetable({
+        'location_name': "At Réduit (going to L'Escalier)",
+        'bus_route': '200',
+        'schedules': {
+          'weekdays': [for (var h = 6; h < 19; h++) {'departure': '${h.toString().padLeft(2, '0')}:14', 'arrival': '${(h + 1).toString().padLeft(2, '0')}:20', 'bus_name': 'UBS'}],
+          'saturdays': [],
+          'sundays_public_holidays': [{'departure': '06:44'}],
+        },
+      });
+      expect(String.fromCharCodes(bytes.take(4)), '%PDF');
+    });
+
     test('month and week planners render', () async {
       final month = await PdfExport.monthPlanner(month: DateTime(now.year, now.month), months: 2, tasks: tasks);
       expect(String.fromCharCodes(month.take(4)), '%PDF');

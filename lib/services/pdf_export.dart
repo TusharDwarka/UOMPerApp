@@ -191,12 +191,7 @@ class PdfExport {
                   child: pw.Text(pdfSafe(t.type), style: pw.TextStyle(fontSize: 8, color: c, fontWeight: pw.FontWeight.bold)),
                 ),
                 pw.SizedBox(width: 6),
-                if (t.subject != 'General')
-                  pw.Expanded(
-                    child: pw.Text(pdfSafe(t.subject), maxLines: 1, style: const pw.TextStyle(fontSize: 9, color: _Pdf.text2)),
-                  )
-                else
-                  pw.Spacer(),
+                pw.Spacer(),
                 pw.Text(pdfSafe(when), style: const pw.TextStyle(fontSize: 9, color: _Pdf.text2)),
               ]),
               pw.SizedBox(height: 4),
@@ -207,7 +202,14 @@ class PdfExport {
                     color: done ? _Pdf.muted : _Pdf.ink,
                     decoration: done ? pw.TextDecoration.lineThrough : null,
                   )),
-              if (room.isNotEmpty) pw.Text('Room: ${pdfSafe(room)}', style: const pw.TextStyle(fontSize: 9, color: _Pdf.text2)),
+              if (t.subject != 'General' || room.isNotEmpty)
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(top: 2),
+                  child: pw.Text(
+                    pdfSafe([if (t.subject != 'General') t.subject, if (room.isNotEmpty) 'Room $room'].join('  -  ')),
+                    style: pw.TextStyle(fontSize: 10, color: _Pdf.accent, fontWeight: pw.FontWeight.bold),
+                  ),
+                ),
               if (o.includeNotes && note.isNotEmpty)
                 pw.Padding(
                   padding: const pw.EdgeInsets.only(top: 3),
@@ -313,7 +315,8 @@ class PdfExport {
               margin: const pw.EdgeInsets.only(top: 2),
               padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 1),
               decoration: pw.BoxDecoration(color: _taskColor(t), borderRadius: pw.BorderRadius.circular(3)),
-              child: pw.Text(pdfSafe(t.title), maxLines: 1, style: const pw.TextStyle(fontSize: 6.5, color: PdfColors.white)),
+              child: pw.Text(pdfSafe(t.subject != 'General' ? '${t.subject}: ${t.title}' : t.title),
+                  maxLines: 2, style: const pw.TextStyle(fontSize: 6.5, color: PdfColors.white)),
             ),
           if (items.length > 3) pw.Text('+${items.length - 3} more', style: const pw.TextStyle(fontSize: 6, color: _Pdf.muted)),
         ]),
@@ -349,6 +352,104 @@ class PdfExport {
         ]),
       ));
     }
+    return doc.save();
+  }
+
+  /// Your tasks written on lined paper (with a margin and tick boxes),
+  /// grouped by due date or module, plus blank lines to add more by hand.
+  static Future<Uint8List> todoPages({
+    required List<AcademicTask> tasks,
+    String groupBy = 'date', // 'date' | 'module'
+    int blankLines = 12,
+    String title = 'To do',
+  }) async {
+    const lineH = 8 * PdfPageFormat.mm;
+    const marginX = 22 * PdfPageFormat.mm;
+    final sorted = [...tasks]..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+    String groupOf(AcademicTask t) => groupBy == 'module'
+        ? (t.subject == 'General' ? 'General' : t.subject)
+        : DateFormat('EEEE d MMMM').format(t.dueDate);
+
+    final groups = <String, List<AcademicTask>>{};
+    for (final t in sorted) {
+      groups.putIfAbsent(groupOf(t), () => []).add(t);
+    }
+    if (groupBy == 'module') {
+      final keys = groups.keys.toList()..sort();
+      final ordered = {for (final k in keys) k: groups[k]!};
+      groups
+        ..clear()
+        ..addAll(ordered);
+    }
+
+    pw.Widget line(pw.Widget child) => pw.Container(
+          height: lineH,
+          padding: const pw.EdgeInsets.only(left: marginX - 36 + 6, bottom: 3),
+          alignment: pw.Alignment.bottomLeft,
+          decoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: _Pdf.line, width: 0.6))),
+          child: child,
+        );
+
+    pw.Widget box() => pw.Container(
+          width: 10,
+          height: 10,
+          margin: const pw.EdgeInsets.only(right: 8),
+          decoration: pw.BoxDecoration(border: pw.Border.all(color: _Pdf.ink, width: 1), borderRadius: pw.BorderRadius.circular(2)),
+        );
+
+    final doc = pw.Document(title: title, author: 'UOMPerApp');
+    doc.addPage(pw.MultiPage(
+      pageTheme: pw.PageTheme(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(36, 36, 36, 30),
+        buildBackground: (ctx) => pw.FullPage(
+          ignoreMargins: true,
+          child: pw.CustomPaint(
+            painter: (PdfGraphics canvas, PdfPoint size) {
+              canvas
+                ..setStrokeColor(_Pdf.margin)
+                ..setLineWidth(1)
+                ..drawLine(marginX + 36, 0, marginX + 36, size.y)
+                ..strokePath();
+            },
+          ),
+        ),
+      ),
+      footer: _footer,
+      build: (ctx) => [
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(left: marginX - 30, bottom: 6),
+          child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+            pw.Text(pdfSafe(title), style: const pw.TextStyle(fontSize: 26, color: _Pdf.ink)),
+            pw.Spacer(),
+            pw.Text(DateFormat('d MMM yyyy').format(DateTime.now()), style: const pw.TextStyle(fontSize: 9, color: _Pdf.muted)),
+          ]),
+        ),
+        for (final entry in groups.entries) ...[
+          line(pw.Text(pdfSafe(entry.key),
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: _Pdf.accent))),
+          for (final t in entry.value)
+            line(pw.Row(children: [
+              box(),
+              pw.Expanded(
+                child: pw.Text(pdfSafe(t.title), maxLines: 1, style: const pw.TextStyle(fontSize: 11, color: _Pdf.ink)),
+              ),
+              pw.Text(
+                pdfSafe([
+                  if (groupBy == 'date' && t.subject != 'General') t.subject,
+                  if (groupBy == 'module') DateFormat('EEE d MMM').format(t.dueDate),
+                  t.type,
+                ].join('  -  ')),
+                style: const pw.TextStyle(fontSize: 8, color: _Pdf.text2),
+              ),
+            ])),
+        ],
+        if (groups.isEmpty) line(pw.Text('No open tasks - enjoy the free time!', style: const pw.TextStyle(fontSize: 10, color: _Pdf.muted))),
+        line(pw.Text('More to do', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: _Pdf.text2))),
+        for (var i = 0; i < blankLines; i++) line(pw.Row(children: [box()])),
+      ],
+    ));
     return doc.save();
   }
 
@@ -487,7 +588,8 @@ class PdfExport {
           pw.Text(pdfSafe('${c.startTime}  ${c.subject}${c.room.isNotEmpty && c.room != 'TBD' ? ' - ${c.room}' : ''}'),
               maxLines: 1, style: const pw.TextStyle(fontSize: 8, color: _Pdf.accent)),
         for (final t in due.take(2))
-          pw.Text(pdfSafe('Due: ${t.title}'), maxLines: 1, style: pw.TextStyle(fontSize: 8, color: _taskColor(t))),
+          pw.Text(pdfSafe('Due: ${t.subject != 'General' ? '${t.subject} - ' : ''}${t.title}'),
+              maxLines: 1, style: pw.TextStyle(fontSize: 8, color: _taskColor(t))),
         pw.Expanded(
           child: pw.LayoutBuilder(builder: (ctx, constraints) {
             final n = ((constraints?.maxHeight ?? 60) / 15).floor().clamp(0, 30);
@@ -499,6 +601,80 @@ class PdfExport {
         ),
       ]),
     );
+  }
+
+  // ───────────────────────── Bus timetable ─────────────────────────
+
+  /// One route: weekdays / Saturday / Sunday & holidays side by side.
+  static Future<Uint8List> busTimetable(Map<String, dynamic> route) async {
+    final name = (route['location_name'] ?? 'Bus route').toString();
+    final number = (route['bus_route'] ?? '').toString();
+    const keys = ['weekdays', 'saturdays', 'sundays_public_holidays'];
+    const titles = ['Weekdays', 'Saturday', 'Sunday & holidays'];
+    final schedules = (route['schedules'] as Map?) ?? const {};
+
+    pw.Widget column(int i) {
+      final trips = ((schedules[keys[i]] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      return pw.Expanded(
+        child: pw.Container(
+          margin: const pw.EdgeInsets.symmetric(horizontal: 4),
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(color: _Pdf.canvas, borderRadius: pw.BorderRadius.circular(10)),
+          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text(titles[i], style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: _Pdf.ink)),
+            pw.Text('${trips.length} departures', style: const pw.TextStyle(fontSize: 8, color: _Pdf.muted)),
+            pw.SizedBox(height: 6),
+            pw.Row(children: [
+              pw.SizedBox(width: 44, child: pw.Text('Leaves', style: const pw.TextStyle(fontSize: 7, color: _Pdf.muted))),
+              pw.SizedBox(width: 44, child: pw.Text('Arrives', style: const pw.TextStyle(fontSize: 7, color: _Pdf.muted))),
+              pw.Text('Bus', style: const pw.TextStyle(fontSize: 7, color: _Pdf.muted)),
+            ]),
+            if (trips.isEmpty) pw.Text('No service', style: const pw.TextStyle(fontSize: 9, color: _Pdf.muted)),
+            for (final t in trips)
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(vertical: 2.5),
+                decoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: _Pdf.line, width: 0.5))),
+                child: pw.Row(children: [
+                  pw.SizedBox(
+                    width: 44,
+                    child: pw.Text(pdfSafe('${t['departure'] ?? ''}'),
+                        style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: _Pdf.ink)),
+                  ),
+                  pw.SizedBox(width: 44, child: pw.Text(pdfSafe('${t['arrival'] ?? ''}'), style: const pw.TextStyle(fontSize: 9, color: _Pdf.text2))),
+                  pw.Expanded(
+                    child: pw.Text(pdfSafe('${t['bus_name'] ?? ''}'), maxLines: 1, style: const pw.TextStyle(fontSize: 8, color: _Pdf.accent)),
+                  ),
+                ]),
+              ),
+          ]),
+        ),
+      );
+    }
+
+    final doc = pw.Document(title: 'Bus timetable', author: 'UOMPerApp');
+    doc.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(30),
+      footer: _footer,
+      build: (ctx) => [
+        pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
+          if (number.isNotEmpty)
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: pw.BoxDecoration(color: _Pdf.accent, borderRadius: pw.BorderRadius.circular(20)),
+              child: pw.Text(pdfSafe(number), style: pw.TextStyle(fontSize: 20, color: PdfColors.white, fontWeight: pw.FontWeight.bold)),
+            ),
+          pw.SizedBox(width: 12),
+          pw.Expanded(child: pw.Text(pdfSafe(name), style: const pw.TextStyle(fontSize: 20, color: _Pdf.ink))),
+        ]),
+        pw.SizedBox(height: 14),
+        pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [column(0), column(1), column(2)]),
+        pw.SizedBox(height: 10),
+        pw.Text('Times may change - check with the bus company. Shared from UOMPerApp.',
+            style: const pw.TextStyle(fontSize: 8, color: _Pdf.muted)),
+      ],
+    ));
+    return doc.save();
   }
 
   // ───────────────────────── Shared bits ─────────────────────────

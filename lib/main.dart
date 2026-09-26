@@ -105,6 +105,7 @@ class SignedInGate extends StatefulWidget {
 class _SignedInGateState extends State<SignedInGate> {
   bool _ready = false;
   late final SyncService _sync;
+  late final GroupService _groups = context.read<GroupService>();
   StreamSubscription<Set<String>>? _settingsSub;
 
   @override
@@ -118,6 +119,7 @@ class _SignedInGateState extends State<SignedInGate> {
   void dispose() {
     _settingsSub?.cancel();
     _sync.stopRealtime();
+    _groups.stopAnnouncementWatcher();
     super.dispose();
   }
 
@@ -162,6 +164,7 @@ class _SignedInGateState extends State<SignedInGate> {
       await notes.loadNotes();
       _sync.startRealtime();
       groups.ensureProfile();
+      groups.startAnnouncementWatcher();
     }
 
     if (timetable.hasCompletedSetup) {

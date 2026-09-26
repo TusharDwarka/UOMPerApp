@@ -54,6 +54,7 @@ Future<void> deleteTaskWithUndo(
   msg.showSnackBar(SnackBar(
     content: Text('Deleted "${removed.title}"'),
     duration: const Duration(seconds: 5),
+    persist: false, // Flutter keeps action snackbars forever by default
     action: SnackBarAction(label: 'Undo', onPressed: () => prov.restoreTask(removed)),
   ));
 }
@@ -194,7 +195,7 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final isEditing = widget.taskToEdit != null;
-    final subjects = context.read<TimetableProvider>().savedSubjects;
+    final subjects = context.read<TimetableProvider>().scheduleSubjects;
     final showRoom = _type == 'Exam' || _type == 'Test' || _type == 'Other' || _room.text.isNotEmpty;
 
     return Padding(
@@ -285,6 +286,29 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
                     ),
                   ],
                   const SizedBox(height: 14),
+                  _label('Module'),
+                  if (subjects.isNotEmpty) ...[
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final m in subjects)
+                          ChoiceChip(
+                            label: Text(m, overflow: TextOverflow.ellipsis),
+                            selected: _subject.text.trim().toLowerCase() == m.toLowerCase(),
+                            showCheckmark: false,
+                            selectedColor: p.ink,
+                            backgroundColor: p.surfaceAlt,
+                            labelStyle: TextStyle(
+                              color: _subject.text.trim().toLowerCase() == m.toLowerCase() ? p.onInk : p.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            onSelected: (sel) => setState(() => _subject.text = sel ? m : ''),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   RawAutocomplete<String>(
                     textEditingController: _subject,
                     focusNode: _subjectFocus,
@@ -296,7 +320,11 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
                       controller: controller,
                       focusNode: focus,
                       textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(labelText: 'Module / subject', prefixIcon: Icon(Icons.menu_book_rounded)),
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        labelText: subjects.isEmpty ? 'Module / subject' : 'Or type another subject',
+                        prefixIcon: const Icon(Icons.menu_book_rounded),
+                      ),
                     ),
                     optionsViewBuilder: (context, onSelected, options) => Align(
                       alignment: Alignment.topLeft,

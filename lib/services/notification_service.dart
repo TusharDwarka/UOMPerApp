@@ -206,6 +206,49 @@ class NotificationService {
     await prefs.remove('no_class_date');
   }
 
+  // ───────────── Sunday summary ─────────────
+
+  static const _summaryKey = 'weekly_summary';
+  static const _prefsSummary = 'weekly_summary_enabled';
+
+  Future<bool> isWeeklySummaryEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_prefsSummary) ?? true;
+  }
+
+  Future<void> setWeeklySummaryEnabled(bool on) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefsSummary, on);
+    if (!on) await cancelOneOff(_summaryKey);
+  }
+
+  /// Schedules next Sunday 18:00 with the coming Mon–Sun's deadlines and
+  /// exams. Re-run whenever tasks change so the summary stays current.
+  Future<void> scheduleWeeklySummary(List<({String title, String type, DateTime due})> tasks) async {
+    if (!_isInitialized) return;
+    await cancelOneOff(_summaryKey);
+    if (!await isWeeklySummaryEnabled()) return;
+
+    final now = DateTime.now();
+    var sunday = DateTime(now.year, now.month, now.day + (DateTime.sunday - now.weekday) % 7, 18);
+    if (!sunday.isAfter(now)) sunday = sunday.add(const Duration(days: 7));
+    final weekStart = DateTime(sunday.year, sunday.month, sunday.day + 1);
+    final weekEnd = weekStart.add(const Duration(days: 7));
+    final upcoming = tasks.where((t) => !t.due.isBefore(weekStart) && t.due.isBefore(weekEnd)).toList()
+      ..sort((a, b) => a.due.compareTo(b.due));
+
+    final exams = upcoming.where((t) => t.type == 'Exam' || t.type == 'Test').length;
+    final String body;
+    if (upcoming.isEmpty) {
+      body = 'Nothing due next week — a good time to get ahead.';
+    } else {
+      final list = upcoming.take(4).map((t) => '${t.title} (${DateFormat('EEE').format(t.due)})').join(', ');
+      body = '${upcoming.length} due${exams > 0 ? ', $exams exam${exams == 1 ? '' : 's'}/test${exams == 1 ? '' : 's'}' : ''}: '
+          '$list${upcoming.length > 4 ? '…' : ''}';
+    }
+    await scheduleOneOff(key: _summaryKey, title: 'Your week ahead 🗓', body: body, at: sunday);
+  }
+
   // ───────────── Group "class coming up" nudges (local only) ─────────────
 
   /// Schedules a one-off local notification (used for group events and the

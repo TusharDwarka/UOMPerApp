@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 import '../models/academic_task.dart';
 import '../models/class_session.dart';
@@ -46,6 +47,26 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   bool _announce = false;
   String? _error;
 
+  // Events tab: list or calendar, plus who has ticked each event off.
+  bool _eventsCalendar = false;
+  DateTime _calFocused = DateTime.now();
+  DateTime _calSelected = dateOnly(DateTime.now());
+  final Map<String, Map<String, String>> _done = {};
+  final Map<String, StreamSubscription> _doneSubs = {};
+
+  void _syncDoneSubscriptions() {
+    final today = dateOnly(DateTime.now()).subtract(const Duration(days: 7));
+    final wanted = _events.where((e) => !(e.end ?? e.start).isBefore(today)).take(40).map((e) => e.id).toSet();
+    for (final id in _doneSubs.keys.toList()) {
+      if (!wanted.contains(id)) _doneSubs.remove(id)?.cancel();
+    }
+    for (final id in wanted) {
+      _doneSubs[id] ??= _service.eventDone(_gid, id).listen((m) {
+        if (mounted) setState(() => _done[id] = m);
+      }, onError: (_) {});
+    }
+  }
+
   String get _gid => widget.groupId;
   GroupMember? get _me => _members.where((m) => m.uid == _service.uid).firstOrNull;
   bool get _isLeader => _me?.isLeader ?? false;
@@ -71,6 +92,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }, onError: (_) {}));
     _subs.add(_service.events(_gid).listen((e) {
       setState(() => _events = e);
+      _syncDoneSubscriptions();
       _scheduleReminders();
     }, onError: (_) {}));
     _subs.add(_service.messages(_gid).listen((m) => setState(() => _messages = m), onError: (_) {}));
@@ -89,6 +111,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }
     _ticker?.cancel();
     _reminderDebounce?.cancel();
+    for (final s in _doneSubs.values) {
+      s.cancel();
+    }
     _msgController.dispose();
     super.dispose();
   }
@@ -102,7 +127,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     final now = DateTime.now();
     final monday = DateTime(now.year, now.month, now.day - (now.weekday - 1));
     final doneThisWeek = tasks.where((t) => (t.updatedAt ?? t.dueDate).isAfter(monday)).length;
-    _service.publishStats(_gid, focusMinutes: focus.thisWeekTotal, tasksDone: doneThisWeek, streak: focus.streak);
+    _service.publishStats(_gid,
+        focusMinutes: focus.thisWeekTotal, tasksDone: doneThisWeek, streak: focus.streak, visibility: _me?.rankVisibility ?? 'full');
   }
 
   void _scheduleReminders() {
@@ -478,29 +504,184 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }
   }
 
-  // ── Events ──
+  // ── Events (list or shared calendar) ──
   Widget _eventsTab(Palette p) {
     final today = dateOnly(DateTime.now());
     final upcoming = _events.where((e) => !(e.end ?? e.start).isBefore(today)).toList();
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
       children: [
-        if (_canPost)
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () => _editEvent(),
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: const Text('Add event / deadline'),
+        Row(
+          children: [
+            Expanded(
+              child: PillSegmented<bool>(
+                values: const [false, true],
+                selected: _eventsCalendar,
+                labelOf: (v) => v ? 'Calendar' : 'List',
+                onChanged: (v) => setState(() => _eventsCalendar = v),
+              ),
+            ),
+            if (_canPost) ...[
+              const SizedBox(width: 8),
+              CircleIconButton(icon: Icons.add_rounded, filled: true, tooltip: 'Add event / deadline', onPressed: () => _editEvent()),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_eventsCalendar) ..._calendarView(p) else ...[
+          if (upcoming.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 30),
+              child: EmptyState(icon: Icons.event_available_rounded, title: 'No upcoming events', subtitle: 'Shared deadlines, exams and meetups show here.'),
+            ),
+          for (final e in upcoming) _eventCard(p, e),
+        ],
+      ],
+    );
+  }
+
+  List<Widget> _calendarView(Palette p) {
+    final dayEvents = _events.where((e) => _eventOn(e, _calSelected)).toList();
+    final dayName = DateFormat('EEEE').format(_calSelected);
+    final dayClasses = _sessions.where((s) => s.day == dayName).toList();
+    return [
+      SoftCard(
+        padding: const EdgeInsets.fromLTRB(6, 4, 6, 10),
+        child: TableCalendar<GroupEvent>(
+          firstDay: DateTime.utc(2020, 1, 1),
+          lastDay: DateTime.utc(2035, 12, 31),
+          focusedDay: _calFocused,
+          startingDayOfWeek: StartingDayOfWeek.monday,
+          rowHeight: 56,
+          selectedDayPredicate: (d) => isSameDate(d, _calSelected),
+          onDaySelected: (sel, foc) => setState(() {
+            _calSelected = dateOnly(sel);
+            _calFocused = foc;
+          }),
+          onPageChanged: (foc) => setState(() => _calFocused = foc),
+          eventLoader: (d) => _events.where((e) => _eventOn(e, d)).toList(),
+          headerStyle: HeaderStyle(
+            formatButtonVisible: false,
+            titleCentered: true,
+            titleTextStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: p.textPrimary),
+          ),
+          calendarStyle: CalendarStyle(
+            outsideDaysVisible: false,
+            cellAlignment: Alignment.topCenter,
+            cellPadding: const EdgeInsets.only(top: 6),
+            defaultTextStyle: TextStyle(color: p.textPrimary),
+            weekendTextStyle: TextStyle(color: p.textSecondary),
+          ),
+          calendarBuilders: CalendarBuilders<GroupEvent>(
+            selectedBuilder: (context, day, _) => _calCircle(day, p.ink, p.onInk),
+            todayBuilder: (context, day, _) => _calCircle(day, null, p.accent, border: p.accent),
+            markerBuilder: (context, day, events) => events.isEmpty
+                ? null
+                : Positioned(
+                    top: 38,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final e in events.take(3))
+                          Container(
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                            decoration: BoxDecoration(color: _eventColor(e), shape: BoxShape.circle),
+                          ),
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 14),
+      Text(DateFormat('EEEE d MMMM').format(_calSelected), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: p.textPrimary)),
+      const SizedBox(height: 8),
+      if (dayEvents.isEmpty && dayClasses.isEmpty)
+        Text('Nothing shared for this day.', style: TextStyle(color: p.textSecondary)),
+      for (final c in dayClasses)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: SoftCard(
+            radius: 20,
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+            child: Row(children: [
+              Text(c.startTime, style: TextStyle(fontWeight: FontWeight.w700, color: p.textPrimary)),
+              const SizedBox(width: 12),
+              Expanded(child: Text(c.subject, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: p.textPrimary))),
+              TagPill('Class', color: p.accent),
+            ]),
+          ),
+        ),
+      for (final e in dayEvents) _eventCard(p, e),
+    ];
+  }
+
+  bool _eventOn(GroupEvent e, DateTime day) {
+    final d = dateOnly(day);
+    final start = dateOnly(e.start);
+    final end = dateOnly(e.end ?? e.start);
+    return !d.isBefore(start) && !d.isAfter(end);
+  }
+
+  Color _eventColor(GroupEvent e) => e.colorValue != null ? Color(e.colorValue!) : AppColors.forType(e.type);
+
+  Widget _calCircle(DateTime day, Color? bg, Color fg, {Color? border}) => Align(
+        alignment: Alignment.topCenter,
+        child: Container(
+          margin: const EdgeInsets.only(top: 2),
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: bg, shape: BoxShape.circle, border: border == null ? null : Border.all(color: border, width: 2)),
+          child: Text('${day.day}', style: TextStyle(color: fg, fontWeight: FontWeight.w700)),
+        ),
+      );
+
+  /// "I'm done" toggle + how many members have finished.
+  Widget _doneRow(Palette p, GroupEvent e) {
+    final done = _done[e.id] ?? const {};
+    final mine = done.containsKey(_service.uid);
+    final total = _members.length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Row(
+        children: [
+          Material(
+            color: mine ? const Color(0xFF00C853) : p.surfaceAlt,
+            shape: const StadiumBorder(),
+            child: InkWell(
+              customBorder: const StadiumBorder(),
+              onTap: () => _service.setEventDone(_gid, e.id, !mine),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(mine ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                      size: 16, color: mine ? Colors.white : p.textSecondary),
+                  const SizedBox(width: 6),
+                  Text(mine ? "I'm done" : 'Mark done',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: mine ? Colors.white : p.textPrimary)),
+                ]),
+              ),
             ),
           ),
-        if (upcoming.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(top: 30),
-            child: EmptyState(icon: Icons.event_available_rounded, title: 'No upcoming events', subtitle: 'Shared deadlines, exams and meetups show here.'),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              total == 0 ? '' : '${done.length} of $total done',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, color: p.textSecondary),
+            ),
           ),
-        for (final e in upcoming)
-          Padding(
+        ],
+      ),
+    );
+  }
+
+  Widget _eventCard(Palette p, GroupEvent e) {
+    return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: SoftCard(
               radius: 24,
@@ -547,6 +728,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               const SizedBox(height: 8),
                               JoinMeetingButton(url: e.meetingLink!, dense: true),
                             ],
+                            _doneRow(p, e),
                           ],
                         ),
                       ),
@@ -560,9 +742,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 ),
               ),
             ),
-          ),
-      ],
-    );
+          );
   }
 
   Future<void> _editEvent([GroupEvent? existing]) async {
@@ -695,6 +875,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             child: SoftCard(
               radius: 22,
               padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+              onTap: _isLeader && m.uid != _service.uid && m.uid != _group?.ownerId ? () => _memberActions(m) : null,
               child: Row(
                 children: [
                   MemberAvatar(name: m.displayName, size: 40),
@@ -739,10 +920,43 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     );
   }
 
+  Future<void> _memberActions(GroupMember m) async {
+    final action = await showChoiceSheet<String>(
+      context,
+      title: m.displayName,
+      options: [m.isLeader ? 'member' : 'leader', 'remove'],
+      selected: null,
+      labelOf: (a) => const {'leader': 'Make leader', 'member': 'Make regular member', 'remove': 'Remove from group'}[a]!,
+      subtitleOf: (a) => const {
+        'leader': 'Leaders manage the shared timetable, events and announcements',
+        'member': 'Removes leader rights',
+        'remove': 'They can rejoin if the group is public or they have the code',
+      }[a],
+      iconOf: (a) => const {'leader': Icons.star_rounded, 'member': Icons.star_border_rounded, 'remove': Icons.person_remove_outlined}[a],
+    );
+    if (action == null || !mounted) return;
+    try {
+      if (action == 'remove') {
+        final ok = await confirmDestructive(context, title: 'Remove member?', message: 'Remove ${m.displayName}?', action: 'Remove');
+        if (ok) await _service.removeMember(_gid, m.uid);
+      } else {
+        await _service.setRole(_gid, m.uid, action);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(action == 'leader' ? '${m.displayName} is now a leader' : '${m.displayName} is now a member')));
+        }
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
   // ── Ranking (friendly contest) ──
   Widget _rankingTab(Palette p) {
     final week = GroupService.weekKey();
-    final ranked = [..._members]..sort((a, b) => b.scoreFor(week).compareTo(a.scoreFor(week)));
+    final ranked = _members.where((m) => m.rankVisibility != 'hidden').toList()
+      ..sort((a, b) => b.scoreFor(week).compareTo(a.scoreFor(week)));
+    final myVisibility = _me?.rankVisibility ?? 'full';
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
       children: [
@@ -750,6 +964,32 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         const SizedBox(height: 4),
         Text('1 pt per focused minute · 20 pts per finished task · 10 pts per streak day. Resets every Monday.',
             style: TextStyle(fontSize: 12, color: p.textSecondary)),
+        const SizedBox(height: 12),
+        SoftCard(
+          radius: 22,
+          padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+          child: Row(children: [
+            Icon(Icons.visibility_outlined, size: 18, color: p.textSecondary),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Show me as', style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary))),
+            Flexible(
+              child: ChoicePill<String>(
+                title: 'Your ranking privacy',
+                value: myVisibility,
+                options: const ['full', 'nameOnly', 'hidden'],
+                labelOf: (v) => const {'full': 'Name & progress', 'nameOnly': 'Name only', 'hidden': 'Hidden'}[v]!,
+                iconOf: (v) => const {'full': Icons.leaderboard_rounded, 'nameOnly': Icons.person_outline, 'hidden': Icons.visibility_off_outlined}[v],
+                onChanged: (v) async {
+                  await _service.setRankVisibility(_gid, v);
+                  if (v == 'full') {
+                    _statsPublished = false;
+                    _publishStats();
+                  }
+                },
+              ),
+            ),
+          ]),
+        ),
         const SizedBox(height: 14),
         for (var i = 0; i < ranked.length; i++)
           Padding(
@@ -762,7 +1002,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 final m = ranked[i];
                 final lead = i == 0 && m.scoreFor(week) > 0;
                 final fg = lead ? p.onInk : p.textPrimary;
-                final stale = m.statsWeek != week;
+                final private = m.rankVisibility == 'nameOnly';
+                final stale = private || m.statsWeek != week;
                 return Row(
                   children: [
                     SizedBox(
@@ -779,7 +1020,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           Text(m.displayName, maxLines: 1, overflow: TextOverflow.ellipsis,
                               style: TextStyle(fontWeight: FontWeight.w600, color: fg)),
                           Text(
-                            stale
+                            private
+                                ? 'Keeps progress private'
+                                : stale
                                 ? 'No activity this week'
                                 : '${m.weeklyFocusMinutes} min · ${m.tasksDone} tasks · ${m.streak}🔥',
                             style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.7)),
@@ -787,7 +1030,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                         ],
                       ),
                     ),
-                    Text('${m.scoreFor(week)}', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w300, color: fg)),
+                    Text(private ? '—' : '${m.scoreFor(week)}', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w300, color: fg)),
                   ],
                 );
               }),

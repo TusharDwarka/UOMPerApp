@@ -85,10 +85,11 @@ class _FilesViewState extends State<_FilesView> {
     final timetable = context.watch<TimetableProvider>();
 
     final modules = {...resources.moduleNames, ...timetable.userSessions.map((s) => s.subject)}
-        .where((m) => !resources.customFolders.contains(m))
+        .where((m) => !resources.customFolders.contains(m) && !resources.isHidden(m))
         .toList()
       ..sort();
     final custom = resources.customFolders;
+    final hidden = resources.hiddenFolders;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
@@ -134,6 +135,27 @@ class _FilesViewState extends State<_FilesView> {
                 style: TextStyle(color: p.textSecondary))
           else
             _grid(custom, resources, true),
+          if (hidden.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Center(
+                child: TextButton.icon(
+                  icon: const Icon(Icons.visibility_outlined, size: 18),
+                  label: Text('Show hidden folders (${hidden.length})'),
+                  onPressed: () async {
+                    final folder = await showChoiceSheet<String>(
+                      context,
+                      title: 'Restore a folder',
+                      options: hidden,
+                      selected: null,
+                      labelOf: (f) => f,
+                      iconOf: (_) => Icons.folder_off_outlined,
+                    );
+                    if (folder != null) resources.unhideFolder(folder);
+                  },
+                ),
+              ),
+            ),
         ],
       ],
     );
@@ -212,13 +234,7 @@ class _FolderCard extends StatelessWidget {
       radius: 28,
       padding: const EdgeInsets.all(16),
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ModuleResourcesScreen(moduleName: name))),
-      onLongPress: custom
-          ? () async {
-              final ok = await confirmDestructive(context,
-                  title: 'Remove folder?', message: 'Remove "$name" from your folders? Files inside stay searchable.', action: 'Remove');
-              if (ok && context.mounted) context.read<ResourceProvider>().removeCustomFolder(name);
-            }
-          : null,
+      onLongPress: () => confirmDeleteFolder(context, name),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -231,6 +247,17 @@ class _FolderCard extends StatelessWidget {
               ),
               const Spacer(),
               Text('$count', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w300, color: p.textPrimary)),
+              SizedBox(
+                width: 30,
+                height: 30,
+                child: PopupMenuButton<String>(
+                  padding: EdgeInsets.zero,
+                  tooltip: 'Folder options',
+                  icon: Icon(Icons.more_vert_rounded, size: 18, color: p.textSecondary),
+                  onSelected: (_) => confirmDeleteFolder(context, name),
+                  itemBuilder: (_) => const [PopupMenuItem(value: 'delete', child: Text('Delete folder'))],
+                ),
+              ),
             ],
           ),
           const Spacer(),
@@ -306,4 +333,26 @@ Color fileIconColor(String fileName) {
     default:
       return Colors.blueGrey;
   }
+}
+
+
+/// Confirms, then deletes a folder and its files (module folders are hidden
+/// so the timetable doesn't bring them straight back).
+Future<bool> confirmDeleteFolder(BuildContext context, String name) async {
+  final prov = context.read<ResourceProvider>();
+  final count = prov.getResourcesForModule(name).length;
+  final ok = await confirmDestructive(
+    context,
+    title: 'Delete "$name"?',
+    message: count == 0
+        ? 'The folder will be removed. You can restore it later from "Show hidden folders".'
+        : "This deletes the folder and its $count file${count == 1 ? '' : 's'} from this device. This can't be undone.",
+    action: 'Delete folder',
+  );
+  if (!ok) return false;
+  await prov.deleteFolder(name);
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Deleted "$name"')));
+  }
+  return true;
 }
