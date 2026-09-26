@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:isar_community/isar.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/academic_task.dart';
@@ -231,6 +233,9 @@ class SyncService {
     var wiped = false;
     if (owner != null && owner != newUid) {
       final isar = await _isarService.db;
+      // Never lose data silently: keep a full copy of the previous account's
+      // local data before clearing it (see [previousAccountBackups]).
+      await _backupLocalData(owner);
       await isar.writeTxn(() async {
         await isar.classSessions.clear();
         await isar.academicTasks.clear();
@@ -247,6 +252,37 @@ class SyncService {
     }
     await prefs.setString(_ownerKey, newUid);
     return wiped;
+  }
+
+  /// Writes everything stored locally for [ownerUid] to
+  /// `<documents>/account_backups/<uid>_<time>.json`.
+  Future<File?> _backupLocalData(String ownerUid) async {
+    try {
+      final isar = await _isarService.db;
+      final prefs = await SharedPreferences.getInstance();
+      final data = {
+        'ownerUid': ownerUid,
+        'createdAt': DateTime.now().toIso8601String(),
+        'class_sessions': (await isar.classSessions.where().findAll()).map((s) => s.toSyncJson()).toList(),
+        'academic_tasks': (await isar.academicTasks.where().findAll()).map((t) => t.toJson()).toList(),
+        'notes': (await isar.notes.where().findAll()).map((n) => n.toJson()).toList(),
+        'attendance': (await isar.attendanceRecords.where().findAll()).map((a) => a.toJson()).toList(),
+        'prefs': {
+          for (final k in const [
+            'courseName', 'hasCompletedSetup', 'semesterStartMs', 'semesterEndMs', busPrefsKey, 'resource_sections', 'custom_folders',
+          ])
+            if (prefs.get(k) != null) k: prefs.get(k),
+        },
+      };
+      final dir = Directory('${(await getApplicationDocumentsDirectory()).path}${Platform.pathSeparator}account_backups');
+      await dir.create(recursive: true);
+      final file = File('${dir.path}${Platform.pathSeparator}${ownerUid}_${DateTime.now().millisecondsSinceEpoch}.json');
+      await file.writeAsString(jsonEncode(data));
+      return file;
+    } catch (e) {
+      debugPrint('Local backup before account switch failed: $e');
+      return null;
+    }
   }
 
   // ───────────────────────── Full sync + realtime ─────────────────────────

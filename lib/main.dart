@@ -178,12 +178,17 @@ class _SignedInGateState extends State<SignedInGate> {
       // cloud so we can skip onboarding if the account is already set up.
       try {
         await pullSettings().timeout(const Duration(seconds: 10));
-        if (timetable.hasCompletedSetup) await fullSync().timeout(const Duration(seconds: 20));
+        await fullSync().timeout(const Duration(seconds: 20));
+        // The account already has classes in the cloud (e.g. a reinstall
+        // where settings never synced): skip onboarding, because finishing
+        // it again would replace that timetable.
+        if (!timetable.hasCompletedSetup && timetable.userSessions.isNotEmpty) {
+          await timetable.setSetupCompleted(true);
+        }
       } catch (_) {
         // Offline — fall through to local state.
       }
       if (mounted) setState(() => _ready = true);
-      if (!timetable.hasCompletedSetup) unawaited(fullSync());
     }
   }
 
