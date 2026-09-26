@@ -303,10 +303,9 @@ class _BusTabState extends State<BusTab> {
   Future<void> _bulkAdd() async {
     final r = _route;
     if (r == null) return;
-    final controller = TextEditingController();
-    final text = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
+    final text = await showControllerDialog<String>(
+      context,
+      builder: (ctx, controller) => AlertDialog(
         title: Text('Add times to ${busDayLabels[_day]}'),
         content: TextField(
           controller: controller,
@@ -320,7 +319,6 @@ class _BusTabState extends State<BusTab> {
         ],
       ),
     );
-    controller.dispose();
     if (text == null || text.trim().isEmpty) return;
 
     final dur = _typicalDuration;

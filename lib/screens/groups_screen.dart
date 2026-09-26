@@ -78,10 +78,9 @@ class _GroupsScreenState extends State<GroupsScreen> {
   }
 
   Future<void> _joinWithCode() async {
-    final controller = TextEditingController();
-    final code = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
+    final code = await showControllerDialog<String>(
+      context,
+      builder: (ctx, controller) => AlertDialog(
         title: const Text('Join with code'),
         content: TextField(
           controller: controller,
@@ -97,7 +96,6 @@ class _GroupsScreenState extends State<GroupsScreen> {
         ],
       ),
     );
-    controller.dispose();
     if (code == null || code.trim().isEmpty || !mounted) return;
     try {
       final g = await context.read<GroupService>().joinByCode(code);

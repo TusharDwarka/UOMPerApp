@@ -60,10 +60,9 @@ class _SettingsTabState extends State<SettingsTab> {
 
   Future<void> _editName() async {
     final user = FirebaseAuth.instance.currentUser;
-    final controller = TextEditingController(text: user?.displayName ?? '');
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
+    final name = await showControllerDialog<String>(
+      context,
+      initial: user?.displayName ?? '', builder: (ctx, controller) => AlertDialog(
         title: const Text('Your name'),
         content: TextField(
           controller: controller,
@@ -77,7 +76,6 @@ class _SettingsTabState extends State<SettingsTab> {
         ],
       ),
     );
-    controller.dispose();
     if (name == null || name.isEmpty || !mounted) return;
     await AuthService().updateDisplayName(name);
     if (mounted) await context.read<GroupService>().ensureProfile();
@@ -85,10 +83,9 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 
   Future<void> _editCourse(TimetableProvider tp) async {
-    final controller = TextEditingController(text: tp.courseName);
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
+    final name = await showControllerDialog<String>(
+      context,
+      initial: tp.courseName, builder: (ctx, controller) => AlertDialog(
         title: const Text('Programme / course'),
         content: TextField(controller: controller, autofocus: true, textCapitalization: TextCapitalization.words),
         actions: [
@@ -97,7 +94,6 @@ class _SettingsTabState extends State<SettingsTab> {
         ],
       ),
     );
-    controller.dispose();
     if (name != null && name.isNotEmpty) await tp.setCourseName(name);
   }
 
@@ -114,10 +110,9 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 
   Future<void> _editPortal() async {
-    final controller = TextEditingController(text: _portalUrl ?? '');
-    final url = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
+    final url = await showControllerDialog<String>(
+      context,
+      initial: _portalUrl ?? '', builder: (ctx, controller) => AlertDialog(
         title: const Text('Student portal link'),
         content: TextField(
           controller: controller,
@@ -131,7 +126,6 @@ class _SettingsTabState extends State<SettingsTab> {
         ],
       ),
     );
-    controller.dispose();
     if (url == null) return;
     final prefs = await SharedPreferences.getInstance();
     final normalized = url.isEmpty ? null : (url.startsWith('http') ? url : 'https://$url');

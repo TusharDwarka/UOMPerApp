@@ -367,8 +367,19 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    return Center(
-      child: Padding(
+    // Centred when there's room; scrolls when the keyboard leaves little space.
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight.isFinite ? constraints.maxHeight : 0),
+          child: Center(child: _content(p)),
+        ),
+      ),
+    );
+  }
+
+  Widget _content(Palette p) {
+    return Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -389,8 +400,7 @@ class EmptyState extends StatelessWidget {
             if (action != null) ...[const SizedBox(height: 18), action!],
           ],
         ),
-      ),
-    );
+      );
   }
 }
 
@@ -460,4 +470,37 @@ Future<bool> confirmDestructive(BuildContext context, {required String title, re
     ),
   );
   return ok == true;
+}
+
+/// Shows a dialog whose [TextEditingController] lives exactly as long as the
+/// dialog. Disposing a controller right after `await showDialog` crashes,
+/// because the closing animation still rebuilds the TextField.
+Future<T?> showControllerDialog<T>(
+  BuildContext context, {
+  String initial = '',
+  required Widget Function(BuildContext context, TextEditingController controller) builder,
+}) {
+  return showDialog<T>(context: context, builder: (_) => _ControllerHost(initial: initial, builder: builder));
+}
+
+class _ControllerHost extends StatefulWidget {
+  final String initial;
+  final Widget Function(BuildContext, TextEditingController) builder;
+  const _ControllerHost({required this.initial, required this.builder});
+
+  @override
+  State<_ControllerHost> createState() => _ControllerHostState();
+}
+
+class _ControllerHostState extends State<_ControllerHost> {
+  late final TextEditingController _controller = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _controller);
 }
