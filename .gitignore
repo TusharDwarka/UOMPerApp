@@ -46,3 +46,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase admin keys must never be committed
+*service-account*.json
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
