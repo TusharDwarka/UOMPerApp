@@ -32,7 +32,9 @@ class _EndSemesterDialogState extends State<EndSemesterDialog> {
     if (_canConfirm) {
       // Pop the dialog and push the celebration screen
       Navigator.of(context).pop();
-      Navigator.of(context).pushAndRemoveUntil(
+      // Push on top of the app (don't remove the root route: it holds the
+      // auth listener and sync).
+      Navigator.of(context).push(
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) => const EndSemesterCelebrationScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -40,7 +42,6 @@ class _EndSemesterDialogState extends State<EndSemesterDialog> {
           },
           transitionDuration: const Duration(milliseconds: 500),
         ),
-        (route) => false,
       );
     }
   }
@@ -60,7 +61,7 @@ class _EndSemesterDialogState extends State<EndSemesterDialog> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
+              color: Colors.red.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.warning_rounded, color: Colors.red, size: 40),
@@ -90,7 +91,7 @@ class _EndSemesterDialogState extends State<EndSemesterDialog> {
               hintText: "END",
               hintStyle: TextStyle(color: isDark ? Colors.grey[700] : Colors.grey[400]),
               filled: true,
-              fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+              fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
             ),
             textCapitalization: TextCapitalization.characters,
@@ -118,7 +119,7 @@ class _EndSemesterDialogState extends State<EndSemesterDialog> {
                 onPressed: _canConfirm ? _onConfirm : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
-                  disabledBackgroundColor: Colors.red.withOpacity(0.3),
+                  disabledBackgroundColor: Colors.red.withValues(alpha: 0.3),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:isar_community/isar.dart';
@@ -9,56 +11,125 @@ import '../services/isar_service.dart';
 import '../services/widget_service.dart';
 import '../services/notification_service.dart';
 import '../services/sync_service.dart';
+import '../utils/time_utils.dart';
+
+/// What the dashboard, widget and groups show as "next class".
+class UpcomingClass {
+  final ClassSession session;
+  final DateTime date;
+  final DateTime start;
+  final DateTime end;
+  final bool inProgress;
+  const UpcomingClass({required this.session, required this.date, required this.start, required this.end, required this.inProgress});
+
+  int minutesUntilStart(DateTime now) => start.difference(now).inMinutes;
+  int minutesUntilEnd(DateTime now) => end.difference(now).inMinutes;
+}
 
 class TimetableProvider extends ChangeNotifier {
   final IsarService isarService;
-  
-  // Restored Fields
+  final SyncService _syncService;
+  StreamSubscription<Set<String>>? _syncSub;
+
   List<ClassSession> _userSessions = [];
   List<ClassSession> _friendSessions = [];
-  Map<String, List<CommonFreeSlot>> _commonFreeTime = {};
-  
-  // Attendance
   List<AttendanceRecord> _attendanceRecords = [];
+  List<AcademicTask> _tasks = [];
 
   // Adaptive Timetable Fields
   String _courseName = '';
   bool _hasCompletedSetup = false;
   bool _isSetupLoaded = false;
-  
+  int _reminderMinutes = 15;
+
   String get courseName => _courseName;
   bool get hasCompletedSetup => _hasCompletedSetup;
   bool get isSetupLoaded => _isSetupLoaded;
-  
-  final SyncService _syncService;
-  
-  TimetableProvider(this.isarService, this._syncService);
+  int get reminderMinutes => _reminderMinutes;
+
+  TimetableProvider(this.isarService, this._syncService) {
+    // Remote 'settings' changes are applied by SignedInGate (main.dart),
+    // which updates this provider and ResourceProvider together.
+    _syncSub = _syncService.changes.listen((cols) async {
+      if (cols.any((c) => c != 'bus' && c != 'settings' && c != SyncService.notesCol)) {
+        await loadSessions();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncSub?.cancel();
+    super.dispose();
+  }
 
   /// Load setup state from SharedPreferences (called early in app init)
   Future<void> loadSetupState() async {
     final prefs = await SharedPreferences.getInstance();
     _courseName = prefs.getString('courseName') ?? '';
     _hasCompletedSetup = prefs.getBool('hasCompletedSetup') ?? false;
-    
-    // Load configurable semester start
+    _reminderMinutes = prefs.getInt('reminder_minutes') ?? 15;
+
     final semesterStartMs = prefs.getInt('semesterStartMs');
     if (semesterStartMs != null) {
       _semesterStart = DateTime.fromMillisecondsSinceEpoch(semesterStartMs);
     }
-
     final semesterEndMs = prefs.getInt('semesterEndMs');
-    if (semesterEndMs != null) {
-      _semesterEnd = DateTime.fromMillisecondsSinceEpoch(semesterEndMs);
-    }
-    
+    _semesterEnd = semesterEndMs != null ? DateTime.fromMillisecondsSinceEpoch(semesterEndMs) : null;
+
     _isSetupLoaded = true;
     notifyListeners();
   }
+
+  // ───────────── Cloud settings (course, semester, setup flag) ─────────────
+
+  Map<String, dynamic> settingsSnapshot() => {
+        'courseName': _courseName,
+        'hasCompletedSetup': _hasCompletedSetup,
+        'semesterStartMs': _semesterStart.millisecondsSinceEpoch,
+        'semesterEndMs': _semesterEnd?.millisecondsSinceEpoch,
+        'reminderMinutes': _reminderMinutes,
+      };
+
+  /// Applies settings pulled from the cloud. This is what lets a second
+  /// device (e.g. the Windows app) skip onboarding after signing in.
+  Future<void> applyCloudSettings(Map<String, dynamic> s) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (s['courseName'] is String && (s['courseName'] as String).isNotEmpty) {
+      _courseName = s['courseName'];
+      await prefs.setString('courseName', _courseName);
+    }
+    if (s['hasCompletedSetup'] == true && !_hasCompletedSetup) {
+      _hasCompletedSetup = true;
+      await prefs.setBool('hasCompletedSetup', true);
+    }
+    if (s['semesterStartMs'] is int) {
+      _semesterStart = DateTime.fromMillisecondsSinceEpoch(s['semesterStartMs']);
+      await prefs.setInt('semesterStartMs', s['semesterStartMs']);
+    }
+    if (s.containsKey('semesterEndMs')) {
+      final end = s['semesterEndMs'];
+      _semesterEnd = end is int ? DateTime.fromMillisecondsSinceEpoch(end) : null;
+      if (end is int) {
+        await prefs.setInt('semesterEndMs', end);
+      } else {
+        await prefs.remove('semesterEndMs');
+      }
+    }
+    if (s['reminderMinutes'] is int) {
+      _reminderMinutes = s['reminderMinutes'];
+      await prefs.setInt('reminder_minutes', _reminderMinutes);
+    }
+    notifyListeners();
+  }
+
+  void _pushSettings() => _syncService.pushSettings(settingsSnapshot());
 
   Future<void> setCourseName(String name) async {
     _courseName = name;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('courseName', name);
+    _pushSettings();
     notifyListeners();
   }
 
@@ -72,6 +143,7 @@ class TimetableProvider extends ChangeNotifier {
     } else {
       await prefs.remove('semesterEndMs');
     }
+    _pushSettings();
     notifyListeners();
   }
 
@@ -79,24 +151,40 @@ class TimetableProvider extends ChangeNotifier {
     _hasCompletedSetup = completed;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('hasCompletedSetup', completed);
+    _pushSettings();
     notifyListeners();
   }
 
-  /// Import sessions parsed by AI. Clears existing user sessions and saves new ones.
+  Future<void> setReminderMinutes(int minutes) async {
+    _reminderMinutes = minutes;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('reminder_minutes', minutes);
+    _pushSettings();
+    notifyListeners();
+    await rescheduleReminders();
+  }
+
+  Future<void> rescheduleReminders() => NotificationService().scheduleAllUpcomingClasses(
+        _userSessions,
+        getEventsForDay: getClassesForDate,
+        minutesBefore: _reminderMinutes,
+      );
+
+  /// Import sessions parsed by AI. Replaces the user's sessions.
   Future<void> importAiSessions(List<ClassSession> sessions) async {
     final isar = await isarService.db;
+    final removed = await isar.classSessions.filter().isUserEqualTo(true).findAll();
+    for (final s in sessions) {
+      s.startTime = normalizeTime(s.startTime);
+      s.endTime = normalizeTime(s.endTime);
+      SyncService.stamp(s);
+    }
     await isar.writeTxn(() async {
-      // Clear only user sessions (keep friend sessions if any)
-      final existingUser = await isar.classSessions.filter().isUserEqualTo(true).findAll();
-      for (final s in existingUser) {
-        await isar.classSessions.delete(s.id);
-      }
-      // Save new AI-parsed sessions
-      for (final session in sessions) {
-        await isar.classSessions.put(session);
-      }
+      await isar.classSessions.deleteAll(removed.map((s) => s.id).toList());
+      await isar.classSessions.putAll(sessions);
     });
-    await _syncService.pushToCloud();
+    await _syncService.pushDeleteMany(SyncService.sessionsCol, removed.map((s) => s.syncId));
+    await _syncService.pushMany(SyncService.sessionsCol, sessions.map((s) => s.toSyncJson()).toList());
     await loadSessions();
   }
 
@@ -111,14 +199,23 @@ class TimetableProvider extends ChangeNotifier {
     _hasCompletedSetup = false;
     _semesterStart = DateTime.now();
     _semesterEnd = null;
-    
+
     final isar = await isarService.db;
+    final removed = await isar.classSessions.where().findAll();
     await isar.writeTxn(() async {
       await isar.classSessions.clear();
     });
-    await _syncService.pushToCloud();
+    await _syncService.pushDeleteMany(SyncService.sessionsCol, removed.map((s) => s.syncId));
+    await _syncService.pushSettings({
+      'courseName': '',
+      'hasCompletedSetup': false,
+      'semesterStartMs': _semesterStart.millisecondsSinceEpoch,
+      'semesterEndMs': null,
+    });
     await loadSessions();
   }
+
+  // ───────────────────────── Attendance ─────────────────────────
 
   Future<void> loadAttendance() async {
     final isar = await isarService.db;
@@ -126,191 +223,112 @@ class TimetableProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool isPresent(String subject, DateTime date) {
-    // If no record exists, assume present by default (or we can assume 'unknown')
-    // For this tracker, let's assume 'unknown' but visually default to green?
-    // Actually, distinct records are better.
-    final record = _attendanceRecords.firstWhere(
-      (r) => r.subjectName == subject && isSameDay(r.date, date),
-      orElse: () => AttendanceRecord()..isPresent = true // Default to Present
-    );
-    return record.isPresent;
-  }
+  bool isPresent(String subject, DateTime date) => getAttendanceRecord(subject, date)?.isPresent ?? true;
 
   Future<void> toggleAttendance(String subject, DateTime date) async {
-    final isar = await isarService.db;
-    
-    // Find existing - filter by subject and date
-    final existing = await isar.attendanceRecords.filter()
-        .subjectNameEqualTo(subject)
-        .and()
-        .dateEqualTo(date)
-        .findFirst();
-
-    if (existing != null) {
-       existing.isPresent = !existing.isPresent;
-       await isar.writeTxn(() async => await isar.attendanceRecords.put(existing));
-    } else {
-      // Create new "Absent" record (since default was Present)
-      // Actually, if we toggle from "Default Present" -> "Absent"
-      final newRecord = AttendanceRecord()
-        ..subjectName = subject
-        ..date = date
-        ..isPresent = false;
-      await isar.writeTxn(() async => await isar.attendanceRecords.put(newRecord));
-    }
-    
-    await _syncService.pushToCloud();
-    await loadAttendance();
+    await setAttendance(subject, date, !isPresent(subject, date));
   }
 
   Future<void> setAttendance(String subject, DateTime date, bool isPresent) async {
     final isar = await isarService.db;
-    
-    // Find existing
-    final existing = await isar.attendanceRecords.filter()
-        .subjectNameEqualTo(subject)
-        .and()
-        .dateEqualTo(date)
-        .findFirst();
-
-    await isar.writeTxn(() async {
-      if (existing != null) {
-        existing.isPresent = isPresent;
-        await isar.attendanceRecords.put(existing);
-      } else {
-        final newRecord = AttendanceRecord()
+    final day = dateOnly(date);
+    final existing = getAttendanceRecord(subject, day);
+    final record = existing ??
+        (AttendanceRecord()
           ..subjectName = subject
-          ..date = date
-          ..isPresent = isPresent;
-        await isar.attendanceRecords.put(newRecord);
-      }
-    });
-    
-    await _syncService.pushToCloud();
+          ..date = day);
+    record.isPresent = isPresent;
+    SyncService.stamp(record);
+    await isar.writeTxn(() => isar.attendanceRecords.put(record));
+    _syncService.pushAttendance(record);
     await loadAttendance();
-    notifyListeners();
   }
 
   // Stats: 10 Skips Allowed PER MODULE
   Map<String, dynamic> getAttendanceStats(String subject) {
     const int maxSkips = 10;
+    final absences = _attendanceRecords.where((r) => r.subjectName == subject && !r.isPresent).length;
+    final presents = _attendanceRecords.where((r) => r.subjectName == subject && r.isPresent).length;
+    final lives = maxSkips - absences;
 
-    // Count current absences
-    final absences = _attendanceRecords
-        .where((r) => r.subjectName == subject && !r.isPresent)
-        .length;
-
-    // Lives left
-    int lives = maxSkips - absences;
-    
     String status = "Safe";
-    if (lives <= 0) status = "CRITICAL"; // 0 lives means you used all 10 allowed skips? Or 0 means you have 0 skips left? 
-    // "10 class missed in total not more" -> 10 lives. 
-    // 0 absences = 10 lives. 10 absences = 0 lives. 
-    // If lives < 0 ... technically eliminated?
-    
-    if (lives <= 0) status = "ELIMINATED";
-    else if (lives <= 3) status = "Warning";
+    if (lives <= 0) {
+      status = "ELIMINATED";
+    } else if (lives <= 3) {
+      status = "Warning";
+    }
 
+    final total = absences + presents;
     return {
       'lives': lives > 0 ? lives : 0,
-      'maxLives': maxSkips, // 10
+      'maxLives': maxSkips,
       'absences': absences,
+      'presents': presents,
+      'rate': total == 0 ? 1.0 : presents / total,
       'status': status
     };
   }
-  
+
   Future<void> loadSessions() async {
     final isar = await isarService.db;
-    _userSessions = await isar.classSessions.filter().isUserEqualTo(true).findAll();
-    _friendSessions = await isar.classSessions.filter().isUserEqualTo(false).findAll();
-    
-    // Load persisted perspective
+    int byStart(ClassSession a, ClassSession b) => a.startMinutes.compareTo(b.startMinutes);
+    _userSessions = (await isar.classSessions.filter().isUserEqualTo(true).findAll())..sort(byStart);
+    _friendSessions = (await isar.classSessions.filter().isUserEqualTo(false).findAll())..sort(byStart);
+
     final prefs = await SharedPreferences.getInstance();
     _isSwapped = prefs.getBool('isSwapped') ?? false;
 
     _tasks = await isar.academicTasks.where().sortByDueDateDesc().findAll();
-    
-    // Load Attendance too
-    await loadAttendance();
-    
+    _attendanceRecords = await isar.attendanceRecords.where().findAll();
+
     notifyListeners();
-    
-    // Update home screen widget
+
     WidgetService.updateWidget(this);
-    
-    // Auto-schedule class reminders for the next 7 days
-    NotificationService().scheduleAllUpcomingClasses(
-      _userSessions,
-      getEventsForDay: (date) => getEventsForDay(date),
-    );
+    rescheduleReminders();
   }
-  
-  // --- Attendance Logic ---
 
   Future<void> resetAttendance() async {
     final isar = await isarService.db;
+    final removed = List<AttendanceRecord>.from(_attendanceRecords);
     await isar.writeTxn(() async {
       await isar.attendanceRecords.clear();
     });
-    await _syncService.pushToCloud();
+    await _syncService.pushDeleteMany(SyncService.attendanceCol, removed.map((r) => r.syncId));
     await loadAttendance();
   }
 
   // Global Survival Stats: 10 Lives Total Rule
   Map<String, dynamic> getGlobalSurvivalStats() {
     const int maxLives = 10;
-    
-    // Count total absences (where isPresent == false)
     final totalAbsences = _attendanceRecords.where((r) => !r.isPresent).length;
-    
     final livesLeft = maxLives - totalAbsences;
-    
+
     String status = "Safe";
-    if (livesLeft <= 0) status = "Eliminated";
-    else if (livesLeft <= 3) status = "Danger";
-    else if (livesLeft <= 6) status = "Warning";
-    
-    return {
-      'lives': livesLeft > 0 ? livesLeft : 0,
-      'maxLives': maxLives,
-      'absences': totalAbsences,
-      'status': status
-    };
+    if (livesLeft <= 0) {
+      status = "Eliminated";
+    } else if (livesLeft <= 3) {
+      status = "Danger";
+    } else if (livesLeft <= 6) {
+      status = "Warning";
+    }
+
+    return {'lives': livesLeft > 0 ? livesLeft : 0, 'maxLives': maxLives, 'absences': totalAbsences, 'status': status};
   }
 
-  // Check for unmarked past/today classes
   List<ClassSession> getUnmarkedClasses(DateTime date) {
-    // Get all user sessions for this day
-    final sessions = getEventsForDay(date);
-    
-    // Filter those that don't have a record
-    return sessions.where((s) {
-       final record = getAttendanceRecord(s.subject, date);
-       return record == null;
-    }).toList();
-  }
-  
-  // Per-Subject Stats (Secondary)
-  Map<String, dynamic> getSubjectStats(String subject) {
-    // Just count absences for this subject
-    final absences = _attendanceRecords
-        .where((r) => r.subjectName == subject && !r.isPresent)
-        .length;
-        
-    return {
-      'absences': absences
-    };
+    return getClassesForDate(date).where((s) => getAttendanceRecord(s.subject, date) == null).toList();
   }
 
-  // Getters
+  Map<String, dynamic> getSubjectStats(String subject) {
+    final absences = _attendanceRecords.where((r) => r.subjectName == subject && !r.isPresent).length;
+    return {'absences': absences};
+  }
+
   // If swapped, return Friend sessions as "User" sessions (Main view)
   List<ClassSession> get userSessions => _isSwapped ? _friendSessions : _userSessions;
-  
   // If swapped, return User sessions as "Friend" sessions (Ghost view)
   List<ClassSession> get friendSessions => _isSwapped ? _userSessions : _friendSessions;
-  
+
   bool _isSwapped = false;
   bool get isSwapped => _isSwapped;
 
@@ -333,375 +351,258 @@ class TimetableProvider extends ChangeNotifier {
     await prefs.setBool('isSwapped', _isSwapped);
   }
 
-  List<AcademicTask> _tasks = [];
   List<AcademicTask> get tasks => _tasks;
-  
-  // Computed properties for Dashboard
   List<AcademicTask> get pendingTasks => _tasks.where((t) => !t.isCompleted).toList();
   List<AcademicTask> get completedTasks => _tasks.where((t) => t.isCompleted).toList();
+  List<AcademicTask> tasksWithStatus(String status) => _tasks.where((t) => t.effectiveStatus == status).toList();
 
-  // Helpers
-  // Configurable semester start — loaded from SharedPreferences, fallback to Jan 19 2026
+  // Configurable semester start — loaded from SharedPreferences
   DateTime _semesterStart = DateTime(2026, 1, 19);
   DateTime? _semesterEnd;
   DateTime get semesterStart => _semesterStart;
   DateTime? get semesterEnd => _semesterEnd;
 
   int getWeekNumber(DateTime date) {
-    // Normalize dates to midnight to avoid time discrepancies
-    final start = DateTime(_semesterStart.year, _semesterStart.month, _semesterStart.day);
-    final current = DateTime(date.year, date.month, date.day);
-    
+    final start = dateOnly(_semesterStart);
+    final current = dateOnly(date);
     if (current.isBefore(start)) return 0;
-    final diff = current.difference(start).inDays;
-    return (diff / 7).floor() + 1;
+    return (current.difference(start).inDays / 7).floor() + 1;
   }
 
   bool _shouldShowSession(ClassSession session, DateTime date) {
     if (session.specificDate != null) {
       return isSameDay(date, session.specificDate!);
     }
+    final normalizedDate = dateOnly(date);
+    if (normalizedDate.isBefore(dateOnly(_semesterStart))) return false;
+    if (_semesterEnd != null && normalizedDate.isAfter(dateOnly(_semesterEnd!))) return false;
 
-    // Check semester bounds
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-    final normalizedStart = DateTime(_semesterStart.year, _semesterStart.month, _semesterStart.day);
-    if (normalizedDate.isBefore(normalizedStart)) return false;
-    
-    if (_semesterEnd != null) {
-      final normalizedEnd = DateTime(_semesterEnd!.year, _semesterEnd!.month, _semesterEnd!.day);
-      if (normalizedDate.isAfter(normalizedEnd)) return false;
-    }
-
-    // If no weeks specified, assume it runs every week
     if (session.weeks == null || session.weeks!.isEmpty) return true;
-    
-    final week = getWeekNumber(date);
-    return session.weeks!.contains(week);
+    return session.weeks!.contains(getWeekNumber(date));
   }
 
-  bool isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
+  bool isSameDay(DateTime a, DateTime b) => isSameDate(a, b);
 
   String getWeekLabel(DateTime date) {
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-    final normalizedStart = DateTime(_semesterStart.year, _semesterStart.month, _semesterStart.day);
-    if (normalizedDate.isBefore(normalizedStart)) return "Pre-Sem";
-    
-    if (_semesterEnd != null) {
-      final normalizedEnd = DateTime(_semesterEnd!.year, _semesterEnd!.month, _semesterEnd!.day);
-      if (normalizedDate.isAfter(normalizedEnd)) return "Break";
-    }
+    final normalizedDate = dateOnly(date);
+    if (normalizedDate.isBefore(dateOnly(_semesterStart))) return "Pre-Sem";
+    if (_semesterEnd != null && normalizedDate.isAfter(dateOnly(_semesterEnd!))) return "Break";
 
     final w = getWeekNumber(date);
-    if (w > 15) return "Break";
-    
+    if (_semesterEnd == null && w > 15) return "Break";
     final online = isOnlineWeek(w);
     return "Week $w${online ? ' (Online)' : ''}";
   }
 
-  List<ClassSession> getEventsForDay(DateTime date) {
+  List<ClassSession> _sessionsFor(List<ClassSession> source, DateTime date) {
     final dayName = DateFormat('EEEE').format(date);
-    // Filter sessions by Day AND Week
-    return userSessions.where((s) => 
-      s.day == dayName && _shouldShowSession(s, date)
-    ).toList();
-  }
-  
-  // Get all classes for a specific date — always uses _userSessions directly
-  // and also catches one-off classes whose specificDate matches even if day name doesn't
-  List<ClassSession> getClassesForDate(DateTime date) {
-    final dayName = DateFormat('EEEE').format(date);
-    return _userSessions.where((s) {
-      // One-off class: match by specificDate only
-      if (s.specificDate != null) {
-        return isSameDay(date, s.specificDate!);
-      }
-      // Regular class: match by day name + semester/week bounds
+    return source.where((s) {
+      // One-off classes match on their date even if `day` disagrees.
+      if (s.specificDate != null) return isSameDay(date, s.specificDate!);
       return s.day == dayName && _shouldShowSession(s, date);
-    }).toList();
+    }).toList()
+      ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
   }
 
-  // Calculate past/valid dates from Semester Start (Jan 19, 2026) going forward
-  List<DateTime> getPastClassDates(String subject) {
-    final sessions = userSessions.where((s) => s.subject == subject).toList(); // Use userSessions getter to respect View
-    if (sessions.isEmpty) return [];
-    
-    final validDays = sessions.map((s) => s.day).toSet(); 
-    
-    List<DateTime> dates = [];
-    DateTime iterator = _semesterStart; // Jan 19
-    DateTime today = DateTime.now();
-    // Normalize today to Midnight
-    today = DateTime(today.year, today.month, today.day);
-    
-    // Iterate forward until Today
-    while (iterator.isBefore(today) || isSameDay(iterator, today)) {
-       final dayName = DateFormat('EEEE').format(iterator);
-       
-       if (validDays.contains(dayName)) {
-         // Check if session active this week
-         // We must find IF there is a session for this subject on this day that is active
-         bool isActive = sessions.any((s) => s.day == dayName && _shouldShowSession(s, iterator));
-         if (isActive) {
-           dates.add(iterator);
-         }
-       }
-       iterator = iterator.add(const Duration(days: 1));
+  /// Classes for [date] in the current perspective, sorted by start time.
+  List<ClassSession> getEventsForDay(DateTime date) => _sessionsFor(userSessions, date);
+
+  /// The signed-in user's own classes for [date] (ignores the friend swap).
+  List<ClassSession> getClassesForDate(DateTime date) => _sessionsFor(_userSessions, date);
+
+  /// Finds the class in progress, or the next one within [lookaheadDays].
+  UpcomingClass? findNextClass(DateTime now, {int lookaheadDays = 7, bool skipToday = false}) {
+    for (var d = skipToday ? 1 : 0; d <= lookaheadDays; d++) {
+      final date = dateOnly(now).add(Duration(days: d));
+      for (final s in getClassesForDate(date)) {
+        final start = date.add(Duration(minutes: s.startMinutes));
+        var end = date.add(Duration(minutes: s.endMinutes));
+        if (!end.isAfter(start)) end = start.add(const Duration(hours: 1));
+        if (end.isAfter(now)) {
+          return UpcomingClass(session: s, date: date, start: start, end: end, inProgress: !start.isAfter(now));
+        }
+      }
     }
-    
-    // Sort recent first
+    return null;
+  }
+
+  // Past dates a subject was held, most recent first.
+  List<DateTime> getPastClassDates(String subject) {
+    final sessions = userSessions.where((s) => s.subject == subject).toList();
+    if (sessions.isEmpty) return [];
+
+    final dates = <DateTime>[];
+    var iterator = dateOnly(_semesterStart);
+    final today = dateOnly(DateTime.now());
+    while (!iterator.isAfter(today)) {
+      final dayName = DateFormat('EEEE').format(iterator);
+      final active = sessions.any((s) => s.specificDate != null
+          ? isSameDay(iterator, s.specificDate!)
+          : s.day == dayName && _shouldShowSession(s, iterator));
+      if (active) dates.add(iterator);
+      iterator = DateTime(iterator.year, iterator.month, iterator.day + 1);
+    }
     return dates.reversed.toList();
   }
-  
-  // Check if attendance is marked for a specific date/subject
+
   AttendanceRecord? getAttendanceRecord(String subject, DateTime date) {
-    // We need exact date matching at 00:00:00 usually. 
-    // The date passed in should be normalized.
-    final normalized = DateTime(date.year, date.month, date.day);
-    
-    try {
-      return _attendanceRecords.firstWhere(
-        (r) => r.subjectName == subject && 
-               r.date.year == normalized.year && 
-               r.date.month == normalized.month && 
-               r.date.day == normalized.day
-      );
-    } catch (e) {
-      return null;
+    for (final r in _attendanceRecords) {
+      if (r.subjectName == subject && isSameDay(r.date, date)) return r;
     }
+    return null;
   }
 
-  
-  List<AcademicTask> getTasksForDay(DateTime date) {
-    return _tasks.where((t) => isSameDay(t.dueDate, date)).toList();
-  }
+  /// Tasks/events on [date], including multi-day events that span it.
+  List<AcademicTask> getTasksForDay(DateTime date) => _tasks.where((t) => t.occursOn(date)).toList();
 
-  // Friend Helpers — uses the swapped getter so it always returns the "other" course
-  List<ClassSession> getFriendEventsForDay(DateTime date) {
-    final dayName = DateFormat('EEEE').format(date);
-    return friendSessions.where((s) => 
-      s.day == dayName && _shouldShowSession(s, date)
-    ).toList();
-  }
+  List<ClassSession> getFriendEventsForDay(DateTime date) => _sessionsFor(friendSessions, date);
 
   List<CommonFreeSlot> getFreeSlotsForDay(DateTime date) {
-    if (isOnlineWeek(getWeekNumber(date))) {
-      return []; // No physical meetings on Online weeks
-    }
+    if (isOnlineWeek(getWeekNumber(date))) return [];
 
-    final dayName = DateFormat('EEEE').format(date);
-    
-    // Use SWAPPED getters so comparison works from both perspectives
-    // userSessions = current user's timetable (respects swap)
-    // friendSessions = the other course's timetable (respects swap)
-    final dailyUser = userSessions.where((s) => 
-      s.day == dayName && _shouldShowSession(s, date)
-    ).toList();
+    final dailyUser = getEventsForDay(date);
+    final dailyFriend = getFriendEventsForDay(date);
 
-    final dailyFriend = friendSessions.where((s) => 
-      s.day == dayName && _shouldShowSession(s, date)
-    ).toList();
-    
-    // 2. Check Campus Presence: Both must have at least one NON-ONLINE class
-    // If list is empty or all classes are ONLINE, assume not on campus.
-    final userOnCampus = dailyUser.isNotEmpty && dailyUser.any((s) => !s.room.toUpperCase().contains('ONLINE'));
-    final friendOnCampus = dailyFriend.isNotEmpty && dailyFriend.any((s) => !s.room.toUpperCase().contains('ONLINE'));
+    // Both must be on campus (at least one non-online class)
+    final userOnCampus = dailyUser.any((s) => !s.room.toUpperCase().contains('ONLINE'));
+    final friendOnCampus = dailyFriend.any((s) => !s.room.toUpperCase().contains('ONLINE'));
+    if (!userOnCampus || !friendOnCampus) return [];
 
-    if (!userOnCampus || !friendOnCampus) {
-      return []; 
-    }
+    const boundsStart = 480, boundsEnd = 1050; // 08:00 – 17:30
+    final busy = [for (final s in [...dailyUser, ...dailyFriend]) _TimeInterval(start: s.startMinutes, end: s.endMinutes)]
+      ..sort((a, b) => a.start.compareTo(b.start));
 
-    // Bounds: 8:00 (480) to 17:30 (1050)
-    final timeBounds = _TimeInterval(start: 480, end: 1050);
-    
-    final busy = <_TimeInterval>[];
-    for (var s in [...dailyUser, ...dailyFriend]) {
-      busy.add(_TimeInterval(start: _timeToMinutes(s.startTime), end: _timeToMinutes(s.endTime)));
-    }
-    busy.sort((a,b) => a.start.compareTo(b.start));
-    
-    // Merge Overlapping Busy Slots
     final merged = <_TimeInterval>[];
-    if (busy.isNotEmpty) {
-      var current = busy.first;
-      for (var i = 1; i < busy.length; i++) {
-         if (busy[i].start < current.end) {
-           current.end = busy[i].end > current.end ? busy[i].end : current.end;
-         } else {
-           merged.add(current);
-           current = busy[i];
-         }
+    for (final b in busy) {
+      if (merged.isNotEmpty && b.start < merged.last.end) {
+        if (b.end > merged.last.end) merged.last.end = b.end;
+      } else {
+        merged.add(_TimeInterval(start: b.start, end: b.end));
       }
-      merged.add(current);
     }
-    
-    // Invert for Free Time
+
     final freeSlots = <CommonFreeSlot>[];
-    int pointer = timeBounds.start;
-    
-    for (var block in merged) {
-       if (block.start > pointer) {
-         // Gap found
-         freeSlots.add(CommonFreeSlot(start: pointer, end: block.start));
-       }
-       pointer = block.end > pointer ? block.end : pointer;
+    var pointer = boundsStart;
+    for (final block in merged) {
+      if (block.start > pointer) freeSlots.add(CommonFreeSlot(start: pointer, end: block.start));
+      if (block.end > pointer) pointer = block.end;
     }
-    
-    if (pointer < timeBounds.end) {
-      freeSlots.add(CommonFreeSlot(start: pointer, end: timeBounds.end));
-    }
-    
-    // Filter out tiny slots (< 30 mins)
+    if (pointer < boundsEnd) freeSlots.add(CommonFreeSlot(start: pointer, end: boundsEnd));
     return freeSlots.where((s) => (s.end - s.start) >= 30).toList();
   }
 
   bool isOnlineWeek(int week) {
-    // For generic/adaptive courses, all weeks are campus by default.
-    // The old DS/CS hardcoded campus weeks were [1, 2, 3, 6, 10].
-    // In the adaptive system, we treat every week as campus unless configured otherwise.
+    // In the adaptive system every week is a campus week unless configured.
     return false;
   }
 
-  // Task Management
-  Future<void> addTask(String title, String subject, String type, DateTime due, {String description = ''}) async {
-     final isar = await isarService.db;
-     final newTask = AcademicTask(
-       title: title, 
-       subject: subject, 
-       type: type, 
-       dueDate: due, 
-       description: description,
-       isCompleted: false
-     );
-     await isar.writeTxn(() async => await isar.academicTasks.put(newTask));
-     await _syncService.pushToCloud();
-     await loadSessions(); 
+  // ───────────────────────── Tasks / events ─────────────────────────
+
+  /// Inserts or updates a task. Keeps `isCompleted` and the board column
+  /// consistent.
+  Future<void> saveTask(AcademicTask task) async {
+    final status = task.status;
+    if (status == TaskStatus.done) {
+      task.isCompleted = true;
+    } else if (status != null) {
+      task.isCompleted = false;
+    }
+    SyncService.stamp(task);
+    final isar = await isarService.db;
+    await isar.writeTxn(() => isar.academicTasks.put(task));
+    _syncService.pushTask(task);
+    await loadSessions();
   }
 
-  Future<void> updateTask(int id, String title, String subject, String type, DateTime dueDate, bool isCompleted, {String description = ''}) async {
-     final isar = await isarService.db;
-     await isar.writeTxn(() async {
-       final task = await isar.academicTasks.get(id);
-       if (task != null) {
-         task.title = title;
-         task.subject = subject;
-         task.type = type;
-         task.dueDate = dueDate;
-         task.isCompleted = isCompleted;
-         task.description = description;
-         await isar.academicTasks.put(task);
-       }
-     });
-     await _syncService.pushToCloud();
-     await loadSessions();
+  Future<void> addTask(String title, String subject, String type, DateTime due, {String description = ''}) {
+    return saveTask(AcademicTask(title: title, subject: subject, type: type, dueDate: due, description: description));
   }
 
-  // Unique subjects from existing tasks for autocomplete
+  Future<void> setTaskStatus(AcademicTask task, String status) async {
+    task.status = status;
+    task.isCompleted = status == TaskStatus.done;
+    await saveTask(task);
+  }
+
+  Future<void> toggleTaskDone(AcademicTask task) =>
+      setTaskStatus(task, task.isCompleted ? TaskStatus.todo : TaskStatus.done);
+
+  // Unique subjects from tasks and classes for autocomplete
   List<String> get savedSubjects {
-    final subjects = _tasks.map((t) => t.subject).where((s) => s.isNotEmpty && s != 'General').toSet().toList();
+    final subjects = {
+      ..._tasks.map((t) => t.subject),
+      ..._userSessions.map((s) => s.subject),
+    }.where((s) => s.isNotEmpty && s != 'General').toList();
     subjects.sort();
     return subjects;
   }
 
-  Future<void> deleteTask(int id) async {
-     final isar = await isarService.db;
-     await isar.writeTxn(() async => await isar.academicTasks.delete(id));
-     await _syncService.pushToCloud();
-     await loadSessions();
+  /// Deletes a task and returns it so the caller can offer "Undo".
+  Future<AcademicTask?> deleteTask(int id) async {
+    final isar = await isarService.db;
+    final task = await isar.academicTasks.get(id);
+    if (task == null) return null;
+    await isar.writeTxn(() => isar.academicTasks.delete(id));
+    _syncService.pushDelete(SyncService.tasksCol, task.syncId);
+    await loadSessions();
+    return task;
   }
 
-  // Session Management
+  /// Re-inserts a task removed by [deleteTask].
+  Future<void> restoreTask(AcademicTask task) async {
+    task.id = Isar.autoIncrement;
+    await saveTask(task);
+  }
+
+  // ───────────────────────── Sessions ─────────────────────────
+
   Future<void> addSession(ClassSession session) async {
+    session.startTime = normalizeTime(session.startTime);
+    session.endTime = normalizeTime(session.endTime);
+    SyncService.stamp(session);
     final isar = await isarService.db;
-    await isar.writeTxn(() async {
-      await isar.classSessions.put(session);
-    });
-    await _syncService.pushToCloud();
+    await isar.writeTxn(() => isar.classSessions.put(session));
+    _syncService.pushSession(session);
     await loadSessions();
   }
-  
+
   Future<void> deleteSession(int id) async {
     final isar = await isarService.db;
-    await isar.writeTxn(() async {
-      await isar.classSessions.delete(id);
-    });
-    await _syncService.pushToCloud();
+    final session = await isar.classSessions.get(id);
+    await isar.writeTxn(() => isar.classSessions.delete(id));
+    _syncService.pushDelete(SyncService.sessionsCol, session?.syncId);
     await loadSessions();
   }
 
-  /* ================================================================
-   * OMITTED — Old Semester Data (Y1 S2 - Data Science & Computer Science)
-   * 
-   * The hardcoded DS/CS timetable JSON that was here has been omitted
-   * in favor of the new adaptive AI-powered timetable import system.
-   * The original data is preserved in the json/ directory as:
-   *   - json/DSS2Y1.json (Data Science)
-   *   - json/CSS2Y1.json (Computer Science)
-   * 
-   * To restore the old behavior, see git history.
-   * ================================================================ */
-
-  // Legacy: Seed data loader — now a no-op in the adaptive system.
-  // Kept for backward compatibility with code that calls it.
-  Future<void> loadFriendTimetable() async {
-     // In the adaptive system, this is replaced by importAiSessions().
-     // If called, just reload whatever sessions exist in the DB.
-     await loadSessions();
+  /// Seeds in-memory data without touching Isar (widget tests only).
+  @visibleForTesting
+  void debugSetData({
+    List<ClassSession> sessions = const [],
+    List<AcademicTask> tasks = const [],
+    List<AttendanceRecord> attendance = const [],
+    String? courseName,
+    DateTime? semesterStart,
+  }) {
+    _userSessions = [...sessions]..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
+    _tasks = [...tasks];
+    _attendanceRecords = [...attendance];
+    if (courseName != null) _courseName = courseName;
+    if (semesterStart != null) _semesterStart = semesterStart;
+    _hasCompletedSetup = true;
+    _isSetupLoaded = true;
+    notifyListeners();
   }
 
-  void _importSessions(Isar isar, Map<String, dynamic> timetable, bool isUser) {
-    timetable.forEach((day, sessions) {
-      for (var s in sessions as List<dynamic>) {
-         // Parse weeks
-         List<int>? weeksList;
-         if (s['weeks'] != null) {
-            weeksList = (s['weeks'] as List).map((e) => e as int).toList();
-         }
-
-         final session = ClassSession(
-            subject: s['moduleName'],
-            startTime: s['startTime'],
-            endTime: s['endTime'],
-            day: day,
-            room: s['location'] ?? 'Unknown',
-            moduleCode: s['moduleCode'] ?? '',
-            isUser: isUser,
-            weeks: weeksList
-         );
-         isar.classSessions.put(session);
-      }
-    });
-  }
-
-  void _calculateCommonFreeTime() {
-    // Deprecated: Now we calculate strictly per day in getFreeSlotsForDay
-    _commonFreeTime.clear();
-  }
-
-  // Time Utility
-  int _timeToMinutes(String time) {
-    try {
-      final parts = time.split(':');
-      return int.parse(parts[0]) * 60 + int.parse(parts[1]);
-    } catch (e) {
-      return 0;
-    }
-  }
-} // End of Class
+  // Legacy: kept for code that still calls it.
+  Future<void> loadFriendTimetable() => loadSessions();
+}
 
 class CommonFreeSlot {
   final int start; // minutes from midnight
-  final int end;   // minutes from midnight
+  final int end; // minutes from midnight
   CommonFreeSlot({required this.start, required this.end});
-  
-  String get label => "${_minToTime(start)} - ${_minToTime(end)}";
-  
-  static String _minToTime(int m) {
-    final h = (m ~/ 60).toString().padLeft(2, '0');
-    final min = (m % 60).toString().padLeft(2, '0');
-    return "$h:$min";
-  }
+
+  String get label => "${formatMinutes(start)} - ${formatMinutes(end)}";
 }
 
 class _TimeInterval {

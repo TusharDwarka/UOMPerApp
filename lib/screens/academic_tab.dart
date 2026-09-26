@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:table_calendar/table_calendar.dart';
-import 'package:isar_community/isar.dart'; // Still needed? Maybe not if fully passing via provider, but for checkbox update logic we might keep or delegate
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:table_calendar/table_calendar.dart';
+
 import '../models/academic_task.dart';
-import '../services/isar_service.dart';
+import '../models/class_session.dart';
 import '../providers/timetable_provider.dart';
-import '../widgets/add_edit_task_sheet.dart'; 
+import '../theme/app_theme.dart';
+import '../utils/meeting_links.dart';
+import '../utils/time_utils.dart';
+import '../widgets/add_edit_task_sheet.dart';
+import '../widgets/ui.dart';
+
+Color taskColor(AcademicTask t) => t.colorValue != null ? Color(t.colorValue!) : AppColors.forType(t.type);
 
 class AcademicTab extends StatefulWidget {
   const AcademicTab({super.key});
@@ -18,446 +24,574 @@ class AcademicTab extends StatefulWidget {
 class _AcademicTabState extends State<AcademicTab> {
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
-  DateTime? _selectedDay;
-  
-  // _allTasks removed. We use Consumer<TimetableProvider>.
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedDay = _focusedDay;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<TimetableProvider>(context, listen: false).loadSessions();
-    });
-  }
-  
-  // _addTask, _updateTask, _loadTasks removed.
-
-  void _showAddEditTaskDialog({AcademicTask? taskToEdit}) {
-     showModalBottomSheet(
-       context: context,
-       isScrollControlled: true,
-       backgroundColor: Colors.transparent, // Sheet controls its own bg
-       builder: (context) => AddEditTaskSheet(taskToEdit: taskToEdit)
-     );
-  }
-  
-  // Helper for calendar
-  bool isSameDay(DateTime? a, DateTime? b) {
-    if (a == null || b == null) return false;
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
+  DateTime _selectedDay = dateOnly(DateTime.now());
+  int _tab = 0; // 0 = calendar, 1 = attendance
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final timetable = Provider.of<TimetableProvider>(context);
+    final p = Palette.of(context);
+    final timetable = context.watch<TimetableProvider>();
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: AppBar(
-          title: Text('Academic Hub', style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          elevation: 0,
-          bottom: TabBar(
-            labelColor: const Color(0xFF2962FF),
-            unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey,
-            indicatorColor: const Color(0xFF2962FF),
-            tabs: const [
-              Tab(text: "Planner"),
-              Tab(text: "Attendance Survival"),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.add_circle_outline, color: Color(0xFF2962FF), size: 28),
-              onPressed: () => _showAddEditTaskDialog(),
-            )
-          ],
-        ),
-        body: TabBarView(
+    return Scaffold(
+      backgroundColor: p.canvas,
+      body: SafeArea(
+        child: Column(
           children: [
-            _buildTaskPlanner(isDark, timetable),
-            _buildAttendanceTracker(isDark, timetable),
+            ScreenHeader(
+              title: _tab == 0 ? 'Hub' : 'Attendance',
+              eyebrow: _tab == 0 ? DateFormat('MMMM yyyy').format(_focusedDay) : 'Survival mode · 10 lives per module',
+              actions: [
+                if (_tab == 0)
+                  CircleIconButton(
+                    icon: _calendarFormat == CalendarFormat.month ? Icons.view_week_rounded : Icons.calendar_view_month_rounded,
+                    tooltip: _calendarFormat == CalendarFormat.month ? 'Week view' : 'Month view',
+                    onPressed: () => setState(() => _calendarFormat =
+                        _calendarFormat == CalendarFormat.month ? CalendarFormat.twoWeeks : CalendarFormat.month),
+                  ),
+                if (_tab == 0)
+                  CircleIconButton(
+                    icon: Icons.add_rounded,
+                    filled: true,
+                    tooltip: 'Add event',
+                    onPressed: () => showTaskSheet(context, initialDate: _selectedDay, initialType: 'Event'),
+                  ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+              child: PillSegmented<int>(
+                values: const [0, 1],
+                selected: _tab,
+                labelOf: (i) => i == 0 ? 'Calendar' : 'Attendance',
+                onChanged: (i) => setState(() => _tab = i),
+              ),
+            ),
+            Expanded(child: _tab == 0 ? _buildCalendarTab(p, timetable) : _AttendanceView(timetable: timetable)),
           ],
         ),
       ),
     );
   }
-  
-  Widget _buildAttendanceTracker(bool isDark, TimetableProvider timetable) {
-         final subjects = timetable.userSessions.map((s) => s.subject).toSet().toList();
-         final todayClasses = timetable.getClassesForDate(DateTime.now());
-         final todaySubjects = todayClasses.map((s) => s.subject).toSet().toList();
 
-         if (subjects.isEmpty) {
-           return Center(child: Text("No courses found. Check your schedule setup.", style: TextStyle(color: isDark ? Colors.grey : Colors.black)));
-         }
+  // ───────────────────────── Calendar ─────────────────────────
 
-         return ListView(
-           padding: const EdgeInsets.all(20),
-           children: [
-             // --- Section 1: Today's Roll Call ---
-             if (todaySubjects.isNotEmpty) ...[
-                Text("Today's Roll Call", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1E1E2C))),
-                const SizedBox(height: 12),
-                ...todaySubjects.map((subject) {
-                   final record = timetable.getAttendanceRecord(subject, DateTime.now());
-                   final hasRecord = record != null;
-                   final isPresent = record?.isPresent ?? false;
-
-                   return Container(
-                     margin: const EdgeInsets.only(bottom: 12),
-                     decoration: BoxDecoration(
-                       color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-                       borderRadius: BorderRadius.circular(16),
-                       boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.05), blurRadius: 10, offset: const Offset(0, 4))],
-                     ),
-                     child: ListTile(
-                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                       title: Text(subject, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
-                       subtitle: Text(
-                         hasRecord ? (isPresent ? "Marked Present" : "Marked Absent") : "Are you in class?", 
-                         style: TextStyle(color: hasRecord ? (isPresent ? Colors.green : Colors.red) : Colors.amber[700])
-                       ),
-                       trailing: Row(
-                         mainAxisSize: MainAxisSize.min,
-                         children: [
-                           IconButton(
-                             icon: Icon(Icons.check_circle, color: (hasRecord && isPresent) ? Colors.green : (isDark ? Colors.grey[700] : Colors.grey[300])),
-                             iconSize: 32,
-                             onPressed: () => timetable.setAttendance(subject, DateTime.now(), true),
-                           ),
-                           IconButton(
-                             icon: Icon(Icons.cancel, color: (hasRecord && !isPresent) ? Colors.red : (isDark ? Colors.grey[700] : Colors.grey[300])),
-                             iconSize: 32,
-                             onPressed: () => timetable.setAttendance(subject, DateTime.now(), false),
-                           ),
-                         ],
-                       ),
-                     ),
-                   );
-                }),
-                const SizedBox(height: 24),
-             ],
-
-             // --- Section 2: Subject Details ---
-             Text("Module Survival Tracking", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1E1E2C))),
-             const SizedBox(height: 12),
-             
-             ...subjects.map((subject) {
-                final stats = timetable.getAttendanceStats(subject);
-                final int lives = stats['lives'];
-                final int maxLives = stats['maxLives'];
-                // final int absences = stats['absences'];
-                
-                // Visual Hearts
-                List<Widget> hearts = [];
-                int heartsToShow = lives > 10 ? 10 : (lives < 0 ? 0 : lives);
-                for(int i=0; i<maxLives; i++) {
-                  if (i < heartsToShow) {
-                    hearts.add(const Icon(Icons.favorite, color: Colors.pinkAccent, size: 16));
-                  } else {
-                    hearts.add(Icon(Icons.favorite_border, color: isDark ? Colors.white24 : Colors.grey[300], size: 16));
-                  }
-                }
-
-                return Card(
-                  elevation: 0,
-                  color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.white10 : Colors.grey[200]!)),
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: Theme(
-                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent, colorScheme: isDark ? const ColorScheme.dark() : const ColorScheme.light()),
-                    child: ExpansionTile(
-                      collapsedIconColor: isDark ? Colors.grey : Colors.grey[600],
-                      title: Text(subject, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 6),
-                          Wrap(spacing: 4, runSpacing: 4, children: hearts),
-                          const SizedBox(height: 6),
-                          Text("$lives / $maxLives Lives Remaining", style: TextStyle(color: lives <= 2 ? Colors.red : (lives <= 5 ? Colors.orange : Colors.green), fontSize: 13, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                      children: [
-                        Divider(color: isDark ? Colors.white10 : Colors.grey[100]),
-                        Padding(
-                          padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ...timetable.getPastClassDates(subject).map((date) {
-                                 final r = timetable.getAttendanceRecord(subject, date);
-                                 final isPresent = r?.isPresent ?? false;
-                                 final hasRecord = r != null;
-                                 
-                                 return InkWell(
-                                   onTap: () => timetable.setAttendance(subject, date, !isPresent),
-                                   child: Container(
-                                     padding: const EdgeInsets.symmetric(vertical: 12),
-                                     decoration: BoxDecoration(
-                                       border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey[100]!))
-                                     ),
-                                     child: Row(
-                                       children: [
-                                         Text(DateFormat('MMM d').format(date), style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
-                                         const SizedBox(width: 8),
-                                         Text(DateFormat('EEE').format(date), style: TextStyle(color: isDark ? Colors.grey : Colors.grey[500], fontSize: 12)),
-                                         const Spacer(),
-                                         if (!hasRecord) 
-                                            Text("Unknown", style: TextStyle(color: isDark ? Colors.grey : Colors.grey[400], fontSize: 12))
-                                         else 
-                                            Icon(isPresent ? Icons.check_circle_outline : Icons.highlight_off, color: isPresent ? Colors.green : Colors.red, size: 20)
-                                       ],
-                                     ),
-                                   ),
-                                 );
-                              }).toList(),
-                               if (timetable.getPastClassDates(subject).isEmpty)
-                                 const Padding(padding: EdgeInsets.all(12), child: Text("No past classes.", style: TextStyle(color: Colors.grey)))
-                            ],
-                          ),
-                        )
-                      ],
-                    ),
-                  ),
-                );
-             }),
-             
-             const SizedBox(height: 30),
-             Center(
-               child: TextButton.icon(
-                 onPressed: () {
-                    showDialog(context: context, builder: (c) => AlertDialog(
-                      title: const Text("Reset Survival Mode?"),
-                      content: const Text("This will clear all attendance records and restore your 10 lives. This cannot be undone."),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(c), child: const Text("Cancel")),
-                        TextButton(
-                          onPressed: () {
-                            timetable.resetAttendance();
-                            Navigator.pop(c);
-                          }, 
-                          child: const Text("Reset All", style: TextStyle(color: Colors.red))
-                        )
-                      ],
-                    ));
-                 },
-                 icon: const Icon(Icons.refresh, color: Colors.grey),
-                 label: const Text("Reset All Progress", style: TextStyle(color: Colors.grey)),
-               ),
-             ),
-             const SizedBox(height: 40),
-           ],
-         );
-  }
-
-  Widget _buildTaskPlanner(bool isDark, TimetableProvider timetable) {
-    
-    // Use timetable.tasks instead of _allTasks
+  Widget _buildCalendarTab(Palette p, TimetableProvider timetable) {
     final allTasks = timetable.tasks;
+    final dayTasks = timetable.getTasksForDay(_selectedDay)
+      ..sort((a, b) => (a.startDate ?? a.dueDate).compareTo(b.startDate ?? b.dueDate));
+    final dayClasses = timetable.getClassesForDate(_selectedDay);
 
-    final selectedTasks = allTasks.where((task) => isSameDay(task.dueDate, _selectedDay ?? DateTime.now())).toList();
-    
-    // Calculate priorities: Tasks due in next 3 days?
-    final priorityTasks = allTasks.where((t) {
-      final diff = t.dueDate.difference(DateTime.now()).inDays;
-      return diff >= 0 && diff <= 3 && !t.isCompleted;
-    }).toList();
-    
-    return ListView( 
-        children: [
-          // 1. Calendar View
-          TableCalendar<AcademicTask>(
-             firstDay: DateTime.utc(2020, 10, 16),
-             lastDay: DateTime.utc(2030, 3, 14),
-             focusedDay: _focusedDay,
-             calendarFormat: _calendarFormat,
-             selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-             onDaySelected: (selectedDay, focusedDay) {
-               setState(() {
-                 _selectedDay = selectedDay;
-                 _focusedDay = focusedDay; 
-               });
-             },
-             onFormatChanged: (format) {
-              if (_calendarFormat != format) setState(() => _calendarFormat = format);
-             },
-             onPageChanged: (focusedDay) => _focusedDay = focusedDay,
-             eventLoader: (day) => allTasks.where((t) => isSameDay(t.dueDate, day)).toList(),
-             calendarStyle: CalendarStyle(
-               defaultTextStyle: TextStyle(color: isDark ? Colors.white : Colors.black),
-               weekendTextStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
-               outsideTextStyle: TextStyle(color: isDark ? Colors.grey[700] : Colors.grey[400]),
-               markerDecoration: const BoxDecoration(color: Color(0xFFFF1744), shape: BoxShape.circle),
-               selectedDecoration: const BoxDecoration(color: Color(0xFF2962FF), shape: BoxShape.circle),
-               todayDecoration: BoxDecoration(color: const Color(0xFF2962FF).withOpacity(0.5), shape: BoxShape.circle),
-             ),
-             headerStyle: HeaderStyle(
-               formatButtonVisible: false, 
-               titleCentered: true,
-               titleTextStyle: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
-               leftChevronIcon: Icon(Icons.chevron_left, color: isDark ? Colors.white : Colors.black),
-               rightChevronIcon: Icon(Icons.chevron_right, color: isDark ? Colors.white : Colors.black),
-             ),
-           ),
-          
-          const SizedBox(height: 20),
-          
-          // 2. Selected Day Tasks
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(
-              isSameDay(_selectedDay, DateTime.now()) ? "Today's Priorities" : "Tasks for ${DateFormat('MMM d').format(_selectedDay!)}", 
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)
+    final today = dateOnly(DateTime.now());
+    final upcoming = allTasks
+        .where((t) => !t.isCompleted && !dateOnly(t.dueDate).isBefore(today) && dateOnly(t.dueDate).difference(today).inDays <= 14)
+        .toList()
+      ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+    // Stable row order so a multi-day bar stays on the same line each day.
+    int barOrder(AcademicTask a, AcademicTask b) {
+      final s = (a.startDate ?? a.dueDate).compareTo(b.startDate ?? b.dueDate);
+      return s != 0 ? s : a.id.compareTo(b.id);
+    }
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 32),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SoftCard(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+            child: TableCalendar<AcademicTask>(
+              firstDay: DateTime.utc(2020, 1, 1),
+              lastDay: DateTime.utc(2035, 12, 31),
+              focusedDay: _focusedDay,
+              calendarFormat: _calendarFormat,
+              startingDayOfWeek: StartingDayOfWeek.monday,
+              rowHeight: 66,
+              daysOfWeekHeight: 26,
+              selectedDayPredicate: (day) => isSameDate(_selectedDay, day),
+              onDaySelected: (selected, focused) => setState(() {
+                _selectedDay = dateOnly(selected);
+                _focusedDay = focused;
+              }),
+              onFormatChanged: (f) => setState(() => _calendarFormat = f),
+              onPageChanged: (focused) => setState(() => _focusedDay = focused),
+              eventLoader: (day) => allTasks.where((t) => t.occursOn(day)).toList()..sort(barOrder),
+              headerStyle: HeaderStyle(
+                formatButtonVisible: false,
+                titleCentered: true,
+                titleTextStyle: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: p.textPrimary),
+                leftChevronIcon: Icon(Icons.chevron_left_rounded, color: p.textPrimary),
+                rightChevronIcon: Icon(Icons.chevron_right_rounded, color: p.textPrimary),
+              ),
+              daysOfWeekStyle: DaysOfWeekStyle(
+                weekdayStyle: TextStyle(color: p.textSecondary, fontWeight: FontWeight.w600, fontSize: 12),
+                weekendStyle: TextStyle(color: p.textMuted, fontWeight: FontWeight.w600, fontSize: 12),
+              ),
+              calendarStyle: CalendarStyle(
+                outsideDaysVisible: false,
+                cellAlignment: Alignment.topCenter,
+                cellPadding: const EdgeInsets.only(top: 6),
+                defaultTextStyle: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w500),
+                weekendTextStyle: TextStyle(color: p.textSecondary),
+              ),
+              calendarBuilders: CalendarBuilders<AcademicTask>(
+                selectedBuilder: (context, day, _) => _dayCircle(day, bg: p.ink, fg: p.onInk),
+                todayBuilder: (context, day, _) => _dayCircle(day, border: p.accent, fg: p.accent),
+                markerBuilder: (context, day, events) => events.isEmpty ? null : _markers(day, events),
+              ),
             ),
           ),
-          const SizedBox(height: 10),
-          
-          if (selectedTasks.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Center(child: Text("No tasks due this day.", style: TextStyle(color: Colors.grey[400]))),
-            )
-          else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: selectedTasks.length,
-              itemBuilder: (context, index) {
-                return _buildTaskCard(selectedTasks[index], isDark, timetable);
-              },
+        ),
+        const SizedBox(height: 18),
+
+        // ── Selected day agenda ──
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: SectionLabel(
+            isSameDate(_selectedDay, DateTime.now()) ? 'Today' : DateFormat('EEEE d MMMM').format(_selectedDay),
+            padding: const EdgeInsets.fromLTRB(4, 0, 0, 10),
+            trailing: TextButton.icon(
+              onPressed: () => showTaskSheet(context, initialDate: _selectedDay, initialType: 'Event'),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Add'),
             ),
-              
-            // 3. Upcoming / Priority Section (Always visible if tasks exist)
-             if (priorityTasks.isNotEmpty) ...[
-               const SizedBox(height: 30),
-               Padding(
-                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                 child: Text("Upcoming Priority (Next 3 Days)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.indigoAccent : Colors.indigo)),
-               ),
-               const SizedBox(height: 10),
-               // Horizontal list of urgent cards
-               SizedBox(
-                 height: 130,
-                 child: ListView.builder(
-                   scrollDirection: Axis.horizontal,
-                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                   itemCount: priorityTasks.length,
-                   itemBuilder: (context, index) {
-                     final t = priorityTasks[index];
-                     return GestureDetector( // Tappable for edit
-                       onTap: () => _showAddEditTaskDialog(taskToEdit: t),
-                       child: Container(
-                         width: 160,
-                         margin: const EdgeInsets.only(right: 15),
-                         padding: const EdgeInsets.all(16),
-                         decoration: BoxDecoration(
-                           gradient: const LinearGradient(colors: [Color(0xFF2962FF), Color(0xFF448AFF)]),
-                           borderRadius: BorderRadius.circular(16),
-                           boxShadow: [
-                              BoxShadow(color: const Color(0xFF2962FF).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
-                           ]
-                         ),
-                         child: Column(
-                           crossAxisAlignment: CrossAxisAlignment.start,
-                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                           children: [
-                             Text(t.type.toUpperCase(), style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
-                             Text(t.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-                             Row(
-                               children: [
-                                 const Icon(Icons.access_time, color: Colors.white70, size: 12),
-                                 const SizedBox(width: 4),
-                                 Text(DateFormat('MMM d').format(t.dueDate), style: const TextStyle(color: Colors.white, fontSize: 12))
-                               ],
-                             )
-                           ],
-                         ),
-                       ),
-                     );
-                   },
-                 ),
-               ),
-                const SizedBox(height: 30),
-              ]
-           ],
+          ),
+        ),
+        if (dayClasses.isEmpty && dayTasks.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            child: Text('Nothing scheduled.', style: TextStyle(color: p.textSecondary)),
+          ),
+        for (final c in dayClasses) _classRow(p, c),
+        for (final t in dayTasks) _eventRow(p, t, timetable),
+
+        // ── Coming up ──
+        if (upcoming.isNotEmpty) ...[
+          const SizedBox(height: 22),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: SectionLabel('Coming up · 14 days', padding: EdgeInsets.fromLTRB(4, 0, 0, 10)),
+          ),
+          SizedBox(
+            height: 150,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: upcoming.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, i) => _upcomingCard(upcoming[i]),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
-  Widget _buildTaskCard(AcademicTask task, bool isDark, TimetableProvider timetable) {
-    return GestureDetector( // Make tappable to edit
-      onTap: () => _showAddEditTaskDialog(taskToEdit: task),
+  Widget _dayCircle(DateTime day, {Color? bg, Color? border, required Color fg}) {
+    return Align(
+      alignment: Alignment.topCenter,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(top: 2),
+        width: 34,
+        height: 34,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isDark ? Colors.white10 : Colors.grey[200]!),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.05), blurRadius: 10, offset: const Offset(0, 4))]
+          color: bg,
+          shape: BoxShape.circle,
+          border: border == null ? null : Border.all(color: border, width: 2),
         ),
+        child: Text('${day.day}', style: TextStyle(color: fg, fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+
+  /// Coloured bars under the date. Multi-day events are drawn edge-to-edge
+  /// so they read as one continuous bar across the week.
+  Widget _markers(DateTime day, List<AcademicTask> events) {
+    final shown = events.take(3).toList();
+    final extra = events.length - shown.length;
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 4,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final e in shown)
+            Builder(builder: (context) {
+              final c = taskColor(e);
+              if (!e.isSpanning) {
+                return Container(
+                  width: 18,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 2),
+                  decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(4)),
+                );
+              }
+              final isStart = isSameDate(day, e.startDate!);
+              final isEnd = isSameDate(day, e.dueDate);
+              final weekStart = day.weekday == DateTime.monday;
+              final weekEnd = day.weekday == DateTime.sunday;
+              return Container(
+                height: 5,
+                margin: EdgeInsets.only(top: 2, left: isStart ? 6 : 0, right: isEnd ? 6 : 0),
+                decoration: BoxDecoration(
+                  color: c,
+                  borderRadius: BorderRadius.horizontal(
+                    left: Radius.circular(isStart || weekStart ? 4 : 0),
+                    right: Radius.circular(isEnd || weekEnd ? 4 : 0),
+                  ),
+                ),
+              );
+            }),
+          if (extra > 0)
+            Text('+$extra', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Palette.of(context).textSecondary)),
+        ],
+      ),
+    );
+  }
+
+  Widget _classRow(Palette p, ClassSession c) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      child: SoftCard(
+        radius: 24,
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
         child: Row(
           children: [
-            Container(
-               padding: const EdgeInsets.all(12),
-               decoration: BoxDecoration(color: _getTypeColor(task.type).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-               child: Icon(
-                 _getTypeIcon(task.type), 
-                 color: _getTypeColor(task.type)
-               ),
+            SizedBox(
+              width: 56,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(c.startTime, style: TextStyle(fontWeight: FontWeight.w700, color: p.textPrimary)),
+                  Text(c.endTime, style: TextStyle(fontSize: 12, color: p.textSecondary)),
+                ],
+              ),
             ),
-            const SizedBox(width: 16),
+            Container(width: 3, height: 34, margin: const EdgeInsets.only(right: 12), color: p.accent),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(task.title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
-                  Text("${task.subject} • ${DateFormat('HH:mm').format(task.dueDate)}", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
+                  Text(c.subject, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
+                  Text('Class · ${c.room}', maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: p.textSecondary)),
                 ],
               ),
             ),
-            Checkbox(
-              value: task.isCompleted, 
-              activeColor: const Color(0xFF2962FF),
-              side: BorderSide(color: isDark ? Colors.grey : Colors.black54),
-              onChanged: (val) {
-                 // Update via Provider
-                 timetable.updateTask(task.id, task.title, task.subject, task.type, task.dueDate, val!);
-              }
-            )
+            if (c.meetingLink != null) JoinMeetingButton(url: c.meetingLink!, dense: true),
           ],
         ),
       ),
     );
   }
 
-  Color _getTypeColor(String type) {
-    switch (type) {
-      case 'Exam': return Colors.red;
-      case 'Test': return Colors.orangeAccent;
-      case 'Assignment': return Colors.orange;
-      case 'Homework': return Colors.teal;
-      case 'Project': return Colors.purple;
-      case 'Note': return Colors.green;
-      default: return Colors.blue;
+  Widget _eventRow(Palette p, AcademicTask t, TimetableProvider timetable) {
+    final c = taskColor(t);
+    String when;
+    if (t.isSpanning) {
+      final total = dateOnly(t.dueDate).difference(dateOnly(t.startDate!)).inDays + 1;
+      final n = dateOnly(_selectedDay).difference(dateOnly(t.startDate!)).inDays + 1;
+      when = 'Day $n of $total · ends ${DateFormat('EEE d MMM').format(t.dueDate)}';
+    } else {
+      when = DateFormat('HH:mm').format(t.dueDate);
     }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      child: SoftCard(
+        radius: 24,
+        padding: EdgeInsets.zero,
+        onTap: () => showTaskSheet(context, task: t),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 8,
+                decoration: BoxDecoration(color: c, borderRadius: const BorderRadius.horizontal(left: Radius.circular(24))),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          TagPill(t.type, color: c),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(when, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 12, color: p.textSecondary)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(t.title,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            color: p.textPrimary,
+                            decoration: t.isCompleted ? TextDecoration.lineThrough : null,
+                          )),
+                      if (t.subject != 'General')
+                        Text(t.subject, style: TextStyle(fontSize: 12, color: p.textSecondary)),
+                      if (t.meetingLink != null) ...[
+                        const SizedBox(height: 8),
+                        JoinMeetingButton(url: t.meetingLink!, dense: true),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              Checkbox(
+                value: t.isCompleted,
+                shape: const CircleBorder(),
+                activeColor: c,
+                onChanged: (_) => timetable.toggleTaskDone(t),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  IconData _getTypeIcon(String type) {
-    switch (type) {
-      case 'Exam': return Icons.warning_amber_rounded;
-      case 'Test': return Icons.priority_high_rounded;
-      case 'Assignment': return Icons.assignment_outlined;
-      case 'Homework': return Icons.menu_book_rounded;
-      case 'Project': return Icons.rocket_launch_outlined;
-      case 'Note': return Icons.sticky_note_2_outlined;
-      default: return Icons.task_alt;
+  Widget _upcomingCard(AcademicTask t) {
+    final c = taskColor(t);
+    final days = dateOnly(t.dueDate).difference(dateOnly(DateTime.now())).inDays;
+    final light = c.computeLuminance() > 0.5;
+    final fg = light ? Colors.black : Colors.white;
+    return GestureDetector(
+      onTap: () => showTaskSheet(context, task: t),
+      child: Container(
+        width: 170,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(28)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(border: Border.all(color: fg), borderRadius: BorderRadius.circular(40)),
+              child: Text(t.type, style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w700)),
+            ),
+            const Spacer(),
+            Text(t.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.w600, height: 1.15)),
+            const SizedBox(height: 6),
+            Text(days == 0 ? 'Today' : (days == 1 ? 'Tomorrow' : 'In $days days'),
+                style: TextStyle(color: fg.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ───────────────────────── Attendance ─────────────────────────
+
+class _AttendanceView extends StatelessWidget {
+  final TimetableProvider timetable;
+  const _AttendanceView({required this.timetable});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final subjects = timetable.userSessions.map((s) => s.subject).toSet().toList()..sort();
+    final todaySubjects = timetable.getClassesForDate(DateTime.now()).map((s) => s.subject).toSet().toList();
+
+    if (subjects.isEmpty) {
+      return const EmptyState(icon: Icons.fact_check_outlined, title: 'No modules yet', subtitle: 'Add classes in the Schedule tab first.');
     }
+
+    var presents = 0, absences = 0;
+    for (final s in subjects) {
+      final st = timetable.getAttendanceStats(s);
+      presents += st['presents'] as int;
+      absences += st['absences'] as int;
+    }
+    final total = presents + absences;
+    final rate = total == 0 ? 100 : (presents * 100 / total).round();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+      children: [
+        SoftCard(
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Overall attendance', style: TextStyle(color: p.textSecondary, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text('$rate%', style: TextStyle(fontSize: 52, fontWeight: FontWeight.w300, letterSpacing: -2, color: p.textPrimary)),
+                    Text('$presents present · $absences missed', style: TextStyle(color: p.textSecondary, fontSize: 13)),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: 76,
+                height: 76,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CircularProgressIndicator(
+                      value: rate / 100,
+                      strokeWidth: 9,
+                      strokeCap: StrokeCap.round,
+                      backgroundColor: p.surfaceAlt,
+                      color: rate >= 80 ? p.accent : (rate >= 60 ? Colors.orange : Colors.red),
+                    ),
+                    Center(child: Icon(Icons.favorite_rounded, color: p.textPrimary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (todaySubjects.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          const SectionLabel("Today's roll call"),
+          for (final subject in todaySubjects) _rollCall(context, p, subject),
+        ],
+        const SizedBox(height: 18),
+        const SectionLabel('Module survival'),
+        for (final subject in subjects) _moduleCard(context, p, subject),
+        const SizedBox(height: 20),
+        Center(
+          child: TextButton.icon(
+            onPressed: () async {
+              final ok = await confirmDestructive(context,
+                  title: 'Reset survival mode?',
+                  message: 'This clears all attendance records and restores your lives. This cannot be undone.',
+                  action: 'Reset');
+              if (ok) timetable.resetAttendance();
+            },
+            icon: Icon(Icons.refresh_rounded, color: p.textSecondary),
+            label: Text('Reset all progress', style: TextStyle(color: p.textSecondary)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _rollCall(BuildContext context, Palette p, String subject) {
+    final record = timetable.getAttendanceRecord(subject, DateTime.now());
+    final has = record != null;
+    final present = record?.isPresent ?? false;
+    Widget choice(bool value) {
+      final active = has && present == value;
+      final c = value ? Colors.green : Colors.redAccent;
+      return Material(
+        color: active ? c : p.surfaceAlt,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () => timetable.setAttendance(subject, DateTime.now(), value),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Icon(value ? Icons.check_rounded : Icons.close_rounded, color: active ? Colors.white : p.textSecondary),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SoftCard(
+        radius: 24,
+        padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(subject, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
+                  Text(has ? (present ? 'Marked present' : 'Marked absent') : 'Are you in class?',
+                      style: TextStyle(fontSize: 12, color: has ? (present ? Colors.green : Colors.redAccent) : Colors.amber[800])),
+                ],
+              ),
+            ),
+            choice(true),
+            const SizedBox(width: 8),
+            choice(false),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _moduleCard(BuildContext context, Palette p, String subject) {
+    final stats = timetable.getAttendanceStats(subject);
+    final lives = stats['lives'] as int;
+    final maxLives = stats['maxLives'] as int;
+    final color = lives <= 2 ? Colors.redAccent : (lives <= 5 ? Colors.orange : Colors.green);
+    final history = timetable.getPastClassDates(subject);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SoftCard(
+        radius: 24,
+        padding: EdgeInsets.zero,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+            childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+            title: Text(subject, style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: lives / maxLives,
+                        minHeight: 8,
+                        backgroundColor: p.surfaceAlt,
+                        color: color,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Icon(Icons.favorite_rounded, size: 14, color: color),
+                  const SizedBox(width: 3),
+                  Text('$lives/$maxLives', style: TextStyle(fontWeight: FontWeight.w700, color: color, fontSize: 13)),
+                ],
+              ),
+            ),
+            children: [
+              if (history.isEmpty) Text('No past classes yet.', style: TextStyle(color: p.textSecondary)),
+              for (final date in history)
+                InkWell(
+                  onTap: () => timetable.setAttendance(subject, date, !(timetable.getAttendanceRecord(subject, date)?.isPresent ?? false)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Row(
+                      children: [
+                        Text(DateFormat('EEE d MMM').format(date), style: TextStyle(color: p.textPrimary)),
+                        const Spacer(),
+                        Builder(builder: (_) {
+                          final r = timetable.getAttendanceRecord(subject, date);
+                          if (r == null) return Text('Unmarked', style: TextStyle(color: p.textMuted, fontSize: 12));
+                          return Icon(r.isPresent ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                              size: 20, color: r.isPresent ? Colors.green : Colors.redAccent);
+                        }),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

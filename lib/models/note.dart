@@ -12,34 +12,44 @@ class Note {
   late int colorIndex;
   late DateTime timestamp;
 
+  /// Pinned notes are shown first.
+  bool? isPinned;
+
+  /// Stable cross-device id (Firestore document id).
+  @Index()
+  String? syncId;
+  DateTime? updatedAt;
+
   Note({
     this.title = '',
     this.content = '',
     this.subject = 'General',
     this.colorIndex = 0,
     required this.timestamp,
+    this.isPinned,
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
+        'syncId': syncId,
         'title': title,
         'content': content,
         'subject': subject,
         'colorIndex': colorIndex,
         'timestamp': timestamp.toIso8601String(),
+        'isPinned': isPinned,
+        'updatedAt': updatedAt?.toIso8601String(),
       };
 
   factory Note.fromJson(Map<String, dynamic> json) {
-    final note = Note(
+    return Note(
       title: json['title'] ?? '',
       content: json['content'] ?? '',
       subject: json['subject'] ?? 'General',
       colorIndex: json['colorIndex'] ?? 0,
       timestamp: json['timestamp'] != null ? DateTime.parse(json['timestamp']) : DateTime.now(),
-    );
-    if (json['id'] != null) {
-      note.id = json['id'];
-    }
-    return note;
+      isPinned: json['isPinned'],
+    )
+      ..syncId = json['syncId']
+      ..updatedAt = json['updatedAt'] != null ? DateTime.tryParse(json['updatedAt']) : null;
   }
 }

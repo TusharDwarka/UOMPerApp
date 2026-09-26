@@ -1,29 +1,32 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:typed_data';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 
+import 'package:firebase_ai/firebase_ai.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+/// Timetable scanning via Firebase AI Logic (Gemini Developer API).
+///
+/// The Gemini API key lives in Firebase, not in the app, so it can't be
+/// extracted from the APK. Enable it once in the Firebase console:
+/// Build → AI Logic → Get started → Gemini Developer API.
 class AiService {
   GenerativeModel? _model;
 
+  /// firebase_ai ships for Android, iOS and macOS only. On Windows the
+  /// timetable is scanned on the phone and arrives through sync.
+  static bool get isSupported => kIsWeb || Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+
   GenerativeModel get model {
-    if (_model == null) {
-      final apiKey = dotenv.env['GEMINI_API_KEY'];
-      if (apiKey == null || apiKey.isEmpty || apiKey == 'your_api_key_here') {
-        throw Exception('GEMINI_API_KEY not set in .env file. Get a free key from https://aistudio.google.com/apikey');
-      }
-      // You can change the model here if you run into quota issues or want a smarter model.
-      // E.g., 'gemini-1.5-pro' or 'gemini-2.0-flash'.
-      // 1.5-flash is highly reliable and generous for free-tier users.
-      _model = GenerativeModel(
-        model: 'gemini-2.5-flash',
-        apiKey: apiKey,
-      );
+    if (!isSupported) {
+      throw UnsupportedError('Timetable scanning is available on the phone app. '
+          'Scan it there — it syncs to this PC automatically.');
     }
-    return _model!;
+    // Change the model here if you hit quota limits.
+    return _model ??= FirebaseAI.googleAI().generativeModel(model: 'gemini-2.5-flash');
   }
 
-  /// Parses a timetable from a file (image or PDF) using Gemini Vision.
+  /// Parses a timetable from a file (image or PDF) using Gemini.
   /// Returns a list of parsed session maps.
   Future<List<Map<String, dynamic>>> parseTimetableFromFile({
     required Uint8List fileBytes,
@@ -35,14 +38,12 @@ class AiService {
     final response = await model.generateContent([
       Content.multi([
         TextPart(prompt),
-        DataPart(mimeType, fileBytes),
+        InlineDataPart(mimeType, fileBytes),
       ])
     ]);
 
     return _parseResponse(response.text ?? '');
   }
-
-
 
   String _buildPrompt(String courseName) {
     return '''

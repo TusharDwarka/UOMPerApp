@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/timetable_provider.dart';
+import '../utils/meeting_links.dart';
+import '../utils/time_utils.dart';
 import 'scroll_time_picker.dart';
 
 class AddEditClassSheet extends StatefulWidget {
   final Map<String, dynamic>? initialData;
+  final bool isEditing;
 
-  const AddEditClassSheet({super.key, this.initialData});
+  const AddEditClassSheet({super.key, this.initialData, this.isEditing = false});
 
   @override
   State<AddEditClassSheet> createState() => _AddEditClassSheetState();
@@ -17,6 +20,8 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
   late TextEditingController _moduleNameCtrl;
   late TextEditingController _moduleCodeCtrl;
   late TextEditingController _locationCtrl;
+  late TextEditingController _linkCtrl;
+  bool _allowConflict = false;
   late String _selectedDay;
   late TimeOfDay _startTime;
   late TimeOfDay _endTime;
@@ -24,9 +29,7 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
   DateTime? _specificDate;
   String? _errorMessage;
 
-  final List<String> _days = [
-    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
-  ];
+  final List<String> _days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   @override
   void initState() {
@@ -35,8 +38,9 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
     _moduleNameCtrl = TextEditingController(text: d?['moduleName'] ?? '');
     _moduleCodeCtrl = TextEditingController(text: d?['moduleCode'] ?? '');
     _locationCtrl = TextEditingController(text: d?['location'] ?? '');
+    _linkCtrl = TextEditingController(text: d?['meetingLink'] ?? '');
     _selectedDay = d?['day'] ?? 'Monday';
-    
+
     if (!_days.contains(_selectedDay)) {
       _selectedDay = 'Monday';
     }
@@ -49,14 +53,9 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
   }
 
   TimeOfDay? _parseTime(String? timeStr) {
-    if (timeStr == null || timeStr.isEmpty) return null;
-    try {
-      final parts = timeStr.split(':');
-      if (parts.length >= 2) {
-        return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
-      }
-    } catch (_) {}
-    return null;
+    final m = parseMinutes(timeStr);
+    if (m == null) return null;
+    return TimeOfDay(hour: (m ~/ 60) % 24, minute: m % 60);
   }
 
   @override
@@ -64,6 +63,7 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
     _moduleNameCtrl.dispose();
     _moduleCodeCtrl.dispose();
     _locationCtrl.dispose();
+    _linkCtrl.dispose();
     super.dispose();
   }
 
@@ -87,7 +87,7 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
     }
 
     final dayToSave = _isTemporary ? DateFormat('EEEE').format(_specificDate!) : _selectedDay;
-    
+
     // Conflict Detection
     final provider = Provider.of<TimetableProvider>(context, listen: false);
     final newStart = _startTime.hour * 60 + _startTime.minute;
@@ -95,31 +95,45 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
     final editId = widget.initialData?['id'];
 
     final sessionsToCheck = provider.userSessions.where((s) {
-       if (editId != null && s.id == editId) return false;
-       
-       if (_isTemporary && _specificDate != null) {
-          if (s.specificDate != null) {
-             return s.specificDate!.year == _specificDate!.year && s.specificDate!.month == _specificDate!.month && s.specificDate!.day == _specificDate!.day;
-          } else {
-             return s.day == dayToSave;
-          }
-       } else {
-          return s.day == dayToSave && s.specificDate == null;
-       }
+      if (editId != null && s.id == editId) return false;
+
+      if (_isTemporary && _specificDate != null) {
+        if (s.specificDate != null) {
+          return s.specificDate!.year == _specificDate!.year &&
+              s.specificDate!.month == _specificDate!.month &&
+              s.specificDate!.day == _specificDate!.day;
+        } else {
+          return s.day == dayToSave;
+        }
+      } else {
+        return s.day == dayToSave && s.specificDate == null;
+      }
     }).toList();
-    
-    for (var s in sessionsToCheck) {
-       final sStartParts = s.startTime.split(':');
-       final sStart = int.parse(sStartParts[0]) * 60 + int.parse(sStartParts[1]);
-       final sEndParts = s.endTime.split(':');
-       final sEnd = int.parse(sEndParts[0]) * 60 + int.parse(sEndParts[1]);
-       
-       if (newStart < sEnd && newEnd > sStart) {
+
+    final myWeeks = List<int>.from(widget.initialData?['weeks'] ?? const []);
+    bool weeksOverlap(List<int>? other) {
+      // Empty/null week lists mean "every week".
+      if (myWeeks.isEmpty || other == null || other.isEmpty) return true;
+      return other.any(myWeeks.contains);
+    }
+
+    final link = _linkCtrl.text.trim();
+    if (link.isNotEmpty && !MeetingLinks.isValid(link)) {
+      setState(() => _errorMessage = "That meeting link doesn't look right");
+      return;
+    }
+
+    if (!_allowConflict) {
+      for (final s in sessionsToCheck) {
+        if (!weeksOverlap(s.weeks)) continue;
+        if (newStart < s.endMinutes && newEnd > s.startMinutes) {
           setState(() {
-            _errorMessage = 'Time conflict with ${s.subject}! Please choose a different time.';
+            _errorMessage = 'Clashes with ${s.subject} (${s.startTime}–${s.endTime}). Tap Save again to keep both.';
+            _allowConflict = true;
           });
           return;
-       }
+        }
+      }
     }
 
     final result = {
@@ -131,6 +145,7 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
       'endTime': '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}',
       'weeks': widget.initialData?['weeks'] ?? [],
       'specificDate': _isTemporary ? _specificDate?.toIso8601String() : null,
+      'meetingLink': MeetingLinks.normalize(link),
     };
 
     Navigator.of(context).pop(result);
@@ -140,7 +155,7 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final accentColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF2962FF);
-    final isEditing = widget.initialData != null;
+    final isEditing = widget.isEditing;
 
     return Container(
       decoration: BoxDecoration(
@@ -170,7 +185,7 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
               ),
             ),
             const SizedBox(height: 24),
-            
+
             // Header
             Text(
               isEditing ? "Edit Class" : "Add Class",
@@ -190,20 +205,34 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
                 Expanded(child: _buildTextField("Room", "e.g. NAC 2.12", _locationCtrl, isDark)),
               ],
             ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _linkCtrl,
+              keyboardType: TextInputType.url,
+              style: TextStyle(color: isDark ? Colors.white : Colors.black),
+              decoration: InputDecoration(
+                labelText: "Online link (optional)",
+                hintText: "Google Meet / Teams / Zoom",
+                prefixIcon: const Icon(Icons.videocam_outlined),
+                filled: true,
+                fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              ),
+            ),
             const SizedBox(height: 24),
 
             // Timing section
             _buildSectionHeader("Timing", Icons.access_time_rounded),
             const SizedBox(height: 16),
-            
+
             // Toggle Regular vs One-Off
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text("Regular", style: TextStyle(color: !_isTemporary ? accentColor : Colors.grey, fontWeight: FontWeight.bold)),
                 Switch(
-                  value: _isTemporary, 
-                  activeColor: accentColor,
+                  value: _isTemporary,
+                  activeThumbColor: accentColor,
                   onChanged: (v) => setState(() => _isTemporary = v),
                 ),
                 Text("One-Off", style: TextStyle(color: _isTemporary ? accentColor : Colors.grey, fontWeight: FontWeight.bold)),
@@ -216,7 +245,7 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+                  color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: DropdownButtonHideUnderline(
@@ -228,7 +257,11 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
                     style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 16, fontWeight: FontWeight.w600),
                     items: _days.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
                     onChanged: (val) {
-                      if (val != null) setState(() => _selectedDay = val);
+                      if (val == null) return;
+                      setState(() {
+                        _selectedDay = val;
+                        _allowConflict = false;
+                      });
                     },
                   ),
                 ),
@@ -249,9 +282,9 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+                    color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: _specificDate == null ? Colors.red.withOpacity(0.5) : Colors.transparent),
+                    border: Border.all(color: _specificDate == null ? Colors.red.withValues(alpha: 0.5) : Colors.transparent),
                   ),
                   child: Row(
                     children: [
@@ -266,35 +299,32 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
                 ),
               ),
             const SizedBox(height: 16),
-            
+
             // Time Pickers
             Row(
               children: [
                 Expanded(
-                  child: _buildTimePicker(
-                    "Start Time", 
-                    _startTime, 
-                    (t) {
-                      setState(() {
-                        _startTime = t;
-                        // Automatically add 1 hour to end time
-                        _endTime = TimeOfDay(hour: (t.hour + 1) % 24, minute: t.minute);
-                      });
-                    }, 
-                    isDark, 
-                    accentColor
-                  ),
+                  child: _buildTimePicker("Start Time", _startTime, (t) {
+                    setState(() {
+                      _allowConflict = false;
+                      _startTime = t;
+                      // Automatically add 1 hour to end time
+                      _endTime = TimeOfDay(hour: (t.hour + 1) % 24, minute: t.minute);
+                    });
+                  }, isDark, accentColor),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _buildTimePicker(
-                    "End Time", 
-                    _endTime, 
-                    (t) => setState(() => _endTime = t), 
-                    isDark, 
-                    accentColor,
-                    hasError: _endTime.hour * 60 + _endTime.minute <= _startTime.hour * 60 + _startTime.minute
-                  ),
+                      "End Time",
+                      _endTime,
+                      (t) => setState(() {
+                            _allowConflict = false;
+                            _endTime = t;
+                          }),
+                      isDark,
+                      accentColor,
+                      hasError: _endTime.hour * 60 + _endTime.minute <= _startTime.hour * 60 + _startTime.minute),
                 ),
               ],
             ),
@@ -306,9 +336,9 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Colors.red.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+                  border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
                 ),
                 child: Row(
                   children: [
@@ -328,22 +358,28 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
             Row(
               children: [
                 if (isEditing)
-                  Expanded(
-                    child: TextButton.icon(
-                      onPressed: () {
-                         Navigator.of(context).pop({'delete': true});
-                      },
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        foregroundColor: Colors.redAccent,
-                      ),
-                      icon: const Icon(Icons.delete),
-                      label: const Text("Delete", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    ),
+                  IconButton.filledTonal(
+                    tooltip: 'Delete class',
+                    style: IconButton.styleFrom(foregroundColor: Colors.redAccent, padding: const EdgeInsets.all(14)),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    onPressed: () async {
+                      final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Delete class?'),
+                          content: Text('Remove ${_moduleNameCtrl.text} from your timetable?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                            TextButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Delete', style: TextStyle(color: Colors.red))),
+                          ],
+                        ),
+                      );
+                      if (ok == true && context.mounted) Navigator.of(context).pop({'delete': true});
+                    },
                   ),
-                if (isEditing)
-                  const SizedBox(width: 8),
+                if (isEditing) const SizedBox(width: 8),
                 Expanded(
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
@@ -351,7 +387,8 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
-                    child: Text("Cancel", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: Text("Cancel",
+                        style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -410,26 +447,27 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
         labelStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[700]),
         hintStyle: TextStyle(color: isDark ? Colors.grey[700] : Colors.grey[400]),
         filled: true,
-        fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+        fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
     );
   }
 
-  Widget _buildTimePicker(String label, TimeOfDay time, Function(TimeOfDay) onChanged, bool isDark, Color accentColor, {bool hasError = false}) {
+  Widget _buildTimePicker(String label, TimeOfDay time, Function(TimeOfDay) onChanged, bool isDark, Color accentColor,
+      {bool hasError = false}) {
     return GestureDetector(
       onTap: () async {
         FocusManager.instance.primaryFocus?.unfocus(); // Fully drop focus
         await Future.delayed(const Duration(milliseconds: 150)); // Wait for keyboard to retract
-        if (!context.mounted) return;
+        if (!mounted) return;
         final picked = await showScrollTimePicker(context: context, initialTime: time);
         if (picked != null) onChanged(picked);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
-          color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+          color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
           borderRadius: BorderRadius.circular(16),
           border: hasError ? Border.all(color: Colors.redAccent, width: 1.5) : null,
         ),
@@ -442,9 +480,15 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
               children: [
                 Icon(Icons.access_time, size: 16, color: accentColor),
                 const SizedBox(width: 8),
-                Text(
-                  time.format(context),
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      time.format(context),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black),
+                    ),
+                  ),
                 ),
               ],
             ),

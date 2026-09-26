@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 import '../providers/timetable_provider.dart';
 import 'notification_service.dart';
+import '../utils/time_utils.dart';
 
 /// Service to update Android/iOS home screen widgets with
 /// the latest class and task information.
@@ -13,7 +15,6 @@ class WidgetService {
   static Future<void> updateWidget(TimetableProvider timetable) async {
     try {
       final now = DateTime.now();
-      final nowMinutes = now.hour * 60 + now.minute;
 
       // ── Next Class ──
       String className = 'No upcoming classes';
@@ -22,11 +23,7 @@ class WidgetService {
 
       final isNoClassToday = await NotificationService().isNoClassToday();
 
-      // Check today's classes — use getClassesForDate to always show
-      // the real user's classes, regardless of the friend-swap perspective.
       final todaySessions = timetable.getClassesForDate(now);
-      todaySessions.sort((a, b) => a.startTime.compareTo(b.startTime));
-      
       final currentWeek = timetable.getWeekNumber(now);
 
       if (isNoClassToday) {
@@ -34,65 +31,21 @@ class WidgetService {
         classDetail = 'You declared a day off! Enjoy your freedom.';
         nextLabel = 'FREE DAY';
       } else {
-        // Currently in class?
-        for (var s in todaySessions) {
-          final startParts = s.startTime.split(':');
-          final endParts = s.endTime.split(':');
-          final startMins = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
-          final endMins = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
-          if (nowMinutes >= startMins && nowMinutes < endMins) {
-            final remaining = endMins - nowMinutes;
-            className = s.subject;
-            classDetail = '${s.room} • ${remaining}m remaining';
+        final next = timetable.findNextClass(now);
+        if (next != null) {
+          final s = next.session;
+          className = s.subject;
+          if (next.inProgress) {
+            classDetail = '${s.room} • ${next.minutesUntilEnd(now)}m remaining';
             nextLabel = 'IN CLASS NOW';
-            break;
+          } else if (isSameDate(next.date, now)) {
+            classDetail = '${s.room} • ${s.startTime} - ${s.endTime}';
+            nextLabel = 'IN ${formatCountdown(next.minutesUntilStart(now)).toUpperCase()}';
+          } else {
+            final days = next.date.difference(dateOnly(now)).inDays;
+            classDetail = '${s.room} • ${s.startTime} - ${s.endTime}';
+            nextLabel = (days == 1 ? 'Tomorrow' : DateFormat('EEE').format(next.date)).toUpperCase();
           }
-        }
-
-        // If not in class, find next upcoming
-        if (nextLabel == 'NEXT CLASS') {
-          for (var s in todaySessions) {
-            final parts = s.startTime.split(':');
-            final startMins = int.parse(parts[0]) * 60 + int.parse(parts[1]);
-            if (startMins > nowMinutes) {
-              final diff = startMins - nowMinutes;
-              className = s.subject;
-              classDetail = '${s.room} • ${s.startTime} - ${s.endTime}';
-              if (diff < 60) {
-                nextLabel = 'IN ${diff}m';
-              } else {
-                nextLabel = 'IN ${diff ~/ 60}h ${diff % 60}m';
-              }
-              break;
-            }
-          }
-        }
-
-        // If no more today, check tomorrow
-        if (nextLabel == 'NEXT CLASS') {
-          for (int d = 1; d <= 7; d++) {
-            final futureDate = now.add(Duration(days: d));
-            final week = timetable.getWeekNumber(futureDate);
-            if (week < 1 || timetable.isOnlineWeek(week)) continue;
-            
-            final classes = timetable.getEventsForDay(futureDate);
-            if (classes.isNotEmpty) {
-              classes.sort((a, b) => a.startTime.compareTo(b.startTime));
-              final first = classes.first;
-              className = first.subject;
-              final dayLabel = d == 1 ? 'Tomorrow' : DateFormat('EEE').format(futureDate);
-              classDetail = '${first.room} • ${first.startTime} - ${first.endTime}';
-              nextLabel = dayLabel.toUpperCase();
-              break;
-            }
-          }
-        }
-
-        // Check online week
-        if (currentWeek >= 1 && timetable.isOnlineWeek(currentWeek) && nextLabel == 'NEXT CLASS') {
-          className = 'Online Week';
-          classDetail = 'No campus classes this week';
-          nextLabel = 'WEEK $currentWeek';
         }
       }
 
@@ -104,7 +57,6 @@ class WidgetService {
       if (pending.isNotEmpty) {
         final sorted = List.from(pending)..sort((a, b) => a.dueDate.compareTo(b.dueDate));
         final nearest = sorted.first;
-        taskName = nearest.title;
         taskName = nearest.title;
         final today = DateTime(now.year, now.month, now.day);
         final taskDate = DateTime(nearest.dueDate.year, nearest.dueDate.month, nearest.dueDate.day);
@@ -171,7 +123,7 @@ class WidgetService {
       );
     } catch (e) {
       // Silently fail — widget is optional
-      print('Widget update failed: $e');
+      debugPrint('Widget update failed: $e');
     }
   }
 }

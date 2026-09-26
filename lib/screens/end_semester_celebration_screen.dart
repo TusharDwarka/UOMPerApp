@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
 import 'package:provider/provider.dart';
 import '../providers/timetable_provider.dart';
-import 'onboarding_screen.dart';
 
 class EndSemesterCelebrationScreen extends StatefulWidget {
   const EndSemesterCelebrationScreen({super.key});
@@ -40,11 +39,9 @@ class _EndSemesterCelebrationScreenState extends State<EndSemesterCelebrationScr
 
     if (!mounted) return;
     
-    // Go back to onboarding
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-      (route) => false,
-    );
+    // Back to the root: SignedInGate now shows onboarding because setup
+    // was reset.
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   @override
@@ -71,7 +68,7 @@ class _EndSemesterCelebrationScreenState extends State<EndSemesterCelebrationScr
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
+                      color: Colors.green.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.celebration_rounded, color: Colors.green, size: 80),

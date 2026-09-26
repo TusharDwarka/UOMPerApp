@@ -53,7 +53,7 @@ class PlanningScreen extends StatelessWidget {
               subtitle: "Everyone",
               trailing: Switch(
                 value: true, 
-                activeColor: const Color(0xFF66BB6A),
+                activeThumbColor: const Color(0xFF66BB6A),
                 onChanged: (val) {},
               ),
             ),

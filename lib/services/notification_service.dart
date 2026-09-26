@@ -1,9 +1,13 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../models/class_session.dart';
+import '../utils/ids.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -14,43 +18,56 @@ class NotificationService {
 
   bool _isInitialized = false;
 
+  /// Scheduled reminders are only supported on Android/iOS. On Windows the
+  /// plugin would throw during init (it requires Windows-specific settings),
+  /// which used to crash the desktop app at startup.
+  bool get isSupported => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+  static const _prefsEnabled = 'class_reminders_enabled';
+  static const _prefsScheduledIds = 'scheduled_reminder_ids';
+
   Future<void> init() async {
-    if (_isInitialized) return;
+    if (_isInitialized || !isSupported) return;
 
-    tz.initializeTimeZones();
+    try {
+      tz.initializeTimeZones();
 
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/launcher_icon');
+      const initializationSettings = InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/launcher_icon'),
+        iOS: DarwinInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+        ),
+      );
 
-    const InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-    );
-
-    // v22 API: requires settings named parameter
-    await _notificationsPlugin.initialize(
-      settings: initializationSettings,
-      onDidReceiveNotificationResponse: (details) {
-        // Handle notification tap here if needed
-      },
-    );
-
-    _isInitialized = true;
+      await _notificationsPlugin.initialize(
+        settings: initializationSettings,
+        onDidReceiveNotificationResponse: (details) {},
+      );
+      _isInitialized = true;
+    } catch (e) {
+      debugPrint('Notification init failed: $e');
+    }
   }
 
+  /// Reminders default to ON (the Settings switch already showed ON by
+  /// default, but this used to default to OFF, so nothing was scheduled).
   Future<bool> areRemindersEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('class_reminders_enabled') ?? false;
+    return prefs.getBool(_prefsEnabled) ?? true;
   }
 
-  /// Request notification permissions from the OS.
   Future<bool> requestPermissions() async {
-    final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
-        _notificationsPlugin.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-
-    final granted = await androidImplementation?.requestNotificationsPermission();
-    await androidImplementation?.requestExactAlarmsPermission();
-    return granted ?? false;
+    if (!isSupported) return false;
+    final android = _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    if (android != null) {
+      final granted = await android.requestNotificationsPermission();
+      await android.requestExactAlarmsPermission();
+      return granted ?? false;
+    }
+    final ios = _notificationsPlugin.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+    return await ios?.requestPermissions(alert: true, badge: true, sound: true) ?? false;
   }
 
   Future<void> scheduleClassReminder({
@@ -61,125 +78,161 @@ class NotificationService {
     int minutesBefore = 15,
     bool force = false,
   }) async {
+    if (!_isInitialized) return;
     if (force) {
       await requestPermissions();
-    } else {
-      final enabled = await areRemindersEnabled();
-      if (!enabled) return;
+    } else if (!await areRemindersEnabled()) {
+      return;
     }
 
     final reminderTime = classStartTime.subtract(Duration(minutes: minutesBefore));
-
-    // Don't schedule if it's already in the past
     if (reminderTime.isBefore(DateTime.now())) return;
 
-    // v22 API: androidScheduleMode is required, uiLocalNotificationDateInterpretation is REMOVED
-    await _notificationsPlugin.zonedSchedule(
-      id: id,
-      title: 'Upcoming Class: $subject',
-      body: 'Starts in $minutesBefore mins at $room',
-      scheduledDate: tz.TZDateTime.from(reminderTime, tz.local),
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'class_reminders',
-          'Class Reminders',
-          channelDescription: 'Notifications for upcoming classes',
-          importance: Importance.max,
-          priority: Priority.high,
+    try {
+      await _notificationsPlugin.zonedSchedule(
+        id: id,
+        title: 'Upcoming: $subject',
+        body: minutesBefore == 0 ? 'Starting now at $room' : 'Starts in $minutesBefore min at $room',
+        scheduledDate: tz.TZDateTime.from(reminderTime, tz.local),
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'class_reminders',
+            'Class Reminders',
+            channelDescription: 'Notifications for upcoming classes',
+            importance: Importance.max,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
         ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-    );
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+    } catch (e) {
+      // Exact alarms can be denied on Android 14+; fall back to inexact.
+      try {
+        await _notificationsPlugin.zonedSchedule(
+          id: id,
+          title: 'Upcoming: $subject',
+          body: 'Starts in $minutesBefore min at $room',
+          scheduledDate: tz.TZDateTime.from(reminderTime, tz.local),
+          notificationDetails: const NotificationDetails(
+            android: AndroidNotificationDetails('class_reminders', 'Class Reminders'),
+          ),
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        );
+      } catch (e2) {
+        debugPrint('Could not schedule reminder: $e2');
+      }
+    }
   }
 
-  // v22 API: requires id named parameter
   Future<void> cancelReminder(int id) async {
+    if (!_isInitialized) return;
     await _notificationsPlugin.cancel(id: id);
   }
 
-  /// Automatically schedule reminders for ALL upcoming classes over the next 7 days.
-  /// Uses a stable notification ID derived from the class data so re-scheduling
-  /// is idempotent (won't duplicate alarms).
-  Future<void> scheduleAllUpcomingClasses(List<ClassSession> allSessions, {
+  static int reminderIdFor(DateTime date, ClassSession session) {
+    final key = '${DateFormat('yyyyMMdd').format(date)}|${session.startTime}|${session.subject}';
+    return stableHash(key) % 2000000000;
+  }
+
+  /// Schedules reminders for all classes in the next 7 days.
+  ///
+  /// Previously-scheduled class reminders are cancelled first, so deleting
+  /// or moving a class no longer leaves a stale notification behind.
+  Future<void> scheduleAllUpcomingClasses(
+    List<ClassSession> allSessions, {
     List<ClassSession> Function(DateTime)? getEventsForDay,
+    int minutesBefore = 15,
   }) async {
-    final enabled = await areRemindersEnabled();
-    if (!enabled) return;
+    if (!_isInitialized) return;
+    final prefs = await SharedPreferences.getInstance();
 
-    // Check if today is a "No Class" day — skip today if so
+    for (final old in prefs.getStringList(_prefsScheduledIds) ?? const <String>[]) {
+      final id = int.tryParse(old);
+      if (id != null) await cancelReminder(id);
+    }
+    await prefs.setStringList(_prefsScheduledIds, []);
+
+    if (!await areRemindersEnabled()) return;
+
     final noClassToday = await isNoClassToday();
-
+    final scheduled = <String>[];
     final now = DateTime.now();
     for (int d = 0; d < 7; d++) {
-      final date = DateTime(now.year, now.month, now.day).add(Duration(days: d));
-
-      // Skip today if user declared "No Class Today"
+      final date = DateTime(now.year, now.month, now.day + d);
       if (d == 0 && noClassToday) continue;
 
       final dayName = DateFormat('EEEE').format(date);
+      final dayClasses = getEventsForDay != null ? getEventsForDay(date) : allSessions.where((s) => s.day == dayName).toList();
 
-      // Get classes for this day
-      List<ClassSession> dayClasses;
-      if (getEventsForDay != null) {
-        dayClasses = getEventsForDay(date);
-      } else {
-        dayClasses = allSessions.where((s) => s.day == dayName).toList();
-      }
-
-      for (var session in dayClasses) {
-        // Parse the start time
-        final parts = session.startTime.split(':');
-        if (parts.length != 2) continue;
-
-        final classStart = DateTime(
-          date.year, date.month, date.day,
-          int.parse(parts[0]), int.parse(parts[1]),
-        );
-
-        // Generate a stable ID from date + session data
-        final stableId = (date.day * 10000 + int.parse(parts[0]) * 100 + int.parse(parts[1]) + session.subject.hashCode).abs() % 2000000000;
-
+      for (final session in dayClasses) {
+        final start = date.add(Duration(minutes: session.startMinutes));
+        final id = reminderIdFor(date, session);
         await scheduleClassReminder(
-          id: stableId,
+          id: id,
           subject: session.subject,
           room: session.room,
-          classStartTime: classStart,
+          classStartTime: start,
+          minutesBefore: minutesBefore,
         );
+        scheduled.add('$id');
       }
     }
+    await prefs.setStringList(_prefsScheduledIds, scheduled);
   }
 
-  /// Cancel ALL class reminders for the rest of today.
+  /// Cancel all class reminders for today.
   Future<void> cancelTodayReminders(List<ClassSession> todayClasses) async {
-    final now = DateTime.now();
-    for (var session in todayClasses) {
-      final parts = session.startTime.split(':');
-      if (parts.length != 2) continue;
-
-      final stableId = (now.day * 10000 + int.parse(parts[0]) * 100 + int.parse(parts[1]) + session.subject.hashCode).abs() % 2000000000;
-      await cancelReminder(stableId);
+    final today = DateTime.now();
+    for (final session in todayClasses) {
+      await cancelReminder(reminderIdFor(DateTime(today.year, today.month, today.day), session));
     }
   }
 
-  /// Check if the user declared "No Class Today"
   Future<bool> isNoClassToday() async {
     final prefs = await SharedPreferences.getInstance();
     final savedDate = prefs.getString('no_class_date');
     if (savedDate == null) return false;
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    return savedDate == today;
+    return savedDate == DateFormat('yyyy-MM-dd').format(DateTime.now());
   }
 
-  /// Set today as a "No Class" day
   Future<void> setNoClassToday() async {
     final prefs = await SharedPreferences.getInstance();
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    await prefs.setString('no_class_date', today);
+    await prefs.setString('no_class_date', DateFormat('yyyy-MM-dd').format(DateTime.now()));
   }
 
-  /// Clear the "No Class Today" flag
   Future<void> clearNoClassToday() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('no_class_date');
   }
+
+  // ───────────── Group "class coming up" nudges (local only) ─────────────
+
+  /// Schedules a one-off local notification (used for group events and the
+  /// focus timer). Ids are derived from [key] so re-scheduling is idempotent.
+  Future<void> scheduleOneOff({
+    required String key,
+    required String title,
+    required String body,
+    required DateTime at,
+  }) async {
+    if (!_isInitialized || at.isBefore(DateTime.now())) return;
+    try {
+      await _notificationsPlugin.zonedSchedule(
+        id: stableHash(key) % 2000000000,
+        title: title,
+        body: body,
+        scheduledDate: tz.TZDateTime.from(at, tz.local),
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails('general', 'General', importance: Importance.high, priority: Priority.high),
+          iOS: DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    } catch (e) {
+      debugPrint('scheduleOneOff failed: $e');
+    }
+  }
+
+  Future<void> cancelOneOff(String key) => cancelReminder(stableHash(key) % 2000000000);
 }

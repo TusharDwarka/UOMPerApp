@@ -1,9 +1,17 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../providers/timetable_provider.dart';
+import 'package:provider/provider.dart';
+
 import '../models/class_session.dart';
-import '../widgets/add_edit_class_sheet.dart';
+import '../providers/timetable_provider.dart';
+import '../theme/app_theme.dart';
+import '../utils/day_layout.dart';
+import '../utils/time_utils.dart';
+import '../widgets/class_details_sheet.dart';
+import '../widgets/ui.dart';
 
 class ScheduleTab extends StatefulWidget {
   const ScheduleTab({super.key});
@@ -13,728 +21,347 @@ class ScheduleTab extends StatefulWidget {
 }
 
 class _ScheduleTabState extends State<ScheduleTab> {
-  DateTime _selectedDate = DateTime.now();
-  final double _hourHeight = 80.0;
-  
-  bool _isCompareMode = false;
-  bool _isEditMode = false;
-  String? _currentPerspective; // Null = Selection Screen
+  static const double _hourHeight = 68;
+  static const double _gutter = 54;
 
-  // Cache DateFormats
-  final DateFormat _dayNumFormat = DateFormat('d');
-  final DateFormat _fullDateFormat = DateFormat('MMMM d, y');
+  DateTime _selectedDate = dateOnly(DateTime.now());
+  final _scroll = ScrollController();
+  Timer? _minuteTicker;
+  bool _didInitialScroll = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Keeps the "now" line and in-progress highlighting current.
+    _minuteTicker = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _minuteTicker?.cancel();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  DateTime get _weekStart => _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
+
+  void _select(DateTime d) {
+    setState(() => _selectedDate = dateOnly(d));
+    _didInitialScroll = false;
+  }
+
+  /// Hour range shown for the day: at least 08:00–18:00, stretched to fit
+  /// early/late classes (these used to be silently hidden before 08:00).
+  (int, int) _hourRange(List<ClassSession> events) {
+    var start = 8, end = 18;
+    for (final e in events) {
+      start = math.min(start, e.startMinutes ~/ 60);
+      end = math.max(end, ((math.max(e.endMinutes, e.startMinutes + 30)) / 60).ceil());
+    }
+    return (start.clamp(0, 23), end.clamp(start + 1, 24));
+  }
+
+  void _autoScroll(int startHour, List<ClassSession> events) {
+    if (_didInitialScroll) return;
+    _didInitialScroll = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      final now = DateTime.now();
+      int targetMin;
+      if (isSameDate(_selectedDate, now)) {
+        targetMin = now.hour * 60 + now.minute - 60;
+      } else if (events.isNotEmpty) {
+        targetMin = events.first.startMinutes - 30;
+      } else {
+        targetMin = startHour * 60;
+      }
+      final offset = ((targetMin - startHour * 60) / 60 * _hourHeight).clamp(0.0, _scroll.position.maxScrollExtent);
+      _scroll.animateTo(offset, duration: const Duration(milliseconds: 450), curve: Curves.easeOutCubic);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final timetable = Provider.of<TimetableProvider>(context);
-    // Align local state with provider
-    _currentPerspective = timetable.courseName.isNotEmpty ? timetable.courseName : "My Schedule";
+    final p = Palette.of(context);
+    final timetable = context.watch<TimetableProvider>();
+    final events = timetable.getClassesForDate(_selectedDate);
+    final (startHour, endHour) = _hourRange(events);
+    _autoScroll(startHour, events);
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    // Calculate current week using provider's semester start
-    final start = timetable.semesterStart;
-    final now = DateTime.now();
-    final diffDays = now.difference(start).inDays;
-    int currentWeek = (diffDays / 7).floor() + 1;
-    if (diffDays < 0) currentWeek = 0; 
+    final title = timetable.courseName.isNotEmpty ? timetable.courseName : 'Schedule';
+    final preSemester = _selectedDate.isBefore(dateOnly(timetable.semesterStart));
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text("Schedule", style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.edit, color: _isEditMode ? Colors.blue : (isDark ? Colors.white : Colors.black)),
-             onPressed: () {
-               setState(() {
-                  _isEditMode = !_isEditMode;
-               });
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildHeader(isDark, timetable),
-          
-          // Week Strip
-          if (!_isEditMode) ...[
-            _buildWeekStrip(currentWeek, isDark),
-            const SizedBox(height: 10),
-          ],
-
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.only(top: 20, bottom: 20),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Time Column
-                  Container(
-                    width: 60,
-                    padding: const EdgeInsets.only(top: 10), // Alignment correction
-                    child: Column(
-                      children: [
-                        for (int i = 8; i <= 24; i++)
-                          SizedBox(
-                            height: 60, 
-                            child: Text(
-                              i == 24 ? "00:00" : "${i.toString().padLeft(2, '0')}:00",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400], fontSize: 12, fontWeight: FontWeight.w500),
-                            ),
-                          )
-                      ],
-                    ),
-                  ),
-
-                  // Event Grid
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                         return Stack(
-                           children: [
-                             // Grid Lines
-                             Column(
-                               children: [
-                                 for (int i = 8; i <= 24; i++)
-                                   Container(
-                                     height: 60, 
-                                     decoration: BoxDecoration(
-                                       border: Border(top: BorderSide(color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300]!)) // Increased visibility
-                                     ),
-                                   )
-                               ],
-                             ),
-
-                             // Events
-                             ..._buildAllEvents(constraints.maxWidth, timetable, isDark),
-                             
-                             // Current Time Indicator (Visual Polish)
-                             _buildCurrentTimeLine(isDark), 
-                           ],
-                         );
-                      }
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-        ],
-      ),
-      floatingActionButton: _isEditMode 
-        ? FloatingActionButton.extended(
-            onPressed: () => _showAddSessionDialog(),
-            label: const Text("Add Class"),
-            icon: const Icon(Icons.add),
-            backgroundColor: const Color(0xFF2962FF),
-            foregroundColor: Colors.white,
-          )
-        : null,
-    );
-  }
-
-  Widget _buildCurrentTimeLine(bool isDark) {
-    // Calculate current time position
-    final now = DateTime.now();
-    if (now.hour < 8) return const SizedBox();
-    
-    final minutes = (now.hour * 60) + now.minute;
-    final top = (minutes - 480).toDouble();
-    
-    return Positioned(
-      top: top, left: 0, right: 0,
-      child: Row(
-        children: [
-          CircleAvatar(radius: 4, backgroundColor: isDark ? Colors.redAccent : Colors.red),
-          Expanded(child: Container(height: 2, color: isDark ? Colors.redAccent : Colors.red)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader(bool isDark, TimetableProvider timetable) {
-    // Get Week Label
-    final weekLabel = timetable.getWeekLabel(_selectedDate);
-    
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 10, 24, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                   Text(
-                    _currentPerspective ?? "Schedule", 
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.blue[900]!.withOpacity(0.3) : Colors.blue[50], 
-                      borderRadius: BorderRadius.circular(8)
-                    ),
-                    child: Text(
-                      weekLabel,
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? Colors.blue[200] : Colors.blue[800])
-                    ),
-                  )
-                ],
-              ),
-              const SizedBox(width: 8),
-              if (_currentPerspective != null)
-              Container(
-                width: 30, height: 30,
-                decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.grey[100], shape: BoxShape.circle),
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  icon: Icon(Icons.swap_horiz, size: 18, color: isDark ? Colors.white70 : Colors.black54),
-                  onPressed: () {
-                    setState(() {
-                      _currentPerspective = null; 
-                      _isCompareMode = false;
-                    });
+      backgroundColor: p.canvas,
+      body: SafeArea(
+        child: Column(
+          children: [
+            ScreenHeader(
+              title: title,
+              eyebrow: '${timetable.getWeekLabel(_selectedDate)} · ${DateFormat('MMMM yyyy').format(_selectedDate)}',
+              actions: [
+                CircleIconButton(
+                  icon: Icons.event_rounded,
+                  tooltip: 'Pick a date',
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2035),
+                    );
+                    if (picked != null) _select(picked);
                   },
                 ),
-              ),
-              // Compare feature temporarily disabled in adaptive system
-              // IconButton(
-              //   icon: Icon(Icons.people_outline, color: _isCompareMode ? Colors.green : (isDark ? Colors.white : Colors.black)),
-              //   onPressed: () => _showCompareModal(context),
-              // ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          GestureDetector(
-             onTap: () async {
-               final DateTime? picked = await showDatePicker(
-                 context: context,
-                 initialDate: _selectedDate,
-                 firstDate: DateTime(2020),
-                 lastDate: DateTime(2030),
-                 builder: (context, child) => Theme(
-                   data: isDark 
-                      ? ThemeData.dark().copyWith(
-                          colorScheme: const ColorScheme.dark(primary: Color(0xFF3949AB), onPrimary: Colors.white, surface: Color(0xFF1E1E1E), onSurface: Colors.white),
-                          dialogBackgroundColor: const Color(0xFF1E1E1E)
-                        )
-                      : ThemeData.light().copyWith(primaryColor: const Color(0xFF0066FF)),
-                   child: child!,
-                 ),
-               );
-               if (picked != null) setState(() => _selectedDate = picked);
-             },
-             child: Row(
-               mainAxisSize: MainAxisSize.min,
-               children: [
-                 Text(
-                   DateFormat('MMMM d, y').format(_selectedDate), 
-                   style: TextStyle(fontSize: 15, color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w500)
-                 ),
-                 const SizedBox(width: 4),
-                 Icon(Icons.keyboard_arrow_down, size: 18, color: isDark ? Colors.grey[400] : Colors.grey[600])
-               ],
-             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Grid Event Builder Logic (Restored)
-  List<Widget> _buildAllEvents(double width, TimetableProvider timetable, bool isDark) {
-    // 1. Check Date Bounds (use provider's actual semester start)
-    final semesterStart = timetable.semesterStart;
-    
-    if (_selectedDate.isBefore(semesterStart)) {
-       return [
-         Positioned(
-           top: 100, left: 0, right: 0,
-           child: Center(
-             child: Text("Pre-Semester (No Classes)", style: TextStyle(color: isDark ? Colors.grey : Colors.grey[600], fontStyle: FontStyle.italic))
-           )
-         )
-       ];
-    }
-
-    List<Widget> children = [];
-    
-    // Get events for the selected day
-    final events = timetable.getClassesForDate(_selectedDate);
-    final friendEvents = _isCompareMode ? timetable.getFriendEventsForDay(_selectedDate) : <ClassSession>[];
-
-    // 2. Build User Events
-    // Handling overlap: Simple logic, if compare mode, width is halved.
-    
-    for (var event in events) {
-      children.add(_buildEventBlock(event, width, isDark: isDark, provider: timetable));
-    }
-    
-    if (_isCompareMode) {
-       for (var event in friendEvents) {
-         children.add(_buildEventBlock(event, width, isGhost: true, isDark: isDark)); // No provider for ghost
-       }
-       
-       // Add Free Blocks
-       final freeSlots = timetable.getFreeSlotsForDay(_selectedDate);
-       for (var slot in freeSlots) {
-          _addFreeBlock(children, slot.start, slot.end, width, isDark);
-       }
-    }
-    
-    // ... (unchanged part) ...
-    
-    return children;
-  }
-  
-  void _addFreeBlock(List<Widget> children, int startMin, int endMin, double totalWidth, bool isDark) {
-    if (endMin - startMin < 30) return; // Ignore small gaps < 30 mins
-    
-    double top = (startMin - 480).toDouble();
-    double height = (endMin - startMin).toDouble();
-    
-    children.add(Positioned(
-      top: top, 
-      left: 0, 
-      right: 0, 
-      height: height - 2,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 10), // Wider to look better
-        decoration: BoxDecoration(
-          color: isDark ? Colors.green.withOpacity(0.15) : Colors.green[50], // Subtle green
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.green.withOpacity(0.5), width: 1, style: BorderStyle.solid),
-        ),
-        alignment: Alignment.center,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-               Icon(Icons.handshake_rounded, size: 16, color: isDark ? Colors.green[300] : Colors.green[700]),
-               const SizedBox(width: 6),
-               Text(
-                 "FREE TO MEET  ${_formatMin(startMin)} - ${_formatMin(endMin)}",
-                 style: TextStyle(
-                   color: isDark ? Colors.green[300] : Colors.green[900], 
-                   fontWeight: FontWeight.bold, 
-                   fontSize: 12,
-                   letterSpacing: 0.5
-                 )
-               )
-            ],
-          ),
-        ),
-      ),
-    ));
-  }
-
-  String _formatMin(int minutes) {
-    final h = (minutes / 60).floor().toString().padLeft(2, '0');
-    final m = (minutes % 60).toString().padLeft(2, '0');
-    return "$h:$m";
-  }
-
-  Widget _buildEventBlock(ClassSession event, double totalWidth, {bool isGhost = false, bool isDark = false, TimetableProvider? provider}) {
-     final partsStart = event.startTime.split(':');
-     final startMinutes = int.parse(partsStart[0]) * 60 + int.parse(partsStart[1]);
-     final partsEnd = event.endTime.split(':');
-     int endMinutes = int.parse(partsEnd[0]) * 60 + int.parse(partsEnd[1]);
-     
-     if (endMinutes < startMinutes) {
-       endMinutes += 24 * 60; // Handle events crossing midnight
-     }
-     
-     // 8:00 AM is 480 minutes.
-     // Offset: (startMinutes - 480) * (60px / 60min) -> 1 px per minute.
-     double top = (startMinutes - 480).toDouble();
-     double height = (endMinutes - startMinutes).toDouble(); // 1 min = 1 px
-     
-     if (top < 0) return const SizedBox(); // Before 8am
-     
-     // Width Logic
-     double left = 0;
-     double width = totalWidth;
-     
-     if (_isCompareMode) {
-       width = (totalWidth / 2) - 6; // Gap
-       if (isGhost) {
-         left = (totalWidth / 2) + 2;
-       } else {
-         left = 0; 
-       }
-     } else {
-       width = totalWidth - 16;
-       left = 0;
-     }
-
-     // Colors
-     final colorOption = event.subject.hashCode.abs() % 6;
-     final styles = [
-       (const Color(0xFFE3F2FD), const Color(0xFF1565C0)), // Blue
-       (const Color(0xFFF3E5F5), const Color(0xFF7B1FA2)), // Purple
-       (const Color(0xFFE0F2F1), const Color(0xFF00695C)), // Teal
-       (const Color(0xFFFFF3E0), const Color(0xFFEF6C00)), // Orange
-       (const Color(0xFFFFEBEE), const Color(0xFFC62828)), // Red
-       (const Color(0xFFE8F5E9), const Color(0xFF2E7D32)), // Green
-     ];
-     final style = styles[colorOption];
-     
-     final bgColor = isGhost ? (isDark ? Colors.white.withOpacity(0.05) : Colors.grey[50]!) : (isDark ? style.$2.withOpacity(0.2) : style.$1);
-     final accentColor = isGhost ? Colors.grey : style.$2;
-     final textColor = isDark ? Colors.white : Colors.black87;
-
-     // Check Attendance Status if Today and Provider available
-     final isToday = isSameDay2(_selectedDate, DateTime.now());
-     bool? isPresent;
-     if (!isGhost && provider != null && isToday) {
-        final r = provider.getAttendanceRecord(event.subject, _selectedDate);
-        if (r != null) isPresent = r.isPresent;
-     }
-
-     return Positioned(
-       top: top,
-       left: left,
-       width: width,
-       height: height - 1, // Slight gap
-       child: GestureDetector(
-         onTap: () => _showAddSessionDialog(sessionToEdit: isGhost ? null : event),
-         child: Container(
-           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), // Reduced padding
-           decoration: BoxDecoration(
-             color: bgColor,
-             borderRadius: BorderRadius.circular(8), 
-             border: Border(left: BorderSide(color: accentColor, width: 3))
-           ),
-           child: Stack(
-             children: [
-               Column(
-                 crossAxisAlignment: CrossAxisAlignment.start,
-                 mainAxisSize: MainAxisSize.min,
-                 children: [
-                   Flexible(
-                     child: Text(
-                       event.subject, 
-                       maxLines: 1, 
-                       overflow: TextOverflow.ellipsis, 
-                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor)
-                     ),
-                   ),
-                   if (height > 35) ...[ 
-                     const SizedBox(height: 1),
-                     Text("${event.startTime} - ${event.endTime}", style: TextStyle(fontSize: 9, color: isDark ? Colors.white70 : Colors.black54)),
-                     if (height > 50)
-                     Flexible(
-                       child: Text(
-                         event.room, 
-                         maxLines: 1, 
-                         overflow: TextOverflow.ellipsis, 
-                         style: TextStyle(fontSize: 9, color: isDark ? Colors.white70 : Colors.black54)
-                       )
-                     ),
-                   ]
-                 ],
-               ),
-               
-               // Attendance Overlay for Today (Bottom Right)
-               if (!isGhost && isToday && height > 40)
-                 Positioned(
-                   bottom: 0,
-                   right: 0,
-                   child: isPresent == null 
-                     ? Row(
-                         mainAxisSize: MainAxisSize.min,
-                         children: [
-                           GestureDetector(
-                             onTap: () => provider?.setAttendance(event.subject, _selectedDate, true),
-                             child: Container(
-                               padding: const EdgeInsets.all(4),
-                               margin: const EdgeInsets.only(right: 4),
-                               decoration: BoxDecoration(color: Colors.green.withOpacity(0.2), shape: BoxShape.circle),
-                               child: const Icon(Icons.check, size: 14, color: Colors.green),
-                             ),
-                           ),
-                           GestureDetector(
-                             onTap: () => provider?.setAttendance(event.subject, _selectedDate, false),
-                             child: Container(
-                               padding: const EdgeInsets.all(4),
-                               decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), shape: BoxShape.circle),
-                               child: const Icon(Icons.close, size: 14, color: Colors.red),
-                             ),
-                           ),
-                         ],
-                       )
-                     : GestureDetector(
-                         onTap: () {
-                           // Allow retoggling / correcting mistake
-                           provider?.setAttendance(event.subject, _selectedDate, !(isPresent ?? false));
-                         },
-                         child: Container(
-                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                           decoration: BoxDecoration(
-                             color: (isPresent! ? Colors.green : Colors.red).withOpacity(0.9),
-                             borderRadius: BorderRadius.circular(4),
-                             border: Border.all(color: Colors.white.withOpacity(0.5), width: 1)
-                           ),
-                           child: Row(
-                             mainAxisSize: MainAxisSize.min,
-                             children: [
-                               Text(
-                                 isPresent ? "IN" : "OUT", 
-                                 style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)
-                               ),
-                               const SizedBox(width: 2),
-                               const Icon(Icons.refresh, size: 8, color: Colors.white70) // Visual hint that it's clickable
-                             ],
-                           ),
-                         ),
-                       ),
-                 )
-             ],
-           ),
-         ),
-       ),
-     );
-  }
-  
-  // Re-write Week Strip for Slidable View
-  Widget _buildWeekStrip(int currentWeek, bool isDark) {
-    // Show window: Selected Date - 2 to Selected Date + 2 (5 days) or 7 days
-    final daysToShow = List.generate(7, (index) {
-       return _selectedDate.subtract(const Duration(days: 3)).add(Duration(days: index));
-    });
-    
-    return SizedBox( // Constrained height
-      height: 90,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(), // Added bounce/friction
-        itemCount: daysToShow.length,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemBuilder: (context, index) {
-           final dayDate = daysToShow[index];
-           final dayLetter = DateFormat('E').format(dayDate)[0];
-           final isSelected = isSameDay2(dayDate, _selectedDate);
-           
-           return GestureDetector(
-             onTap: () => setState(() => _selectedDate = dayDate),
-             child: Container(
-               width: 60,
-               margin: const EdgeInsets.only(right: 8),
-               child: Column(
-                 mainAxisAlignment: MainAxisAlignment.center,
-                 children: [
-                   Text(dayLetter, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.bold, fontSize: 13)),
-                   const SizedBox(height: 8),
-                   Container(
-                     width: 45, height: 50,
-                     decoration: BoxDecoration(
-                       color: isSelected ? (isDark ? Colors.white : Colors.black) : Colors.transparent,
-                       borderRadius: BorderRadius.circular(16),
-                     ),
-                     alignment: Alignment.center,
-                     child: Text(
-                       "${dayDate.day}",
-                       style: TextStyle(
-                         color: isSelected ? (isDark ? Colors.black : Colors.white) : (isDark ? Colors.white : Colors.black),
-                         fontWeight: FontWeight.bold,
-                         fontSize: 18
-                       )
-                     ),
-                   )
-                 ],
-               ),
-             ),
-           );
-        },
-      ),
-    );
-     }
-  
-  // Ensure _showAddSessionDialog is fully dark aware
-  Future<void> _showAddSessionDialog({ClassSession? sessionToEdit}) async {
-    Map<String, dynamic>? initialData;
-    if (sessionToEdit != null) {
-      initialData = {
-        'id': sessionToEdit.id,
-        'moduleName': sessionToEdit.subject,
-        'moduleCode': sessionToEdit.moduleCode,
-        'location': sessionToEdit.room,
-        'day': sessionToEdit.day,
-        'startTime': sessionToEdit.startTime,
-        'endTime': sessionToEdit.endTime,
-        'weeks': sessionToEdit.weeks,
-        'specificDate': sessionToEdit.specificDate?.toIso8601String(),
-        'isTemporary': sessionToEdit.specificDate != null,
-      };
-    } else {
-      initialData = {
-        'day': DateFormat('EEEE').format(_selectedDate),
-        'specificDate': _selectedDate.toIso8601String(),
-        'isTemporary': false,
-      };
-    }
-
-    final result = await showModalBottomSheet<Map<String, dynamic>>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => AddEditClassSheet(initialData: initialData),
-    );
-
-    if (result != null) {
-      final provider = Provider.of<TimetableProvider>(context, listen: false);
-      if (result['delete'] == true && sessionToEdit != null) {
-         provider.deleteSession(sessionToEdit.id);
-         return;
-      }
-
-      final session = ClassSession(
-        subject: result['moduleName'] ?? '',
-        startTime: result['startTime'] ?? '',
-        endTime: result['endTime'] ?? '',
-        day: result['day'] ?? '',
-        room: result['location'] ?? 'TBD',
-        moduleCode: result['moduleCode'] ?? '',
-        isUser: true,
-        weeks: result['weeks'] != null ? List<int>.from(result['weeks']) : null,
-        specificDate: result['specificDate'] != null ? DateTime.tryParse(result['specificDate']) : null,
-      );
-
-      if (sessionToEdit != null) {
-        session.id = sessionToEdit.id;
-      }
-      provider.addSession(session);
-    }
-  }
-
-  Widget _buildCourseSelectionScreen() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(30),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-                Icon(Icons.school_rounded, size: 60, color: isDark ? const Color(0xFF5C6BC0) : const Color(0xFF1A237E)),
-                const SizedBox(height: 20),
-                Text("Select Your Course", textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
-                const SizedBox(height: 10),
-                Text("Choose your main perspective for the schedule.", textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey)),
-                const SizedBox(height: 50),
-                
-                _buildCourseCard("Data Science", Icons.analytics_outlined, isDark ? Colors.white : Colors.black87, () {
-                   setState(() {
-                     _currentPerspective = "Data Science";
-                     final provider = Provider.of<TimetableProvider>(context, listen: false);
-                     provider.loadFriendTimetable(); 
-                     provider.setPerspective(false); 
-                   });
-                }, isDark),
-                const SizedBox(height: 20),
-                _buildCourseCard("Computer Science", Icons.computer_rounded, isDark ? Colors.white : Colors.black87, () {
-                   setState(() {
-                     _currentPerspective = "Computer Science";
-                     final provider = Provider.of<TimetableProvider>(context, listen: false);
-                     provider.loadFriendTimetable();
-                     provider.setPerspective(true);
-                   });
-                }, isDark),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCourseCard(String title, IconData icon, Color color, VoidCallback onTap, bool isDark) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isDark ? Colors.white10 : Colors.grey[200]!),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.05), blurRadius: 10, offset: const Offset(0, 4))]
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: isDark ? const Color(0xFF3949AB).withOpacity(0.2) : const Color(0xFFE8EAF6), borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, color: isDark ? const Color(0xFF5C6BC0) : const Color(0xFF1A237E)),
+                CircleIconButton(
+                  icon: Icons.add_rounded,
+                  filled: true,
+                  tooltip: 'Add class',
+                  onPressed: () => editClass(context, forDate: _selectedDate),
+                ),
+              ],
             ),
-            const SizedBox(width: 20),
-            Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-            const Spacer(),
-            Icon(Icons.arrow_forward_ios_rounded, size: 16, color: isDark ? Colors.grey[500] : Colors.grey),
+            _buildWeekStrip(p, timetable),
+            const SizedBox(height: 8),
+            Expanded(
+              child: preSemester
+                  ? const EmptyState(
+                      icon: Icons.beach_access_rounded,
+                      title: 'Before the semester',
+                      subtitle: 'Classes start on your semester start date. Change it in Settings.',
+                    )
+                  : SingleChildScrollView(
+                      controller: _scroll,
+                      padding: const EdgeInsets.fromLTRB(0, 12, 16, 40),
+                      child: LayoutBuilder(builder: (context, c) {
+                        final gridWidth = c.maxWidth - _gutter;
+                        final height = (endHour - startHour) * _hourHeight;
+                        return SizedBox(
+                          height: height,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              for (var h = startHour; h <= endHour; h++) ..._hourLine(p, h, startHour),
+                              ..._buildBlocks(p, timetable, events, startHour, gridWidth),
+                              if (events.isEmpty)
+                                Positioned(
+                                  top: _hourHeight * 1.5,
+                                  left: _gutter,
+                                  right: 0,
+                                  child: Center(
+                                    child: Text(
+                                      _selectedDate.weekday >= 6 ? 'Weekend — no classes' : 'No classes this day',
+                                      style: TextStyle(color: p.textSecondary),
+                                    ),
+                                  ),
+                                ),
+                              if (isSameDate(_selectedDate, DateTime.now())) _nowLine(p, startHour, endHour),
+                            ],
+                          ),
+                        );
+                      }),
+                    ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  void _showCompareModal(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (c) => Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-           mainAxisSize: MainAxisSize.min,
-           crossAxisAlignment: CrossAxisAlignment.start,
-           children: [
-             Text("Compare with...", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
-             const SizedBox(height: 20),
-             ListTile(
-               contentPadding: EdgeInsets.zero,
-               leading: const CircleAvatar(backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.science, color: Colors.green)),
-               title: Text(_currentPerspective == "Data Science" ? "Computer Science" : "Data Science", style: TextStyle(color: isDark ? Colors.white : Colors.black)),
-               subtitle: Text("View side-by-side", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600])),
-               trailing: _isCompareMode ? const Icon(Icons.check_circle, color: Colors.green) : const Icon(Icons.circle_outlined, color: Colors.grey),
-               onTap: () {
-                 setState(() {
-                   _isCompareMode = true;
-                 });
-                 Navigator.pop(c);
-               },
-             ),
-             if (_isCompareMode) ...[
-               Divider(height: 30, color: isDark ? Colors.white10 : Colors.grey[300]),
-               ListTile(
-                 contentPadding: EdgeInsets.zero,
-                 leading: const CircleAvatar(backgroundColor: Color(0xFFFFEBEE), child: Icon(Icons.close, color: Colors.red)),
-                 title: Text("Stop Comparing", style: TextStyle(color: isDark ? Colors.white : Colors.black)),
-                 onTap: () {
-                   setState(() {
-                     _isCompareMode = false;
-                   });
-                   Navigator.pop(c);
-                 },
-               ),
-             ]
-           ],
+  List<Widget> _hourLine(Palette p, int hour, int startHour) {
+    final top = (hour - startHour) * _hourHeight;
+    return [
+      // Label is vertically centred on its grid line.
+      Positioned(
+        top: top - 8,
+        left: 0,
+        width: _gutter - 8,
+        child: Text(
+          hour == 24 ? '00:00' : '${hour.toString().padLeft(2, '0')}:00',
+          textAlign: TextAlign.right,
+          style: TextStyle(fontSize: 11, height: 1.4, color: p.textMuted, fontWeight: FontWeight.w600),
         ),
-      )
+      ),
+      Positioned(top: top, left: _gutter, right: 0, child: Container(height: 1, color: p.border)),
+    ];
+  }
+
+  Widget _nowLine(Palette p, int startHour, int endHour) {
+    final now = DateTime.now();
+    final minutes = now.hour * 60 + now.minute;
+    if (minutes < startHour * 60 || minutes > endHour * 60) return const SizedBox.shrink();
+    final top = (minutes - startHour * 60) / 60 * _hourHeight;
+    return Positioned(
+      top: top - 5,
+      left: _gutter - 5,
+      right: 0,
+      child: IgnorePointer(
+        child: Row(
+          children: [
+            Container(width: 10, height: 10, decoration: BoxDecoration(color: p.accent, shape: BoxShape.circle)),
+            Expanded(child: Container(height: 2, color: p.accent)),
+          ],
+        ),
+      ),
     );
   }
 
-  bool isSameDay2(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
+  List<Widget> _buildBlocks(Palette p, TimetableProvider timetable, List<ClassSession> events, int startHour, double gridWidth) {
+    final laid = layoutDayBlocks<ClassSession>(events, startOf: (s) => s.startMinutes, endOf: (s) => s.endMinutes);
+    final now = DateTime.now();
+    final isToday = isSameDate(_selectedDate, now);
+    final nowMin = now.hour * 60 + now.minute;
+
+    return [
+      for (final b in laid)
+        Builder(builder: (context) {
+          final s = b.item;
+          final laneWidth = gridWidth / b.laneCount;
+          final top = (b.start - startHour * 60) / 60 * _hourHeight;
+          final height = math.max((b.end - b.start) / 60 * _hourHeight - 3, 26.0);
+          final colors = moduleColors(s.subject, p.isDark);
+          final inProgress = isToday && nowMin >= b.start && nowMin < b.end;
+          final done = isToday && nowMin >= b.end;
+          final record = timetable.getAttendanceRecord(s.subject, _selectedDate);
+
+          return Positioned(
+            top: top + 1.5,
+            left: _gutter + 4 + b.lane * laneWidth,
+            width: laneWidth - 6,
+            height: height,
+            child: Opacity(
+              opacity: done ? 0.55 : 1,
+              child: Material(
+                color: colors.$1,
+                borderRadius: BorderRadius.circular(18),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () => showClassDetailsSheet(context, s, date: _selectedDate),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      border: inProgress ? Border.all(color: colors.$2, width: 2) : null,
+                    ),
+                    padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
+                    // Short (30-min) blocks can't fit every line; clip the
+                    // extra lines instead of throwing an overflow.
+                    child: ClipRect(
+                      child: OverflowBox(
+                        alignment: Alignment.topLeft,
+                        maxHeight: double.infinity,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(s.subject,
+                                      maxLines: height > 60 ? 2 : 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: p.isDark ? Colors.white : const Color(0xFF15171A))),
+                                ),
+                                if (s.meetingLink != null) Icon(Icons.videocam_rounded, size: 15, color: colors.$2),
+                                if (record != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: Icon(record.isPresent ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                                        size: 15, color: record.isPresent ? Colors.green : Colors.redAccent),
+                                  ),
+                              ],
+                            ),
+                            if (height > 40)
+                              Text('${s.startTime} – ${s.endTime}${b.laneCount == 1 ? '  ·  ${s.room}' : ''}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 11, color: colors.$2, fontWeight: FontWeight.w600)),
+                            if (height > 64 && b.laneCount > 1)
+                              Text(s.room, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: colors.$2)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+    ];
+  }
+
+  Widget _buildWeekStrip(Palette p, TimetableProvider timetable) {
+    final days = List.generate(7, (i) => _weekStart.add(Duration(days: i)));
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Previous week',
+            icon: const Icon(Icons.chevron_left_rounded),
+            onPressed: () => _select(_selectedDate.subtract(const Duration(days: 7))),
+          ),
+          Expanded(
+            child: Row(
+              children: [
+                for (final d in days)
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _select(d),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        margin: const EdgeInsets.symmetric(horizontal: 2),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSameDate(d, _selectedDate) ? p.ink : Colors.transparent,
+                          borderRadius: BorderRadius.circular(40),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(DateFormat('E').format(d).substring(0, 1),
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: isSameDate(d, _selectedDate) ? p.onInk.withValues(alpha: 0.7) : p.textMuted)),
+                            const SizedBox(height: 4),
+                            Text('${d.day}',
+                                style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w600,
+                                    color: isSameDate(d, _selectedDate)
+                                        ? p.onInk
+                                        : (isSameDate(d, DateTime.now()) ? p.accent : p.textPrimary))),
+                            const SizedBox(height: 4),
+                            Container(
+                              width: 5,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: timetable.getClassesForDate(d).isEmpty
+                                    ? Colors.transparent
+                                    : (isSameDate(d, _selectedDate) ? p.onInk : p.accent),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Next week',
+            icon: const Icon(Icons.chevron_right_rounded),
+            onPressed: () => _select(_selectedDate.add(const Duration(days: 7))),
+          ),
+        ],
+      ),
+    );
   }
 }

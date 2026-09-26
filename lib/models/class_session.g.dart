@@ -32,33 +32,48 @@ const ClassSessionSchema = CollectionSchema(
       name: r'isUser',
       type: IsarType.bool,
     ),
-    r'moduleCode': PropertySchema(
+    r'meetingLink': PropertySchema(
       id: 3,
+      name: r'meetingLink',
+      type: IsarType.string,
+    ),
+    r'moduleCode': PropertySchema(
+      id: 4,
       name: r'moduleCode',
       type: IsarType.string,
     ),
     r'room': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'room',
       type: IsarType.string,
     ),
     r'specificDate': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'specificDate',
       type: IsarType.dateTime,
     ),
     r'startTime': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'startTime',
       type: IsarType.string,
     ),
     r'subject': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'subject',
       type: IsarType.string,
     ),
+    r'syncId': PropertySchema(
+      id: 9,
+      name: r'syncId',
+      type: IsarType.string,
+    ),
+    r'updatedAt': PropertySchema(
+      id: 10,
+      name: r'updatedAt',
+      type: IsarType.dateTime,
+    ),
     r'weeks': PropertySchema(
-      id: 8,
+      id: 11,
       name: r'weeks',
       type: IsarType.longList,
     )
@@ -68,7 +83,21 @@ const ClassSessionSchema = CollectionSchema(
   deserialize: _classSessionDeserialize,
   deserializeProp: _classSessionDeserializeProp,
   idName: r'id',
-  indexes: {},
+  indexes: {
+    r'syncId': IndexSchema(
+      id: 7538593479801827566,
+      name: r'syncId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncId',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    )
+  },
   links: {},
   embeddedSchemas: {},
   getId: _classSessionGetId,
@@ -85,10 +114,22 @@ int _classSessionEstimateSize(
   var bytesCount = offsets.last;
   bytesCount += 3 + object.day.length * 3;
   bytesCount += 3 + object.endTime.length * 3;
+  {
+    final value = object.meetingLink;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.moduleCode.length * 3;
   bytesCount += 3 + object.room.length * 3;
   bytesCount += 3 + object.startTime.length * 3;
   bytesCount += 3 + object.subject.length * 3;
+  {
+    final value = object.syncId;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   {
     final value = object.weeks;
     if (value != null) {
@@ -107,12 +148,15 @@ void _classSessionSerialize(
   writer.writeString(offsets[0], object.day);
   writer.writeString(offsets[1], object.endTime);
   writer.writeBool(offsets[2], object.isUser);
-  writer.writeString(offsets[3], object.moduleCode);
-  writer.writeString(offsets[4], object.room);
-  writer.writeDateTime(offsets[5], object.specificDate);
-  writer.writeString(offsets[6], object.startTime);
-  writer.writeString(offsets[7], object.subject);
-  writer.writeLongList(offsets[8], object.weeks);
+  writer.writeString(offsets[3], object.meetingLink);
+  writer.writeString(offsets[4], object.moduleCode);
+  writer.writeString(offsets[5], object.room);
+  writer.writeDateTime(offsets[6], object.specificDate);
+  writer.writeString(offsets[7], object.startTime);
+  writer.writeString(offsets[8], object.subject);
+  writer.writeString(offsets[9], object.syncId);
+  writer.writeDateTime(offsets[10], object.updatedAt);
+  writer.writeLongList(offsets[11], object.weeks);
 }
 
 ClassSession _classSessionDeserialize(
@@ -125,14 +169,17 @@ ClassSession _classSessionDeserialize(
     day: reader.readStringOrNull(offsets[0]) ?? '',
     endTime: reader.readStringOrNull(offsets[1]) ?? '',
     isUser: reader.readBoolOrNull(offsets[2]) ?? true,
-    moduleCode: reader.readStringOrNull(offsets[3]) ?? '',
-    room: reader.readStringOrNull(offsets[4]) ?? '',
-    specificDate: reader.readDateTimeOrNull(offsets[5]),
-    startTime: reader.readStringOrNull(offsets[6]) ?? '',
-    subject: reader.readStringOrNull(offsets[7]) ?? '',
-    weeks: reader.readLongList(offsets[8]),
+    meetingLink: reader.readStringOrNull(offsets[3]),
+    moduleCode: reader.readStringOrNull(offsets[4]) ?? '',
+    room: reader.readStringOrNull(offsets[5]) ?? '',
+    specificDate: reader.readDateTimeOrNull(offsets[6]),
+    startTime: reader.readStringOrNull(offsets[7]) ?? '',
+    subject: reader.readStringOrNull(offsets[8]) ?? '',
+    weeks: reader.readLongList(offsets[11]),
   );
   object.id = id;
+  object.syncId = reader.readStringOrNull(offsets[9]);
+  object.updatedAt = reader.readDateTimeOrNull(offsets[10]);
   return object;
 }
 
@@ -150,16 +197,22 @@ P _classSessionDeserializeProp<P>(
     case 2:
       return (reader.readBoolOrNull(offset) ?? true) as P;
     case 3:
-      return (reader.readStringOrNull(offset) ?? '') as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 4:
       return (reader.readStringOrNull(offset) ?? '') as P;
     case 5:
-      return (reader.readDateTimeOrNull(offset)) as P;
-    case 6:
       return (reader.readStringOrNull(offset) ?? '') as P;
+    case 6:
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 7:
       return (reader.readStringOrNull(offset) ?? '') as P;
     case 8:
+      return (reader.readStringOrNull(offset) ?? '') as P;
+    case 9:
+      return (reader.readStringOrNull(offset)) as P;
+    case 10:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 11:
       return (reader.readLongList(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -254,6 +307,72 @@ extension ClassSessionQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterWhereClause> syncIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterWhereClause>
+      syncIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'syncId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterWhereClause> syncIdEqualTo(
+      String? syncId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncId',
+        value: [syncId],
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterWhereClause> syncIdNotEqualTo(
+      String? syncId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncId',
+              lower: [],
+              upper: [syncId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncId',
+              lower: [syncId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncId',
+              lower: [syncId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncId',
+              lower: [],
+              upper: [syncId],
+              includeUpper: false,
+            ));
+      }
     });
   }
 }
@@ -587,6 +706,160 @@ extension ClassSessionQueryFilter
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'isUser',
         value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      meetingLinkIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'meetingLink',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      meetingLinkIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'meetingLink',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      meetingLinkEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'meetingLink',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      meetingLinkGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'meetingLink',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      meetingLinkLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'meetingLink',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      meetingLinkBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'meetingLink',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      meetingLinkStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'meetingLink',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      meetingLinkEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'meetingLink',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      meetingLinkContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'meetingLink',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      meetingLinkMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'meetingLink',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      meetingLinkIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'meetingLink',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      meetingLinkIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'meetingLink',
+        value: '',
       ));
     });
   }
@@ -1208,6 +1481,233 @@ extension ClassSessionQueryFilter
   }
 
   QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      syncIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'syncId',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      syncIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'syncId',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition> syncIdEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      syncIdGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      syncIdLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition> syncIdBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      syncIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      syncIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      syncIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition> syncIdMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      syncIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      syncIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      updatedAtIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'updatedAt',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      updatedAtIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'updatedAt',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      updatedAtEqualTo(DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      updatedAtGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      updatedAtLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      updatedAtBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'updatedAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
       weeksIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -1415,6 +1915,19 @@ extension ClassSessionQuerySortBy
     });
   }
 
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy> sortByMeetingLink() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'meetingLink', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy>
+      sortByMeetingLinkDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'meetingLink', Sort.desc);
+    });
+  }
+
   QueryBuilder<ClassSession, ClassSession, QAfterSortBy> sortByModuleCode() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'moduleCode', Sort.asc);
@@ -1476,6 +1989,30 @@ extension ClassSessionQuerySortBy
       return query.addSortBy(r'subject', Sort.desc);
     });
   }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy> sortBySyncId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy> sortBySyncIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy> sortByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy> sortByUpdatedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.desc);
+    });
+  }
 }
 
 extension ClassSessionQuerySortThenBy
@@ -1525,6 +2062,19 @@ extension ClassSessionQuerySortThenBy
   QueryBuilder<ClassSession, ClassSession, QAfterSortBy> thenByIsUserDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'isUser', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy> thenByMeetingLink() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'meetingLink', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy>
+      thenByMeetingLinkDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'meetingLink', Sort.desc);
     });
   }
 
@@ -1589,6 +2139,30 @@ extension ClassSessionQuerySortThenBy
       return query.addSortBy(r'subject', Sort.desc);
     });
   }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy> thenBySyncId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy> thenBySyncIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy> thenByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterSortBy> thenByUpdatedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.desc);
+    });
+  }
 }
 
 extension ClassSessionQueryWhereDistinct
@@ -1610,6 +2184,13 @@ extension ClassSessionQueryWhereDistinct
   QueryBuilder<ClassSession, ClassSession, QDistinct> distinctByIsUser() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'isUser');
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QDistinct> distinctByMeetingLink(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'meetingLink', caseSensitive: caseSensitive);
     });
   }
 
@@ -1647,6 +2228,19 @@ extension ClassSessionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<ClassSession, ClassSession, QDistinct> distinctBySyncId(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncId', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QDistinct> distinctByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'updatedAt');
+    });
+  }
+
   QueryBuilder<ClassSession, ClassSession, QDistinct> distinctByWeeks() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'weeks');
@@ -1680,6 +2274,12 @@ extension ClassSessionQueryProperty
     });
   }
 
+  QueryBuilder<ClassSession, String?, QQueryOperations> meetingLinkProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'meetingLink');
+    });
+  }
+
   QueryBuilder<ClassSession, String, QQueryOperations> moduleCodeProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'moduleCode');
@@ -1708,6 +2308,18 @@ extension ClassSessionQueryProperty
   QueryBuilder<ClassSession, String, QQueryOperations> subjectProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'subject');
+    });
+  }
+
+  QueryBuilder<ClassSession, String?, QQueryOperations> syncIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncId');
+    });
+  }
+
+  QueryBuilder<ClassSession, DateTime?, QQueryOperations> updatedAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'updatedAt');
     });
   }
 

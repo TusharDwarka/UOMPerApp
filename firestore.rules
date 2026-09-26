@@ -1,0 +1,94 @@
+rules_version = '2';
+
+// Deploy with:  firebase deploy --only firestore:rules
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function notAnonymous() { return signedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous'; }
+
+    // ───────────── Personal data: only the owner, never anyone else ─────────────
+    match /users/{uid} {
+      allow read, write: if isSelf(uid);
+      match /{collection}/{docId} {
+        allow read, write: if isSelf(uid);
+      }
+    }
+
+    // ───────────── Study groups ─────────────
+    function groupPath(gid) { return /databases/$(database)/documents/groups/$(gid); }
+    function memberPath(gid, uid) { return /databases/$(database)/documents/groups/$(gid)/members/$(uid); }
+    function isMember(gid) { return signedIn() && exists(memberPath(gid, request.auth.uid)); }
+    function isLeader(gid) {
+      return isMember(gid) && get(memberPath(gid, request.auth.uid)).data.role == 'leader';
+    }
+    function groupData(gid) { return get(groupPath(gid)).data; }
+    function canPost(gid) { return isLeader(gid) || (isMember(gid) && groupData(gid).membersCanPost == true); }
+
+    match /groups/{gid} {
+      allow read: if signedIn() && (resource.data.isPublic == true || isMember(gid));
+      allow create: if notAnonymous()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80;
+      allow update: if isLeader(gid)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.joinCode == resource.data.joinCode;
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+
+      match /members/{uid} {
+        allow read: if isMember(gid) || (signedIn() && groupData(gid).isPublic == true);
+
+        // Join: yourself only, as a plain member, and either the group is
+        // public or you supplied a valid join code. The owner joins as leader.
+        allow create: if isSelf(uid) && notAnonymous() && (
+          (request.resource.data.role == 'leader' && groupData(gid).ownerId == uid)
+          || (request.resource.data.role == 'member' && (
+                groupData(gid).isPublic == true
+                || (request.resource.data.code is string
+                    && groupData(gid).joinCode == request.resource.data.code)))
+        );
+
+        // Members update their own name/stats but can't promote themselves;
+        // leaders can change roles.
+        allow update: if (isSelf(uid) && request.resource.data.role == resource.data.role)
+          || isLeader(gid);
+
+        // Leave, or be removed by a leader. The owner can't be removed.
+        allow delete: if (isSelf(uid) || isLeader(gid)) && groupData(gid).ownerId != uid;
+      }
+
+      match /sessions/{id} {
+        allow read: if isMember(gid);
+        allow create, update, delete: if canPost(gid);
+      }
+
+      match /events/{id} {
+        allow read: if isMember(gid);
+        allow create, update, delete: if canPost(gid);
+      }
+
+      match /messages/{id} {
+        allow read: if isMember(gid);
+        allow create: if isMember(gid)
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 2000
+          && (request.resource.data.kind == 'text'
+              || (request.resource.data.kind == 'announcement' && isLeader(gid)));
+        allow delete: if signedIn() && (resource.data.senderId == request.auth.uid || isLeader(gid));
+      }
+    }
+
+    // Join codes can be looked up one at a time but never listed.
+    match /joinCodes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if notAnonymous() && request.resource.data.ownerId == request.auth.uid
+        && groupData(request.resource.data.groupId).ownerId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+  }
+}

@@ -1,62 +1,66 @@
 # UOM Personal Student App 🎓
 
-A comprehensive mobile companion designed for University of Mauritius students to manage their academic life, track attendance, and coordinate schedules with friends.
+A companion app for University of Mauritius students — timetable, deadlines, bus times, files, focus
+timer and study groups — on Android and Windows, synced through one account.
 
-## ✨ Key Features
+## ✨ Features
 
-### 📅 Advanced Schedule Management
-- **Smart Timetable**: Automatically detects the current week and adjusts for Online vs. Campus weeks.
-- **Compare Schedules**: The flagship **"Free to Meet"** feature allows you to compare your timetable (e.g., Data Science) with a friend's (e.g., Computer Science).
-- **Intelligent Gap Detection**: When comparing, the app automatically highlights common free slots (min 30 mins) directly on the grid—but **only if both of you are on campus** that day!
+### 📅 Schedule
+- AI timetable import (photo/PDF), week-aware classes, one-off classes.
+- Day view with correct hour alignment, early/late classes, side-by-side overlapping classes and a live "now" line.
+- Tap a class for attendance, homework, reminder and **Join Meet/Teams/Zoom** (paste a link on any class or event).
 
-### ❤️ Attendance Survival Mode
-- **Gamified Tracking**: Treat your attendance like a game! You start with 10 "Lives" per module.
-- **Visual Feedback**: Hearts dissipate as you miss classes.
-- **Log History**: Correct mistakes or view your attendance history for any module.
+### 🗓 Academic Hub
+- Calendar with **per-event colours** and **multi-day (spanning) events** drawn as continuous bars.
+- Day agenda (classes + events), 14-day "coming up" strip.
+- Attendance survival mode (10 lives per module).
 
-### 📝 Academic Hub & Planner
-- **Task Management**: Track assignments, tests, and projects.
-- **Deadline Awareness**: Visual urgency indicators (Red for <= 3 days, Orange for <= 7 days).
-- **Class Quick Actions**: Add homework directly from your schedule view.
+### ✅ Board (Kanban)
+- To Do → In Progress → Done. Drag between columns (PC) or long-press onto a column tab (phone).
+- No accidental swipe-to-delete; every delete asks first and offers **Undo**.
+- Priority, filters, PDF/print and WhatsApp share.
 
-### 💻 PC / Desktop Experience
-- **Responsive Layout**: Automatically adapts to large screens with a dedicated side navigation rail.
-- **Optimized for Productivity**: Use your mouse and keyboard to manage tasks faster.
-- **Windows Support**: Native performance on Windows machines.
+### 🚌 Bus
+- Opens on the **next departure** with a live countdown; earlier buses are collapsed.
+- Add a time and it drops into the right slot (arrival pre-filled from the usual journey time); paste many times at once.
 
-### 🚌 Campus Utilities
-- **Bus Schedule**: Integrated bus timings for easy commute planning.
-- **Dark Mode**: Fully supported beautiful dark theme for late-night studying.
+### 📁 Files & Notes
+- One page, one header. Module folders + your own folders, with **custom sections** (add / rename / delete).
+- Move, rename, search files. Colourful notes with pinning.
 
-## 🚀 Getting Started
+### ⏱ Focus
+- Pomodoro timer with daily goal, streak and the weekly productivity chart.
 
-1.  **Prerequisites**: Ensure you have [Flutter](https://flutter.dev/docs/get-started/install) installed.
-2.  **Clone the Repo**:
-    ```bash
-    git clone https://github.com/TusharDwarka/uom-per-app.git
-    cd uom-per-app
-    ```
-3.  **Install Dependencies**:
-    ```bash
-    flutter pub get
-    ```
-4.  **Run the App**:
-    ```bash
-    flutter run
-    ```
-    *To run on Windows:*
-    ```bash
-    flutter run -d windows
-    ```
+### 👥 Groups
+- Join your cohort (public list by programme/year, or private join code).
+- Shared timetable & events managed by **leaders**, group chat with announcements, live "next class" countdown,
+  per-member "remind me X min before", and a weekly **focus leaderboard**.
 
-5.  **Build for PC**:
-    ```bash
-    flutter build windows
-    ```
-    *Output located in `build/windows/runner/Release`*
+### 🔐 Accounts & sync
+- Email/password sign-in (or guest, upgradable later without losing data).
+- Everything personal syncs live between phone and PC; the app works offline and catches up later.
 
-## 🛠 Tech Stack
--   **Framework**: Flutter
--   **State Management**: Provider
--   **Database**: Isar (High performance NoSQL)
--   **UI**: Material 3 Design
+## 🔧 One-time Firebase setup
+
+1. Firebase console → **Authentication** → enable **Email/Password** and **Anonymous**.
+2. **Firestore Database** → create the database (production mode).
+3. Deploy the security rules in this repo:
+   ```bash
+   npm i -g firebase-tools
+   firebase login
+   firebase deploy --only firestore:rules
+   ```
+   Without the rules deployed, Groups will get "permission denied".
+
+## 🚀 Getting started
+
+```bash
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs   # after changing Isar models
+flutter run                 # phone
+flutter run -d windows      # PC
+flutter test                # logic + layout/overflow tests
+```
+
+## 🛠 Tech stack
+Flutter · Provider · Isar (local DB) · Firebase Auth + Cloud Firestore (sync & groups) · Gemini (timetable import)
