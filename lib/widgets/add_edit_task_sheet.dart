@@ -3,312 +3,486 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/academic_task.dart';
 import '../providers/timetable_provider.dart';
+import '../theme/app_theme.dart';
+import '../utils/meeting_links.dart';
+import '../utils/time_utils.dart';
 import 'scroll_time_picker.dart';
+import 'ui.dart';
+
+const taskTypes = ['Assignment', 'Homework', 'Test', 'Exam', 'Project', 'Event', 'Other'];
+
+/// Opens the task/event editor. Used by the board, Academic Hub, dashboard
+/// and schedule quick actions so they all behave the same.
+Future<void> showTaskSheet(
+  BuildContext context, {
+  AcademicTask? task,
+  String? initialType,
+  String? initialModule,
+  DateTime? initialDate,
+  String? initialStatus,
+}) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => AddEditTaskSheet(
+      taskToEdit: task,
+      initialCategory: initialType,
+      initialModule: initialModule,
+      initialDate: initialDate,
+      initialStatus: initialStatus,
+    ),
+  );
+}
+
+/// Deletes with an Undo snackbar (used by every delete entry point).
+/// Pass [provider]/[messenger] when the calling widget is about to close.
+Future<void> deleteTaskWithUndo(
+  BuildContext context,
+  AcademicTask task, {
+  TimetableProvider? provider,
+  ScaffoldMessengerState? messenger,
+}) async {
+  final prov = provider ?? context.read<TimetableProvider>();
+  final msg = messenger ?? ScaffoldMessenger.of(context);
+  final removed = await prov.deleteTask(task.id);
+  if (removed == null) return;
+  msg.hideCurrentSnackBar();
+  msg.showSnackBar(SnackBar(
+    content: Text('Deleted "${removed.title}"'),
+    duration: const Duration(seconds: 5),
+    action: SnackBarAction(label: 'Undo', onPressed: () => prov.restoreTask(removed)),
+  ));
+}
 
 class AddEditTaskSheet extends StatefulWidget {
   final AcademicTask? taskToEdit;
   final String? initialCategory;
   final String? initialModule;
-  
-  const AddEditTaskSheet({super.key, this.taskToEdit, this.initialCategory, this.initialModule});
+  final DateTime? initialDate;
+  final String? initialStatus;
+
+  const AddEditTaskSheet({
+    super.key,
+    this.taskToEdit,
+    this.initialCategory,
+    this.initialModule,
+    this.initialDate,
+    this.initialStatus,
+  });
 
   @override
   State<AddEditTaskSheet> createState() => _AddEditTaskSheetState();
 }
 
 class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
-  final _formKey = GlobalKey<FormState>();
-  late String title;
-  late String subject;
-  late String type;
-  late String note;
-  late String room;
-  late DateTime selectedDate;
-  late TimeOfDay selectedTime;
-  bool _showSubjectSuggestions = false;
-  late TextEditingController _subjectController;
-  
+  late final TextEditingController _title;
+  late final TextEditingController _subject;
+  late final TextEditingController _note;
+  late final TextEditingController _room;
+  late final TextEditingController _link;
+  final _subjectFocus = FocusNode();
+  late String _type;
+  late DateTime _dueDate;
+  late TimeOfDay _dueTime;
+  DateTime? _startDate;
+  bool _multiDay = false;
+  int? _color;
+  late String _status;
+  int _priority = 1;
+  String? _error;
+
   @override
   void initState() {
     super.initState();
     final t = widget.taskToEdit;
-    title = t?.title ?? '';
-    subject = t?.subject ?? widget.initialModule ?? 'General';
-    type = t?.type ?? widget.initialCategory ?? 'Assignment';
-    selectedDate = t?.dueDate ?? DateTime.now();
-    selectedTime = t != null ? TimeOfDay.fromDateTime(t.dueDate) : const TimeOfDay(hour: 23, minute: 59);
-    
-    // Parse note and room from description
-    note = '';
-    room = '';
+    _title = TextEditingController(text: t?.title ?? '');
+    _subject = TextEditingController(text: t?.subject == 'General' ? '' : (t?.subject ?? widget.initialModule ?? ''));
+    _type = t?.type ?? widget.initialCategory ?? 'Assignment';
+    if (!taskTypes.contains(_type)) _type = 'Other';
+
+    final base = t?.dueDate ?? widget.initialDate ?? DateTime.now();
+    _dueDate = dateOnly(base);
+    _dueTime = t != null ? TimeOfDay.fromDateTime(t.dueDate) : const TimeOfDay(hour: 23, minute: 59);
+    _startDate = t?.startDate;
+    _multiDay = t?.isSpanning ?? false;
+    _color = t?.colorValue;
+    _status = t?.effectiveStatus ?? widget.initialStatus ?? TaskStatus.todo;
+    _priority = t?.priority ?? 1;
+
+    var note = '';
+    var room = '';
     if (t != null && t.description.isNotEmpty) {
       final parts = t.description.split('\n---ROOM---\n');
       note = parts[0];
       if (parts.length > 1) room = parts[1];
     }
-    
-    _subjectController = TextEditingController(text: subject);
+    _note = TextEditingController(text: note);
+    _room = TextEditingController(text: room);
+    _link = TextEditingController(text: t?.meetingLink ?? '');
   }
 
   @override
   void dispose() {
-    _subjectController.dispose();
+    _title.dispose();
+    _subject.dispose();
+    _note.dispose();
+    _room.dispose();
+    _link.dispose();
+    _subjectFocus.dispose();
     super.dispose();
   }
-  
+
   String _buildDescription() {
-    final n = note.trim();
-    final r = room.trim();
-    if (n.isEmpty && r.isEmpty) return '';
+    final n = _note.text.trim();
+    final r = _room.text.trim();
     if (r.isEmpty) return n;
     return '$n\n---ROOM---\n$r';
   }
 
-  bool get _showRoomField => type == 'Exam' || type == 'Test';
+  Future<DateTime?> _pickDate(DateTime initial) {
+    return showDatePicker(context: context, initialDate: initial, firstDate: DateTime(2020), lastDate: DateTime(2035));
+  }
+
+  Future<void> _save() async {
+    final title = _title.text.trim();
+    if (title.isEmpty) {
+      setState(() => _error = 'Give it a title');
+      return;
+    }
+    final link = _link.text.trim();
+    if (link.isNotEmpty && !MeetingLinks.isValid(link)) {
+      setState(() => _error = 'That meeting link doesn\'t look right');
+      return;
+    }
+    final due = DateTime(_dueDate.year, _dueDate.month, _dueDate.day, _dueTime.hour, _dueTime.minute);
+    DateTime? start;
+    if (_multiDay && _startDate != null) {
+      start = dateOnly(_startDate!);
+      if (start.isAfter(dateOnly(due))) {
+        setState(() => _error = 'Start date must be before the end date');
+        return;
+      }
+    }
+
+    final provider = context.read<TimetableProvider>();
+    final task = widget.taskToEdit ?? AcademicTask(dueDate: due);
+    task
+      ..title = title
+      ..subject = _subject.text.trim().isEmpty ? 'General' : _subject.text.trim()
+      ..type = _type
+      ..dueDate = due
+      ..description = _buildDescription()
+      ..startDate = start
+      ..colorValue = _color
+      ..meetingLink = MeetingLinks.normalize(link)
+      ..status = _status
+      ..priority = _priority
+      ..isCompleted = _status == TaskStatus.done;
+
+    Navigator.pop(context);
+    await provider.saveTask(task);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = Palette.of(context);
     final isEditing = widget.taskToEdit != null;
-    final timetable = Provider.of<TimetableProvider>(context, listen: false);
-    final savedSubjects = timetable.savedSubjects;
-    
-    final subjectText = _subjectController.text.trim().toLowerCase();
-    final filteredSubjects = savedSubjects.where((s) => 
-      s.toLowerCase().contains(subjectText) && s.toLowerCase() != subjectText
-    ).toList();
+    final subjects = context.read<TimetableProvider>().savedSubjects;
+    final showRoom = _type == 'Exam' || _type == 'Test' || _type == 'Event' || _room.text.isNotEmpty;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(25))
-      ),
-      child: AnimatedPadding(
-        duration: const Duration(milliseconds: 100),
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20, 
-          top: 30, left: 24, right: 24
-        ),
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(isEditing ? "Edit Task" : "Add Task", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
-                    if (isEditing)
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () {
-                           Provider.of<TimetableProvider>(context, listen: false).deleteTask(widget.taskToEdit!.id);
-                           Navigator.pop(context);
-                        },
-                      )
-                  ],
-                ),
-                const SizedBox(height: 20),
-                
-                TextFormField(
-                  initialValue: title,
-                  style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                  decoration: _buildInputDeco("Task Title", isDark),
-                  validator: (v) => v!.isEmpty ? "Required" : null,
-                  onSaved: (v) => title = v!,
-                ),
-                const SizedBox(height: 15),
-                
-                // Subject with autocomplete
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextFormField(
-                      controller: _subjectController,
-                      style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                      decoration: _buildInputDeco("Subject", isDark).copyWith(
-                        suffixIcon: savedSubjects.isNotEmpty 
-                          ? IconButton(
-                              icon: Icon(_showSubjectSuggestions ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, 
-                                   color: Colors.grey[400], size: 20),
-                              onPressed: () => setState(() => _showSubjectSuggestions = !_showSubjectSuggestions),
-                            )
-                          : null,
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.9,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      builder: (context, scroll) => Container(
+        decoration: BoxDecoration(color: p.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 10, 12, 0),
+              child: Column(
+                children: [
+                  Container(width: 40, height: 4, decoration: BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(isEditing ? 'Edit' : 'New ${_type.toLowerCase()}',
+                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w300, letterSpacing: -0.8, color: p.textPrimary)),
                       ),
-                      onChanged: (val) => setState(() => _showSubjectSuggestions = val.isNotEmpty),
-                      onTap: () => setState(() => _showSubjectSuggestions = true),
-                      onSaved: (v) => subject = v ?? "General",
-                    ),
-                    if (_showSubjectSuggestions && filteredSubjects.isNotEmpty)
-                      Container(
-                        margin: const EdgeInsets.only(top: 4),
-                        constraints: const BoxConstraints(maxHeight: 100),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: isDark ? Colors.white10 : Colors.grey[200]!),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)]
+                      if (isEditing)
+                        IconButton(
+                          tooltip: 'Delete',
+                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                          onPressed: () async {
+                            final ok = await confirmDestructive(context,
+                                title: 'Delete?', message: 'Delete "${widget.taskToEdit!.title}"?');
+                            if (!ok || !context.mounted) return;
+                            final task = widget.taskToEdit!;
+                            final provider = context.read<TimetableProvider>();
+                            final messenger = ScaffoldMessenger.of(context);
+                            Navigator.pop(context);
+                            await deleteTaskWithUndo(context, task, provider: provider, messenger: messenger);
+                          },
                         ),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          padding: EdgeInsets.zero,
-                          itemCount: filteredSubjects.length,
-                          itemBuilder: (ctx, i) => InkWell(
-                            onTap: () {
-                              _subjectController.text = filteredSubjects[i];
-                              setState(() => _showSubjectSuggestions = false);
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.history, size: 14, color: Colors.grey[400]),
-                                  const SizedBox(width: 10),
-                                  Text(filteredSubjects[i], style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontSize: 14)),
-                                ],
-                              ),
-                            ),
+                      IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(context)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                controller: scroll,
+                padding: EdgeInsets.fromLTRB(22, 6, 22, 24 + MediaQuery.of(context).viewInsets.bottom),
+                children: [
+                  TextField(
+                    controller: _title,
+                    autofocus: !isEditing,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: p.textPrimary),
+                    decoration: const InputDecoration(hintText: 'What is it?'),
+                  ),
+                  const SizedBox(height: 14),
+                  _label('Type'),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: taskTypes.map((t) {
+                      final sel = t == _type;
+                      return ChoiceChip(
+                        label: Text(t),
+                        selected: sel,
+                        showCheckmark: false,
+                        selectedColor: p.ink,
+                        backgroundColor: p.surfaceAlt,
+                        labelStyle: TextStyle(color: sel ? p.onInk : p.textPrimary, fontWeight: FontWeight.w600),
+                        onSelected: (_) => setState(() => _type = t),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  RawAutocomplete<String>(
+                    textEditingController: _subject,
+                    focusNode: _subjectFocus,
+                    optionsBuilder: (v) {
+                      final q = v.text.toLowerCase();
+                      return subjects.where((s) => s.toLowerCase().contains(q) && s.toLowerCase() != q);
+                    },
+                    fieldViewBuilder: (context, controller, focus, onSubmit) => TextField(
+                      controller: controller,
+                      focusNode: focus,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(labelText: 'Module / subject', prefixIcon: Icon(Icons.menu_book_rounded)),
+                    ),
+                    optionsViewBuilder: (context, onSelected, options) => Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 6,
+                        color: p.surface,
+                        borderRadius: BorderRadius.circular(18),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 220, maxWidth: 360),
+                          child: ListView(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            shrinkWrap: true,
+                            children: options
+                                .map((o) => ListTile(
+                                      dense: true,
+                                      leading: const Icon(Icons.history_rounded, size: 18),
+                                      title: Text(o),
+                                      onTap: () => onSelected(o),
+                                    ))
+                                .toList(),
                           ),
                         ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 15),
-                
-                DropdownButtonFormField<String>(
-                  value: ["Assignment", "Homework", "Test", "Exam", "Project", "Note", "Other"].contains(type) ? type : "Other",
-                  dropdownColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
-                  items: ["Assignment", "Homework", "Test", "Exam", "Project", "Note", "Other"].map((e) => DropdownMenuItem(value: e, child: Text(e, style: TextStyle(color: isDark ? Colors.white : Colors.black)))).toList(),
-                  onChanged: (v) => setState(() => type = v!),
-                  decoration: _buildInputDeco("Type", isDark),
-                ),
-                const SizedBox(height: 15),
-
-                // Room field (Exam/Test only)
-                if (_showRoomField) ...[
-                  TextFormField(
-                    initialValue: room,
-                    style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                    decoration: _buildInputDeco("Room (optional)", isDark).copyWith(
-                      prefixIcon: Icon(Icons.location_on_outlined, color: Colors.redAccent.withOpacity(0.7)),
-                      hintText: "e.g. NAC 2.12, LT1",
-                      hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400]),
                     ),
-                    onSaved: (v) => room = v ?? '',
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 18),
+                  _label('When'),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Spans several days'),
+                    subtitle: const Text('e.g. exam week, field trip, hackathon'),
+                    value: _multiDay,
+                    onChanged: (v) => setState(() {
+                      _multiDay = v;
+                      _startDate ??= _dueDate.subtract(const Duration(days: 1));
+                    }),
+                  ),
+                  Row(
+                    children: [
+                      if (_multiDay) ...[
+                        Expanded(
+                          child: _pickerBox(
+                            p,
+                            'Starts',
+                            DateFormat('EEE d MMM').format(_startDate ?? _dueDate),
+                            Icons.first_page_rounded,
+                            () async {
+                              final d = await _pickDate(_startDate ?? _dueDate);
+                              if (d != null) setState(() => _startDate = d);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: _pickerBox(
+                          p,
+                          _multiDay ? 'Ends' : 'Due',
+                          DateFormat('EEE d MMM').format(_dueDate),
+                          Icons.event_rounded,
+                          () async {
+                            final d = await _pickDate(_dueDate);
+                            if (d != null) setState(() => _dueDate = d);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _pickerBox(p, 'Time', _dueTime.format(context), Icons.schedule_rounded, () async {
+                          FocusScope.of(context).unfocus();
+                          final t = await showScrollTimePicker(context: context, initialTime: _dueTime);
+                          if (t != null) setState(() => _dueTime = t);
+                        }),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  _label('Colour on calendar'),
+                  SizedBox(
+                    height: 40,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        _colorDot(p, null),
+                        for (final c in AppColors.eventPalette) _colorDot(p, c.toARGB32()),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  _label('Board column'),
+                  PillSegmented<String>(
+                    values: TaskStatus.all,
+                    selected: _status,
+                    labelOf: TaskStatus.label,
+                    onChanged: (s) => setState(() => _status = s),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Text('Priority', style: TextStyle(color: p.textSecondary, fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      SegmentedButton<int>(
+                        showSelectedIcon: false,
+                        segments: const [
+                          ButtonSegment(value: 0, label: Text('Low')),
+                          ButtonSegment(value: 1, label: Text('Normal')),
+                          ButtonSegment(value: 2, label: Text('High')),
+                        ],
+                        selected: {_priority},
+                        onSelectionChanged: (s) => setState(() => _priority = s.first),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  _label('Online meeting'),
+                  TextField(
+                    controller: _link,
+                    keyboardType: TextInputType.url,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Paste a Google Meet / Teams / Zoom link',
+                      prefixIcon: const Icon(Icons.videocam_outlined),
+                      suffixIcon: MeetingLinks.isValid(_link.text)
+                          ? Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: TagPill(MeetingLinks.label(_link.text).replaceFirst('Join ', ''),
+                                  color: MeetingLinks.color(_link.text)),
+                            )
+                          : null,
+                    ),
+                  ),
+                  if (showRoom) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _room,
+                      decoration: const InputDecoration(labelText: 'Room / location', prefixIcon: Icon(Icons.location_on_outlined)),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _note,
+                    maxLines: 3,
+                    minLines: 2,
+                    decoration: const InputDecoration(labelText: 'Notes', alignLabelWithHint: true),
+                  ),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(_error!, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+                    ),
+                  const SizedBox(height: 22),
+                  InkPillButton(label: isEditing ? 'Save changes' : 'Add', icon: Icons.check_rounded, expand: true, onPressed: _save),
                 ],
-
-                // Note field
-                TextFormField(
-                  initialValue: note,
-                  maxLines: 2,
-                  style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 14),
-                  decoration: _buildInputDeco("Note (optional)", isDark).copyWith(
-                    prefixIcon: Padding(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      child: Icon(Icons.sticky_note_2_outlined, color: Colors.amber.withOpacity(0.7)),
-                    ),
-                    hintText: "Add a note...",
-                    hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400]),
-                  ),
-                  onSaved: (v) => note = v ?? '',
-                ),
-                const SizedBox(height: 15),
-                
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildDateButton(isDark, false, () async {
-                        final d = await showDatePicker(
-                          context: context, 
-                          initialDate: selectedDate, 
-                          firstDate: DateTime(2020), 
-                          lastDate: DateTime(2030),
-                          builder: (context, child) => Theme(
-                            data: isDark ? ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: Color(0xFF2962FF), onPrimary: Colors.white, surface: Color(0xFF1E1E1E), onSurface: Colors.white), dialogBackgroundColor: const Color(0xFF1E1E1E)) : ThemeData.light(),
-                            child: child!,
-                          )
-                        );
-                        if(d!=null) setState(() => selectedDate = d);
-                      })
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _buildDateButton(isDark, true, () async {
-                         final t = await showScrollTimePicker(
-                           context: context, 
-                           initialTime: selectedTime,
-                         );
-                         if(t!=null) setState(() => selectedTime = t);
-                      })
-                    )
-                  ],
-                ),
-                const SizedBox(height: 25),
-                
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      if (_formKey.currentState!.validate()) {
-                        _formKey.currentState!.save();
-                        final due = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, selectedTime.hour, selectedTime.minute);
-                        final description = _buildDescription();
-                        
-                        final provider = Provider.of<TimetableProvider>(context, listen: false);
-                        if (isEditing) {
-                          provider.updateTask(widget.taskToEdit!.id, title, subject, type, due, widget.taskToEdit!.isCompleted, description: description);
-                        } else {
-                          provider.addTask(title, subject, type, due, description: description);
-                        }
-                        Navigator.pop(context);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2962FF),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: 0
-                    ),
-                    child: Text(isEditing ? "Save Changes" : "Create Task", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  ),
-                )
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
-  
-  InputDecoration _buildInputDeco(String label, bool isDark) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[600]),
-      filled: true,
-      fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16)
+
+  Widget _label(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 8, left: 2),
+        child: Text(text.toUpperCase(),
+            style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w800, color: Palette.of(context).textMuted)),
+      );
+
+  Widget _pickerBox(Palette p, String label, String value, IconData icon, VoidCallback onTap) {
+    return SoftCard(
+      color: p.surfaceAlt,
+      radius: 18,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(icon, size: 13, color: p.textSecondary),
+            const SizedBox(width: 4),
+            Text(label, style: TextStyle(fontSize: 11, color: p.textSecondary, fontWeight: FontWeight.w600)),
+          ]),
+          const SizedBox(height: 3),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontWeight: FontWeight.w700, color: p.textPrimary)),
+        ],
+      ),
     );
   }
-  
-  Widget _buildDateButton(bool isDark, bool isTime, VoidCallback onTap) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(isTime ? Icons.access_time : Icons.calendar_today, color: isDark ? Colors.blue[200] : const Color(0xFF2962FF), size: 18),
-      label: Text(
-        isTime ? selectedTime.format(context) : DateFormat('MMM d').format(selectedDate),
-        style: TextStyle(color: isDark ? Colors.white : const Color(0xFF2962FF))
+
+  Widget _colorDot(Palette p, int? value) {
+    final selected = _color == value;
+    final c = value == null ? AppColors.forType(_type) : Color(value);
+    return GestureDetector(
+      onTap: () => setState(() => _color = value),
+      child: Container(
+        width: 36,
+        height: 36,
+        margin: const EdgeInsets.only(right: 8),
+        decoration: BoxDecoration(
+          color: c,
+          shape: BoxShape.circle,
+          border: Border.all(color: selected ? p.ink : Colors.transparent, width: 3),
+        ),
+        child: value == null
+            ? const Center(child: Text('A', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)))
+            : (selected ? const Icon(Icons.check, size: 18, color: Colors.white) : null),
       ),
-      style: OutlinedButton.styleFrom(
-        side: BorderSide(color: isDark ? Colors.white10 : Colors.grey[300]!),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-      )
     );
   }
 }

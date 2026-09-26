@@ -124,7 +124,7 @@ class _ScrollTimePickerSheetState extends State<_ScrollTimePickerSheet> {
                       height: 44,
                       margin: const EdgeInsets.symmetric(horizontal: 40),
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[100],
+                        color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey[100],
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: isDark ? Colors.white12 : Colors.grey[300]!),
                       ),
@@ -297,7 +297,7 @@ class _ScrollTimePickerSheetState extends State<_ScrollTimePickerSheet> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? accentBlue.withOpacity(0.15) : (isDark ? Colors.white.withOpacity(0.06) : Colors.grey[100]),
+          color: isActive ? accentBlue.withValues(alpha: 0.15) : (isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey[100]),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: isActive ? accentBlue : (isDark ? Colors.white12 : Colors.grey[300]!)),
         ),

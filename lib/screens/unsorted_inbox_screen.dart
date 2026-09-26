@@ -125,17 +125,17 @@ class UnsortedInboxScreen extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) {
+      builder: (sheetContext) {
         final timetable = Provider.of<TimetableProvider>(context, listen: false);
-        final modules = timetable.userSessions.map((s) => s.subject).toSet().toList();
+        final modules = {...timetable.userSessions.map((s) => s.subject), ...resourceProv.customFolders}.toList();
         modules.sort();
 
         return Container(
           decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
+            color: Theme.of(sheetContext).scaffoldBackgroundColor,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 24, left: 24, right: 24, top: 24),
+          padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24, left: 24, right: 24, top: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,7 +148,7 @@ class UnsortedInboxScreen extends StatelessWidget {
                 children: modules.map((m) => ActionChip(
                   label: Container(constraints: const BoxConstraints(maxWidth: 150), child: Text(m, maxLines: 1, overflow: TextOverflow.ellipsis)),
                   onPressed: () {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                     _showCategoryDialog(context, file, m, resourceProv);
                   },
                 )).toList(),
@@ -158,9 +158,20 @@ class UnsortedInboxScreen extends StatelessWidget {
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
                 title: const Text("Delete File", style: TextStyle(color: Colors.red)),
-                onTap: () {
-                  Navigator.pop(context);
-                  resourceProv.deleteResource(file.id);
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Delete file?'),
+                      content: Text('Delete "${file.fileName}"?'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+                      ],
+                    ),
+                  );
+                  if (ok == true) resourceProv.deleteResource(file.id);
                 },
               )
             ],
@@ -174,11 +185,12 @@ class UnsortedInboxScreen extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) {
-        final categories = ['Lectures', 'Tutorials', 'Past Papers', 'Assignments', 'General', 'Module Catalogue'];
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final categories = resourceProv.sectionsFor(moduleName);
         return Container(
           decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
+            color: Theme.of(sheetContext).scaffoldBackgroundColor,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: const EdgeInsets.all(24),
@@ -188,15 +200,15 @@ class UnsortedInboxScreen extends StatelessWidget {
             children: [
               Text("Category for $moduleName", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
-              ...categories.map((c) => ListTile(
+              Flexible(child: ListView(shrinkWrap: true, children: categories.map((c) => ListTile(
                 title: Text(c),
                 leading: const Icon(Icons.folder_open),
                 onTap: () {
-                  Navigator.pop(context);
+                  Navigator.pop(sheetContext);
                   resourceProv.moveResource(file.id, moduleName, c);
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Moved to $moduleName / $c")));
                 },
-              ))
+              )).toList())),
             ],
           ),
         );

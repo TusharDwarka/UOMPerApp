@@ -1,263 +1,367 @@
-import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:file_picker/file_picker.dart';
-import '../providers/resource_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:provider/provider.dart';
+
 import '../models/module_resource.dart';
+import '../providers/resource_provider.dart';
+import '../providers/timetable_provider.dart';
+import '../theme/app_theme.dart';
+import '../widgets/ui.dart';
+import 'resources_tab.dart' show fileIcon, fileIconColor;
 
-class ModuleResourcesScreen extends StatelessWidget {
+/// One folder (module or custom) split into user-editable sections.
+class ModuleResourcesScreen extends StatefulWidget {
   final String moduleName;
-
   const ModuleResourcesScreen({super.key, required this.moduleName});
 
   @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  State<ModuleResourcesScreen> createState() => _ModuleResourcesScreenState();
+}
 
-    return DefaultTabController(
-      length: 6,
-      child: Builder(
-        builder: (context) {
-          return Scaffold(
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-            appBar: AppBar(
-              title: Text(moduleName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
-              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-              elevation: 0,
-              iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
-              bottom: TabBar(
-                isScrollable: true,
-                labelColor: const Color(0xFF2962FF),
-                unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey,
-                indicatorColor: const Color(0xFF2962FF),
-                tabs: const [
-                  Tab(text: "Lectures"),
-                  Tab(text: "Tutorials"),
-                  Tab(text: "Past Papers"),
-                  Tab(text: "Assignments"),
-                  Tab(text: "General"),
-                  Tab(text: "Module Catalogue"),
+class _ModuleResourcesScreenState extends State<ModuleResourcesScreen> {
+  String? _section;
+
+  String get _folder => widget.moduleName;
+
+  Future<String?> _askName(String title, {String initial = ''}) async {
+    final controller = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(hintText: 'e.g. Labs, Revision, Group Project'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('Save')),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _addSection() async {
+    final name = await _askName('New section');
+    if (name == null || !mounted) return;
+    final ok = await context.read<ResourceProvider>().addSection(_folder, name);
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _section = name.trim());
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('That section already exists')));
+    }
+  }
+
+  void _sectionMenu(String section) {
+    if (section == ResourceProvider.fallbackSection) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('"General" is the default section and can\'t be removed')));
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SheetScaffold(
+        title: section,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_rounded),
+              title: const Text('Rename section'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final name = await _askName('Rename section', initial: section);
+                if (name == null || !mounted) return;
+                final ok = await context.read<ResourceProvider>().renameSection(_folder, section, name);
+                if (ok && mounted) setState(() => _section = name.trim());
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+              title: const Text('Delete section', style: TextStyle(color: Colors.redAccent)),
+              subtitle: const Text('Files move to General'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final ok = await confirmDestructive(context,
+                    title: 'Delete "$section"?', message: 'Its files will be moved to General.', action: 'Delete section');
+                if (!ok || !mounted) return;
+                await context.read<ResourceProvider>().deleteSection(_folder, section);
+                setState(() => _section = ResourceProvider.fallbackSection);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addFile(String section) async {
+    final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+    if (result == null || !mounted) return;
+    final prov = context.read<ResourceProvider>();
+    var added = 0;
+    for (final f in result.files) {
+      if (f.path == null) continue;
+      await prov.addResource(sourceFilePath: f.path!, fileName: f.name, moduleName: _folder, category: section, sourceApp: 'manual');
+      added++;
+    }
+    if (mounted && added > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added $added file${added == 1 ? '' : 's'} to $section')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final prov = context.watch<ResourceProvider>();
+    final sections = prov.sectionsFor(_folder);
+    final current = sections.contains(_section) ? _section! : sections.first;
+    final files = prov.getResourcesForModuleAndCategory(_folder, current);
+
+    return Scaffold(
+      backgroundColor: p.canvas,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _addFile(current),
+        icon: const Icon(Icons.upload_file_rounded),
+        label: Text('Add to $current', overflow: TextOverflow.ellipsis),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 16, 0),
+              child: Row(
+                children: [
+                  CircleIconButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => Navigator.pop(context)),
                 ],
               ),
             ),
-            body: TabBarView(
-              children: [
-                _CategoryList(moduleName: moduleName, category: "Lectures"),
-                _CategoryList(moduleName: moduleName, category: "Tutorials"),
-                _CategoryList(moduleName: moduleName, category: "Past Papers"),
-                _CategoryList(moduleName: moduleName, category: "Assignments"),
-                _CategoryList(moduleName: moduleName, category: "General"),
-                _CategoryList(moduleName: moduleName, category: "Module Catalogue"),
-              ],
+            ScreenHeader(
+              title: _folder,
+              eyebrow: '${prov.getResourcesForModule(_folder).length} files · ${sections.length} sections',
             ),
-            floatingActionButton: FloatingActionButton(
-              backgroundColor: const Color(0xFF2962FF),
-              foregroundColor: Colors.white,
-              onPressed: () async {
-                final tabController = DefaultTabController.of(context);
-                final categories = ['Lectures', 'Tutorials', 'Past Papers', 'Assignments', 'General', 'Module Catalogue'];
-                final currentCategory = categories[tabController.index];
-                
-                final result = await FilePicker.platform.pickFiles();
-                if (result != null && result.files.single.path != null) {
-                  final file = result.files.single;
-                  // Save to resource provider
-                  final resourceProv = Provider.of<ResourceProvider>(context, listen: false);
-                  await resourceProv.addResource(
-                    sourceFilePath: file.path!,
-                    fileName: file.name,
-                    moduleName: moduleName,
-                    category: currentCategory,
-                    sourceApp: 'manual',
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Added to $currentCategory")));
-                  }
-                }
-              },
-              child: const Icon(Icons.add),
+            SizedBox(
+              height: 48,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                children: [
+                  for (final s in sections)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onLongPress: () => _sectionMenu(s),
+                        child: ChoiceChip(
+                          showCheckmark: false,
+                          label: Text('$s  ${prov.getResourcesForModuleAndCategory(_folder, s).length}'),
+                          selected: s == current,
+                          selectedColor: p.ink,
+                          backgroundColor: p.surface,
+                          labelStyle: TextStyle(color: s == current ? p.onInk : p.textPrimary, fontWeight: FontWeight.w600),
+                          onSelected: (_) => setState(() => _section = s),
+                        ),
+                      ),
+                    ),
+                  ActionChip(
+                    avatar: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Section'),
+                    onPressed: _addSection,
+                  ),
+                ],
+              ),
             ),
-          );
-        },
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 2, 24, 6),
+              child: Row(
+                children: [
+                  Icon(Icons.touch_app_outlined, size: 13, color: p.textMuted),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text('Hold a section to rename or delete it', style: TextStyle(fontSize: 11, color: p.textMuted)),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: files.isEmpty
+                  ? EmptyState(icon: Icons.folder_open_rounded, title: 'No files in $current', subtitle: 'Tap "Add" or share files here from WhatsApp.')
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
+                      itemCount: files.length,
+                      itemBuilder: (context, i) => _FileRow(file: files[i], folder: _folder),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _CategoryList extends StatelessWidget {
-  final String moduleName;
-  final String category;
-
-  const _CategoryList({required this.moduleName, required this.category});
+class _FileRow extends StatelessWidget {
+  final ModuleResource file;
+  final String folder;
+  const _FileRow({required this.file, required this.folder});
 
   String _formatBytes(int bytes) {
-    if (bytes <= 0) return "0 B";
-    const suffixes = ["B", "KB", "MB", "GB"];
+    if (bytes <= 0) return '0 B';
+    const suffixes = ['B', 'KB', 'MB', 'GB'];
     var i = 0;
-    double d = bytes.toDouble();
+    var d = bytes.toDouble();
     while (d > 1024 && i < suffixes.length - 1) {
       d /= 1024;
       i++;
     }
-    return "${d.toStringAsFixed(1)} ${suffixes[i]}";
+    return '${d.toStringAsFixed(1)} ${suffixes[i]}';
   }
 
-  void _openFile(String path) async {
-    final result = await OpenFilex.open(path);
-    if (result.type != ResultType.done) {
-      debugPrint("Could not open file: ${result.message}");
+  Future<void> _open(BuildContext context) async {
+    final result = await OpenFilex.open(file.filePath);
+    if (result.type != ResultType.done && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open: ${result.message}')));
     }
   }
 
-  IconData _getFileIcon(String fileName) {
-    final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
-    switch (ext) {
-      case 'pdf': return Icons.picture_as_pdf;
-      case 'doc':
-      case 'docx': return Icons.description;
-      case 'xls':
-      case 'xlsx': return Icons.table_chart;
-      case 'ppt':
-      case 'pptx': return Icons.slideshow;
-      case 'txt': return Icons.article;
-      case 'png':
-      case 'jpg':
-      case 'jpeg': return Icons.image;
-      case 'zip':
-      case 'rar': return Icons.folder_zip;
-      default: return Icons.insert_drive_file;
+  Future<void> _move(BuildContext context) async {
+    final prov = context.read<ResourceProvider>();
+    final folders = {
+      ...prov.moduleNames,
+      ...context.read<TimetableProvider>().userSessions.map((s) => s.subject),
+      ...prov.customFolders,
+    }.toList()
+      ..sort();
+    var targetFolder = folder;
+    var targetSection = file.category;
+
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          final sections = prov.sectionsFor(targetFolder);
+          if (!sections.contains(targetSection)) targetSection = sections.first;
+          return SheetScaffold(
+            title: 'Move file',
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: targetFolder,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Folder'),
+                    items: folders.map((f) => DropdownMenuItem(value: f, child: Text(f, overflow: TextOverflow.ellipsis))).toList(),
+                    onChanged: (v) => setSheet(() => targetFolder = v ?? targetFolder),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final s in sections)
+                        ChoiceChip(label: Text(s), selected: targetSection == s, onSelected: (_) => setSheet(() => targetSection = s)),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  InkPillButton(label: 'Move', expand: true, onPressed: () => Navigator.pop(ctx, true)),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    if (ok == true) {
+      await prov.moveResource(file.id, targetFolder, targetSection);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Moved to $targetFolder / $targetSection')));
+      }
     }
   }
 
-  Color _getFileIconColor(String fileName) {
-    final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
-    switch (ext) {
-      case 'pdf': return Colors.redAccent;
-      case 'doc':
-      case 'docx': return Colors.blueAccent;
-      case 'xls':
-      case 'xlsx': return Colors.green;
-      case 'ppt':
-      case 'pptx': return Colors.orangeAccent;
-      case 'txt': return Colors.grey;
-      case 'png':
-      case 'jpg':
-      case 'jpeg': return Colors.purpleAccent;
-      case 'zip':
-      case 'rar': return Colors.brown;
-      default: return Colors.blueGrey;
+  Future<void> _rename(BuildContext context) async {
+    final controller = TextEditingController(text: file.fileName);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename file'),
+        content: TextField(controller: controller, autofocus: true),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: const Text('Rename')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name != null && name.isNotEmpty && name != file.fileName && context.mounted) {
+      await context.read<ResourceProvider>().renameResource(file.id, name);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Consumer<ResourceProvider>(
-      builder: (context, provider, child) {
-        final files = provider.getResourcesForModuleAndCategory(moduleName, category);
-
-        if (files.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.folder_open, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text("No files here yet", style: TextStyle(color: Colors.grey[500], fontSize: 16)),
-              ],
+    final p = Palette.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SoftCard(
+        radius: 22,
+        padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
+        onTap: () => _open(context),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: fileIconColor(file.fileName).withValues(alpha: 0.12), shape: BoxShape.circle),
+              child: Icon(fileIcon(file.fileName), color: fileIconColor(file.fileName)),
             ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: files.length,
-          itemBuilder: (context, index) {
-            final file = files[index];
-            return Dismissible(
-              key: Key('file_${file.id}'),
-              background: Container(
-                decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(12)),
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 20),
-                child: const Icon(Icons.delete, color: Colors.white),
-              ),
-              direction: DismissDirection.endToStart,
-              onDismissed: (_) {
-                provider.deleteResource(file.id);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("File deleted")));
-              },
-              child: Card(
-                elevation: 0,
-                color: isDark ? const Color(0xFF252525) : Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: isDark ? Colors.white10 : Colors.grey[200]!)
-                ),
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  onTap: () => _openFile(file.filePath),
-                  leading: Icon(_getFileIcon(file.fileName), color: _getFileIconColor(file.fileName), size: 32),
-                  title: Text(file.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
-                  subtitle: Row(
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(file.fileName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
+                  Row(
                     children: [
-                      Text(_formatBytes(file.fileSizeBytes), style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                      const SizedBox(width: 8),
-                      if (file.sourceApp == 'whatsapp')
-                        Icon(Icons.message, size: 12, color: Colors.green[400]),
+                      Text(_formatBytes(file.fileSizeBytes), style: TextStyle(fontSize: 12, color: p.textSecondary)),
+                      if (file.sourceApp == 'whatsapp') ...[
+                        const SizedBox(width: 6),
+                        Icon(Icons.chat_rounded, size: 12, color: Colors.green[400]),
+                      ],
                     ],
                   ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.more_vert),
-                    onPressed: () {
-                      _showFileOptions(context, file, provider);
-                    },
-                  ),
-                ),
+                ],
               ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showFileOptions(BuildContext context, ModuleResource file, ResourceProvider provider) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.drive_file_move_outline),
-                title: const Text("Move to another category"),
-                onTap: () {
-                  Navigator.pop(context);
-                  // TODO: implement move dialog
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text("Delete", style: TextStyle(color: Colors.red)),
-                onTap: () {
-                  Navigator.pop(context);
-                  provider.deleteResource(file.id);
-                },
-              ),
-            ],
-          ),
-        );
-      }
+            ),
+            PopupMenuButton<String>(
+              onSelected: (v) async {
+                switch (v) {
+                  case 'move':
+                    await _move(context);
+                  case 'rename':
+                    await _rename(context);
+                  case 'delete':
+                    final ok = await confirmDestructive(context, title: 'Delete file?', message: 'Delete "${file.fileName}" from this device?');
+                    if (ok && context.mounted) await context.read<ResourceProvider>().deleteResource(file.id);
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'move', child: Text('Move to…')),
+                PopupMenuItem(value: 'rename', child: Text('Rename')),
+                PopupMenuItem(value: 'delete', child: Text('Delete')),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

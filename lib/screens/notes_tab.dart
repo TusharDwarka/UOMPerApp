@@ -1,231 +1,185 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
-import '../providers/note_provider.dart';
-import '../models/note.dart';
 import 'dart:math';
 
-class NotesTab extends StatefulWidget {
-  const NotesTab({super.key});
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-  @override
-  State<NotesTab> createState() => _NotesTabState();
+import '../models/note.dart';
+import '../providers/note_provider.dart';
+import '../theme/app_theme.dart';
+import '../widgets/ui.dart';
+
+/// Pastel note colours (text on them stays dark in both themes).
+const noteColors = <Color>[
+  Color(0xFFFFF8E1),
+  Color(0xFFE3EBFF),
+  Color(0xFFF3E5F5),
+  Color(0xFFE8F5E9),
+  Color(0xFFFFEBEE),
+  Color(0xFFE0F7FA),
+  Color(0xFFFFF3E0),
+  Color(0xFFFCE4EC),
+];
+
+void showNoteEditor(BuildContext context, {Note? note}) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => NoteEditorSheet(note: note, colors: noteColors),
+  );
 }
 
-class _NotesTabState extends State<NotesTab> {
-  final ValueNotifier<String> _searchQueryNotifier = ValueNotifier("");
-  final TextEditingController _searchController = TextEditingController();
-  
-  // Creative Colors (Pastel / Soft Material)
-  final List<Color> _noteColors = [
-    const Color(0xFFFFF8E1), // Amber 50
-    const Color(0xFFE3F2FD), // Blue 50
-    const Color(0xFFF3E5F5), // Purple 50
-    const Color(0xFFE8F5E9), // Green 50
-    const Color(0xFFFFEBEE), // Red 50
-    const Color(0xFFE0F7FA), // Cyan 50
-    const Color(0xFFFFF3E0), // Orange 50
-    const Color(0xFFFCE4EC), // Pink 50
-  ];
+/// Notes grid, embedded in the Files & Notes page (it no longer brings its
+/// own Scaffold/AppBar, which caused the doubled header).
+class NotesView extends StatefulWidget {
+  const NotesView({super.key});
+
+  @override
+  State<NotesView> createState() => _NotesViewState();
+}
+
+class _NotesViewState extends State<NotesView> {
+  String _query = '';
+  String? _subject;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<NoteProvider>(context, listen: false).loadNotes();
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchQueryNotifier.dispose();
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  List<Note> _filterNotes(List<Note> notes, String query) {
-    if (query.isEmpty) return notes;
-    return notes.where((n) {
-      return n.title.toLowerCase().contains(query.toLowerCase()) ||
-             n.content.toLowerCase().contains(query.toLowerCase()) ||
-             n.subject.toLowerCase().contains(query.toLowerCase());
-    }).toList();
+    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<NoteProvider>().loadNotes());
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      resizeToAvoidBottomInset: false, 
-      appBar: AppBar(
-        title: Text("Creative Notes", style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 24)),
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.refresh, color: isDark ? Colors.white : Colors.black87),
-            onPressed: () => Provider.of<NoteProvider>(context, listen: false).loadNotes(),
-          )
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showNoteEditor(),
-        backgroundColor: isDark ? const Color(0xFF2962FF) : Colors.black,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text("New Note", style: TextStyle(color: Colors.white)),
-      ),
-      body: Column(
-        children: [
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: RepaintBoundary(
-              child: TextField(
-                controller: _searchController,
-                style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                decoration: InputDecoration(
-                  hintText: "Search notes, subjects...",
-                  hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                  prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey),
-                  filled: true,
-                  fillColor: isDark ? Colors.white10 : Colors.grey[100],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20)
-                ),
-                onChanged: (val) {
-                  _searchQueryNotifier.value = val; 
-                },
-              ),
+    final p = Palette.of(context);
+    final notes = context.watch<NoteProvider>().notes;
+    final subjects = notes.map((n) => n.subject).where((s) => s.isNotEmpty && s != 'General').toSet().toList()..sort();
+    final q = _query.toLowerCase();
+    final filtered = notes.where((n) {
+      if (_subject != null && n.subject != _subject) return false;
+      if (q.isEmpty) return true;
+      return n.title.toLowerCase().contains(q) || n.content.toLowerCase().contains(q) || n.subject.toLowerCase().contains(q);
+    }).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+          child: TextField(
+            decoration: const InputDecoration(hintText: 'Search notes…', prefixIcon: Icon(Icons.search_rounded)),
+            onChanged: (v) => setState(() => _query = v),
+          ),
+        ),
+        if (subjects.isNotEmpty)
+          SizedBox(
+            height: 42,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              children: [
+                for (final s in [null, ...subjects])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
+                      label: Text(s ?? 'All'),
+                      selected: _subject == s,
+                      showCheckmark: false,
+                      selectedColor: p.ink,
+                      labelStyle: TextStyle(color: _subject == s ? p.onInk : p.textPrimary, fontWeight: FontWeight.w600),
+                      onSelected: (_) => setState(() => _subject = s),
+                    ),
+                  ),
+              ],
             ),
           ),
-          
-          Expanded(
-            child: ValueListenableBuilder<String>(
-              valueListenable: _searchQueryNotifier,
-              builder: (context, query, _) {
-                return Consumer<NoteProvider>(
-                  builder: (context, noteProvider, _) {
-                    final filteredNotes = _filterNotes(noteProvider.notes, query);
-                    
-                    if (filteredNotes.isEmpty) {
-                      return Center(
-                        child: Text(
-                          "Empty Canvas", 
-                          style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[300], fontSize: 20, fontWeight: FontWeight.bold)
-                        )
-                      );
-                    }
-                    
-                    return _buildMasonryGrid(filteredNotes);
-                  },
-                );
-              }
+        Expanded(
+          child: filtered.isEmpty
+              ? EmptyState(
+                  icon: Icons.sticky_note_2_outlined,
+                  title: notes.isEmpty ? 'Empty canvas' : 'No matches',
+                  subtitle: notes.isEmpty ? 'Jot down ideas, formulas, lecture takeaways.' : null,
+                  action: notes.isEmpty
+                      ? InkPillButton(label: 'New note', icon: Icons.add, onPressed: () => showNoteEditor(context))
+                      : null,
+                )
+              : LayoutBuilder(builder: (context, c) {
+                  final cols = c.maxWidth > 900 ? 4 : (c.maxWidth > 600 ? 3 : 2);
+                  final columns = List.generate(cols, (_) => <Widget>[]);
+                  for (var i = 0; i < filtered.length; i++) {
+                    columns[i % cols].add(_NoteCard(note: filtered[i]));
+                  }
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var i = 0; i < cols; i++) ...[
+                          if (i > 0) const SizedBox(width: 12),
+                          Expanded(child: Column(children: columns[i])),
+                        ],
+                      ],
+                    ),
+                  );
+                }),
+        ),
+      ],
+    );
+  }
+}
+
+class _NoteCard extends StatelessWidget {
+  final Note note;
+  const _NoteCard({required this.note});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = noteColors[note.colorIndex % noteColors.length];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: color,
+        borderRadius: BorderRadius.circular(26),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(26),
+          onTap: () => showNoteEditor(context, note: note),
+          onLongPress: () => context.read<NoteProvider>().togglePin(note),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    if (note.subject.isNotEmpty && note.subject != 'General')
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(20)),
+                          child: Text(note.subject.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Colors.black87)),
+                        ),
+                      )
+                    else
+                      const Spacer(),
+                    if (note.isPinned == true) ...[
+                      const SizedBox(width: 6),
+                      const Icon(Icons.push_pin_rounded, size: 14, color: Colors.black54),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(note.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, height: 1.2, color: Colors.black)),
+                if (note.content.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(note.content, maxLines: 8, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 14, color: Colors.black.withValues(alpha: 0.7), height: 1.45)),
+                ],
+                const SizedBox(height: 10),
+                Text(DateFormat('d MMM').format(note.timestamp), style: TextStyle(fontSize: 11, color: Colors.black.withValues(alpha: 0.4))),
+              ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  // Simple Manual Masonry (2 columns)
-  Widget _buildMasonryGrid(List<Note> notes) {
-    final leftColumn = <Widget>[];
-    final rightColumn = <Widget>[];
-
-    for (var i = 0; i < notes.length; i++) {
-      final card = RepaintBoundary(
-        key: ValueKey('note_${notes[i].id}'),
-        child: _buildNoteCard(notes[i])
-      );
-      if (i % 2 == 0) {
-        leftColumn.add(card);
-      } else {
-        rightColumn.add(card);
-      }
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      physics: const BouncingScrollPhysics(),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: Column(children: leftColumn)),
-          const SizedBox(width: 16),
-          Expanded(child: Column(children: rightColumn)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNoteCard(Note note) {
-    // Keep pastel colors as they are meant to be 'creative' notes
-    // Text on these pastels should remain black
-    final color = _noteColors[note.colorIndex % _noteColors.length];
-    
-    return GestureDetector(
-      onTap: () => _showNoteEditor(note: note),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
-          ]
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (note.subject.isNotEmpty && note.subject != "General")
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(8)
-                ),
-                child: Text(
-                  note.subject.toUpperCase(), 
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1, color: Colors.black87),
-                ),
-              ),
-              
-            Text(
-              note.title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, height: 1.2, color: Colors.black),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              note.content,
-              maxLines: 8,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 14, color: Colors.black.withOpacity(0.7), height: 1.5),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              DateFormat('MMM d').format(note.timestamp),
-              style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.4)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showNoteEditor({Note? note}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-      builder: (context) => NoteEditorSheet(
-        note: note,
-        colors: _noteColors,
       ),
     );
   }
@@ -242,11 +196,12 @@ class NoteEditorSheet extends StatefulWidget {
 }
 
 class _NoteEditorSheetState extends State<NoteEditorSheet> {
-  late TextEditingController _titleController;
-  late TextEditingController _contentController;
-  late TextEditingController _subjectController;
+  late final TextEditingController _titleController;
+  late final TextEditingController _contentController;
+  late final TextEditingController _subjectController;
   late int _selectedColorIndex;
   late bool _isNew;
+  late bool _pinned;
 
   @override
   void initState() {
@@ -254,132 +209,137 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
     _isNew = widget.note == null;
     _titleController = TextEditingController(text: widget.note?.title ?? '');
     _contentController = TextEditingController(text: widget.note?.content ?? '');
-    _subjectController = TextEditingController(text: widget.note?.subject ?? 'General');
-    
-    if (widget.note != null) {
-      _selectedColorIndex = widget.note!.colorIndex;
-      if (_selectedColorIndex >= widget.colors.length) _selectedColorIndex = 0;
-    } else {
-      _selectedColorIndex = Random().nextInt(widget.colors.length);
+    _subjectController = TextEditingController(text: widget.note?.subject == 'General' ? '' : (widget.note?.subject ?? ''));
+    _pinned = widget.note?.isPinned ?? false;
+    _selectedColorIndex = widget.note != null
+        ? widget.note!.colorIndex % widget.colors.length
+        : Random().nextInt(widget.colors.length);
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _contentController.dispose();
+    _subjectController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final title = _titleController.text.trim();
+    final content = _contentController.text.trim();
+    if (title.isEmpty && content.isEmpty) {
+      Navigator.pop(context);
+      return;
     }
+    final provider = context.read<NoteProvider>();
+    final note = widget.note ?? Note(timestamp: DateTime.now());
+    note
+      ..title = title.isEmpty ? content.split('\n').first : title
+      ..content = content
+      ..subject = _subjectController.text.trim().isEmpty ? 'General' : _subjectController.text.trim()
+      ..colorIndex = _selectedColorIndex
+      ..isPinned = _pinned
+      ..timestamp = DateTime.now();
+    Navigator.pop(context);
+    await provider.updateNote(note);
+  }
+
+  Future<void> _delete() async {
+    final provider = context.read<NoteProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.pop(context);
+    final removed = await provider.deleteNote(widget.note!.id);
+    if (removed == null) return;
+    messenger.showSnackBar(SnackBar(
+      content: const Text('Note deleted'),
+      action: SnackBarAction(label: 'Undo', onPressed: () => provider.restoreNote(removed)),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
-    final noteProvider = Provider.of<NoteProvider>(context, listen: false);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = Palette.of(context);
+    final bg = widget.colors[_selectedColorIndex];
 
-    return AnimatedPadding(
-       duration: const Duration(milliseconds: 100),
-       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-        top: 20, left: 20, right: 20
-      ), 
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.85, 
-        child: Column(
-          children: [
-            // Header Actions
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(icon: Icon(Icons.close, color: isDark ? Colors.white : Colors.black), onPressed: () => Navigator.pop(context)),
-                if (!_isNew)
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.red), 
-                    onPressed: () async {
-                      await noteProvider.deleteNote(widget.note!.id);
-                      if (context.mounted) Navigator.pop(context);
-                    }
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.88,
+      decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, top: 10, left: 20, right: 12),
+      child: Column(
+        children: [
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(4))),
+          Row(
+            children: [
+              IconButton(icon: const Icon(Icons.close_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
+              const Spacer(),
+              IconButton(
+                tooltip: _pinned ? 'Unpin' : 'Pin',
+                icon: Icon(_pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, color: Colors.black87),
+                onPressed: () => setState(() => _pinned = !_pinned),
+              ),
+              if (!_isNew)
+                IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent), onPressed: _delete),
+              const SizedBox(width: 4),
+              Material(
+                color: Colors.black,
+                shape: const StadiumBorder(),
+                child: InkWell(
+                  customBorder: const StadiumBorder(),
+                  onTap: _save,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    child: Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                   ),
-                 IconButton(
-                   icon: const Icon(Icons.check, color: Colors.blue, size: 28),
-                   onPressed: () async {
-                     if (_titleController.text.isNotEmpty) {
-                       final newNote = Note(
-                         title: _titleController.text,
-                         content: _contentController.text,
-                         subject: _subjectController.text,
-                         colorIndex: _selectedColorIndex,
-                         timestamp: DateTime.now()
-                       );
-                       // Ensure ID is preserved for updates
-                       if (!_isNew) {
-                         newNote.id = widget.note!.id;
-                       }
-                       
-                       if (_isNew) {
-                         await noteProvider.addNote(newNote);
-                       } else {
-                         await noteProvider.updateNote(newNote);
-                       }
-                       
-                       if (context.mounted) Navigator.pop(context);
-                     }
-                   }
-                 )
-              ],
-            ),
-            
-            const SizedBox(height: 10),
-            
-            // Color Picker Strip - Const where possible
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: List.generate(widget.colors.length, (index) {
-                  final isSelected = _selectedColorIndex == index;
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                         _selectedColorIndex = index;
-                      });
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(
-                        color: widget.colors[index],
-                        shape: BoxShape.circle,
-                        border: isSelected ? Border.all(color: isDark ? Colors.white : Colors.black, width: 2) : Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!)
-                      ),
-                      child: isSelected ? const Icon(Icons.check, size: 16, color: Colors.black) : null,
-                    ),
-                  );
-                }),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Inputs
-            RepaintBoundary(
-              child: TextField(
-                controller: _titleController,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
-                decoration: InputDecoration.collapsed(hintText: "Title", hintStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[400])),
-              ),
-            ),
-            const SizedBox(height: 10),
-            RepaintBoundary(
-              child: TextField(
-                controller: _subjectController,
-                style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w600),
-                decoration: InputDecoration.collapsed(hintText: "Subject / Tag", hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[300])),
-              ),
-            ),
-            const Divider(height: 30),
-            Expanded(
-              child: RepaintBoundary(
-                child: TextField(
-                  controller: _contentController,
-                  maxLines: null,
-                  style: TextStyle(fontSize: 18, height: 1.5, color: isDark ? Colors.white : Colors.black),
-                  decoration: InputDecoration.collapsed(hintText: "Start writing...", hintStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[400])),
                 ),
               ),
-            )
-          ],
-        ),
+            ],
+          ),
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: List.generate(widget.colors.length, (index) {
+                final isSelected = _selectedColorIndex == index;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedColorIndex = index),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: widget.colors[index],
+                      shape: BoxShape.circle,
+                      border: Border.all(color: isSelected ? Colors.black : Colors.black12, width: isSelected ? 2 : 1),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _titleController,
+            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600, color: Colors.black),
+            decoration: const InputDecoration.collapsed(hintText: 'Title', hintStyle: TextStyle(color: Colors.black38), filled: false),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _subjectController,
+            style: const TextStyle(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w600),
+            decoration: const InputDecoration.collapsed(hintText: 'Module / tag', hintStyle: TextStyle(color: Colors.black26), filled: false),
+          ),
+          Divider(height: 26, color: p.isDark ? Colors.black26 : Colors.black12),
+          Expanded(
+            child: TextField(
+              controller: _contentController,
+              maxLines: null,
+              expands: true,
+              textAlignVertical: TextAlignVertical.top,
+              style: const TextStyle(fontSize: 17, height: 1.5, color: Colors.black),
+              decoration: const InputDecoration.collapsed(hintText: 'Start writing…', hintStyle: TextStyle(color: Colors.black38), filled: false),
+            ),
+          ),
+        ],
       ),
     );
   }

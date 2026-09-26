@@ -13,24 +13,29 @@ class AttendanceRecord {
   late DateTime date;
 
   // true = Present, false = Absent
-  late bool isPresent; 
+  late bool isPresent;
+
+  /// Stable cross-device id (Firestore document id).
+  @Index()
+  String? syncId;
+  DateTime? updatedAt;
+
+  AttendanceRecord();
 
   Map<String, dynamic> toJson() => {
-        'id': id,
+        'syncId': syncId,
         'subjectName': subjectName,
         'date': date.toIso8601String(),
         'isPresent': isPresent,
+        'updatedAt': updatedAt?.toIso8601String(),
       };
 
   factory AttendanceRecord.fromJson(Map<String, dynamic> json) {
-    final record = AttendanceRecord()
+    return AttendanceRecord()
       ..subjectName = json['subjectName'] ?? ''
       ..date = json['date'] != null ? DateTime.parse(json['date']) : DateTime.now()
-      ..isPresent = json['isPresent'] ?? false;
-      
-    if (json['id'] != null) {
-      record.id = json['id'];
-    }
-    return record;
+      ..isPresent = json['isPresent'] ?? false
+      ..syncId = json['syncId']
+      ..updatedAt = json['updatedAt'] != null ? DateTime.tryParse(json['updatedAt']) : null;
   }
 }

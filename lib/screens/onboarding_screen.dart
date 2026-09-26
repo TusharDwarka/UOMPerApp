@@ -7,7 +7,6 @@ import '../models/class_session.dart';
 import '../providers/timetable_provider.dart';
 import '../services/ai_service.dart';
 import '../widgets/add_edit_class_sheet.dart';
-import 'home_screen.dart';
 import '../services/notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -173,7 +172,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
       String msg = "Failed to process timetable. Please try again.";
       final eStr = e.toString().toLowerCase();
       
-      if (eStr.contains("quota") || eStr.contains("429") || eStr.contains("overloaded")) {
+      if (e is UnsupportedError) {
+        msg = e.message ?? "Timetable scanning is available on the phone app.";
+      } else if (eStr.contains("403") || eStr.contains("permission") || eStr.contains("has not been used") || eStr.contains("disabled")) {
+        msg = "AI scanning isn't switched on for this app yet (Firebase → AI Logic). You can add classes manually meanwhile.";
+      } else if (eStr.contains("quota") || eStr.contains("429") || eStr.contains("overloaded")) {
         msg = "The AI servers are currently busy or overloaded. Please try again in a minute.";
       } else if (eStr.contains("detect a valid timetable")) {
         msg = "We couldn't detect a valid timetable in this file. Please try a clearer picture.";
@@ -192,11 +195,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   Future<void> _saveAndFinish() async {
     if (_isSaving) return;
     setState(() => _isSaving = true);
-    print("DEBUG: _saveAndFinish started");
+    debugPrint("DEBUG: _saveAndFinish started");
     try {
       final provider = Provider.of<TimetableProvider>(context, listen: false);
       final courseName = _courseNameController.text.trim();
-      print("DEBUG: courseName = $courseName");
+      debugPrint("DEBUG: courseName = $courseName");
 
       // Build ClassSession list from selected parsed sessions
       final sessions = <ClassSession>[];
@@ -222,24 +225,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
         ));
       }
 
-      print("DEBUG: sessions built. Count = ${sessions.length}");
+      debugPrint("DEBUG: sessions built. Count = ${sessions.length}");
 
       // Save course name and semester dates
       await provider.setCourseName(courseName);
-      print("DEBUG: setCourseName completed");
+      debugPrint("DEBUG: setCourseName completed");
       await provider.setSemesterDates(_semesterStart, _semesterEnd);
-      print("DEBUG: setSemesterDates completed");
+      debugPrint("DEBUG: setSemesterDates completed");
       await provider.importAiSessions(sessions);
-      print("DEBUG: importAiSessions completed");
-      await provider.setSetupCompleted(true);
-      print("DEBUG: setSetupCompleted completed");
+      debugPrint("DEBUG: importAiSessions completed");
+      // Setup is marked complete in _finishSetup: flipping it here made the
+      // app jump to Home before the notification step could be shown.
 
       // Instead of going to home screen, go to notifications permission step
       if (mounted) {
         _goToStep(4);
       }
     } catch (e, stackTrace) {
-      print("DEBUG: _saveAndFinish ERROR: $e\n$stackTrace");
+      debugPrint("DEBUG: _saveAndFinish ERROR: $e\n$stackTrace");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error saving: $e', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.red),
@@ -296,7 +299,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               decoration: BoxDecoration(
                 color: index <= _currentStep
                     ? (isDark ? const Color(0xFF5C6BC0) : const Color(0xFF3949AB))
-                    : (isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
+                    : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -321,7 +324,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.1),
+              color: accentColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Icon(Icons.school_rounded, size: 40, color: accentColor),
@@ -349,7 +352,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               hintText: "e.g. BSc Data Science, Agriculture...",
               hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontWeight: FontWeight.normal),
               filled: true,
-              fillColor: isDark ? Colors.white.withOpacity(0.06) : Colors.white,
+              fillColor: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
               contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               prefixIcon: Padding(
@@ -386,7 +389,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
               decoration: BoxDecoration(
-                color: isDark ? Colors.white.withOpacity(0.06) : Colors.white,
+                color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
@@ -425,7 +428,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               decoration: BoxDecoration(
-                color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey[100],
+                color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey[100],
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
@@ -488,7 +491,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey[100],
+                    color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey[100],
                     shape: BoxShape.circle,
                   ),
                   child: Icon(Icons.arrow_back, size: 20, color: isDark ? Colors.white : Colors.black),
@@ -509,9 +512,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -584,8 +587,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.green.withOpacity(0.5), width: 2),
-                color: Colors.green.withOpacity(0.05),
+                border: Border.all(color: Colors.green.withValues(alpha: 0.5), width: 2),
+                color: Colors.green.withValues(alpha: 0.05),
               ),
               child: Row(
                 children: [
@@ -646,7 +649,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 16),
         decoration: BoxDecoration(
-          color: isDark ? Colors.white.withOpacity(0.06) : Colors.white,
+          color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: isDark ? Colors.white10 : Colors.grey[200]!),
         ),
@@ -655,7 +658,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: accentColor.withOpacity(0.1),
+                color: accentColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: accentColor, size: 28),
@@ -690,7 +693,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                   child: Container(
                     padding: const EdgeInsets.all(30),
                     decoration: BoxDecoration(
-                      color: accentColor.withOpacity(0.1 + (_pulseController.value * 0.05)),
+                      color: accentColor.withValues(alpha: 0.1 + (_pulseController.value * 0.05)),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(Icons.auto_awesome, size: 50, color: accentColor),
@@ -757,7 +760,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey[100],
+                    color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey[100],
                     shape: BoxShape.circle,
                   ),
                   child: Icon(Icons.arrow_back, size: 20, color: isDark ? Colors.white : Colors.black),
@@ -776,9 +779,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                 ),
                 child: Text(_parsedSessions.isEmpty ? "✎ Manual Mode" : "✓ Parsed", style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.bold, fontSize: 12)),
               ),
@@ -841,7 +844,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF8F9FE),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -4))],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, -4))],
           ),
           child: _buildContinueButton("Looks Good! Save ${selectedCount} classes", _saveAndFinish, isDark, isLoading: _isSaving),
         ),
@@ -871,8 +874,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isSelected
-              ? (isDark ? accent.withOpacity(0.12) : accent.withOpacity(0.08))
-              : (isDark ? Colors.white.withOpacity(0.03) : Colors.grey[100]),
+              ? (isDark ? accent.withValues(alpha: 0.12) : accent.withValues(alpha: 0.08))
+              : (isDark ? Colors.white.withValues(alpha: 0.03) : Colors.grey[100]),
           borderRadius: BorderRadius.circular(18),
           border: Border(left: BorderSide(color: isSelected ? accent : Colors.grey, width: 3)),
         ),
@@ -949,7 +952,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: Colors.orange.withOpacity(0.15), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.15), shape: BoxShape.circle),
             child: const Icon(Icons.notifications_active_rounded, size: 60, color: Colors.orange),
           ),
           const SizedBox(height: 40),
@@ -991,12 +994,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
       await prefs.setBool('class_reminders_enabled', false);
     }
 
-    if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (route) => false,
-      );
-    }
+    if (!mounted) return;
+    // SignedInGate (main.dart) swaps Onboarding for Home when this flips.
+    // Navigating here with pushAndRemoveUntil would also remove the auth
+    // listener, breaking sign-out and live sync.
+    final provider = Provider.of<TimetableProvider>(context, listen: false);
+    await provider.setSetupCompleted(true);
+    await provider.rescheduleReminders();
   }
 
   // --- Add / Edit Class Bottom Sheet ---

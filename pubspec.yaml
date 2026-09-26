@@ -32,10 +32,8 @@ dependencies:
   printing: ^5.12.0
   
   # AI & Adaptive Timetable
-  flutter_dotenv: ^5.1.0
   image_picker: ^1.0.7
   file_picker: ^8.1.2
-  google_generative_ai: ^0.4.3
   confetti: ^0.8.0
   receive_sharing_intent: ^1.8.1
   open_filex: ^4.7.0
@@ -44,6 +42,7 @@ dependencies:
   firebase_core: ^4.13.0
   firebase_auth: ^6.5.7
   cloud_firestore: ^6.8.0
+  firebase_ai: ^4.0.0
   
 dev_dependencies:
   flutter_test:
@@ -72,6 +71,5 @@ flutter_native_splash:
 flutter:
   uses-material-design: true
   assets:
-    - .env
     - assets/branding/
 
