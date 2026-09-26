@@ -504,3 +504,163 @@ class _ControllerHostState extends State<_ControllerHost> {
   @override
   Widget build(BuildContext context) => widget.builder(context, _controller);
 }
+
+/// Rounded option sheet used instead of dropdown menus (which rendered as
+/// square boxes). The selected option is a black pill with a tick.
+Future<T?> showChoiceSheet<T>(
+  BuildContext context, {
+  required String title,
+  required List<T> options,
+  required T? selected,
+  required String Function(T) labelOf,
+  String? Function(T)? subtitleOf,
+  IconData? Function(T)? iconOf,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) {
+      final p = Palette.of(ctx);
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.8),
+        child: SheetScaffold(
+          title: title,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final o in options)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Material(
+                    color: o == selected ? p.ink : p.surfaceAlt,
+                    borderRadius: BorderRadius.circular(22),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(22),
+                      onTap: () => Navigator.pop(ctx, o),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                        child: Row(
+                          children: [
+                            if (iconOf?.call(o) != null) ...[
+                              Icon(iconOf!(o), size: 20, color: o == selected ? p.onInk : p.textSecondary),
+                              const SizedBox(width: 12),
+                            ],
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(labelOf(o),
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w600, fontSize: 15, color: o == selected ? p.onInk : p.textPrimary)),
+                                  if (subtitleOf?.call(o) != null)
+                                    Text(subtitleOf!(o)!,
+                                        style: TextStyle(
+                                            fontSize: 12, color: (o == selected ? p.onInk : p.textSecondary).withValues(alpha: 0.75))),
+                                ],
+                              ),
+                            ),
+                            if (o == selected) Icon(Icons.check_rounded, color: p.onInk, size: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// Compact rounded "value ⌄" pill that opens [showChoiceSheet].
+class ChoicePill<T> extends StatelessWidget {
+  final String title;
+  final T value;
+  final List<T> options;
+  final String Function(T) labelOf;
+  final ValueChanged<T> onChanged;
+  final IconData? Function(T)? iconOf;
+
+  const ChoicePill({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.options,
+    required this.labelOf,
+    required this.onChanged,
+    this.iconOf,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Material(
+      color: p.surfaceAlt,
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: () async {
+          final picked = await showChoiceSheet<T>(context,
+              title: title, options: options, selected: value, labelOf: labelOf, iconOf: iconOf);
+          if (picked != null && picked != value) onChanged(picked);
+        },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(labelOf(value), maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: FontWeight.w700, color: p.textPrimary)),
+              ),
+              Icon(Icons.expand_more_rounded, size: 20, color: p.textSecondary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Mon–Sun selector: seven round day buttons, selected one is black.
+class WeekdayPicker extends StatelessWidget {
+  final String selected; // "Monday"…"Sunday"
+  final ValueChanged<String> onChanged;
+  const WeekdayPicker({super.key, required this.selected, required this.onChanged});
+
+  static const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Row(
+      children: [
+        for (final d in days)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Semantics(
+                button: true,
+                selected: d == selected,
+                label: d,
+                child: GestureDetector(
+                  onTap: () => onChanged(d),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: d == selected ? p.ink : p.surfaceAlt, shape: BoxShape.circle),
+                    child: Text(d.substring(0, 2),
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: d == selected ? p.onInk : p.textPrimary)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}

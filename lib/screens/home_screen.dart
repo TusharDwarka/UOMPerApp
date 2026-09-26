@@ -14,6 +14,7 @@ import 'academic_tab.dart';
 import 'bus_tab.dart';
 import 'dashboard_tab.dart';
 import 'focus_screen.dart';
+import 'notes_tab.dart';
 import 'groups_screen.dart';
 import 'resources_tab.dart';
 import 'schedule_tab.dart';
@@ -22,7 +23,7 @@ import 'todo_board_tab.dart';
 
 /// Page indices. Mobile shows the first five in the pill bar plus "More".
 class AppPage {
-  static const home = 0, schedule = 1, hub = 2, board = 3, bus = 4, files = 5, groups = 6, focus = 7, settings = 8;
+  static const home = 0, schedule = 1, hub = 2, board = 3, bus = 4, files = 5, notes = 6, groups = 7, focus = 8, settings = 9;
 }
 
 class NavDest {
@@ -38,6 +39,7 @@ const _destinations = <NavDest>[
   NavDest(Icons.view_kanban_rounded, 'Board'),
   NavDest(Icons.directions_bus_filled_rounded, 'Bus'),
   NavDest(Icons.folder_rounded, 'Files'),
+  NavDest(Icons.sticky_note_2_rounded, 'Notes'),
   NavDest(Icons.groups_rounded, 'Groups'),
   NavDest(Icons.timer_rounded, 'Focus'),
   NavDest(Icons.settings_rounded, 'Settings'),
@@ -76,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const TodoBoardTab(),
     const BusTab(),
     const ResourcesTab(),
+    const NotesScreen(),
     const GroupsScreen(),
     const FocusScreen(),
     const SettingsTab(),
@@ -238,7 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
           childAspectRatio: 1.9,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            for (final i in [AppPage.files, AppPage.groups, AppPage.focus, AppPage.settings])
+            for (final i in [AppPage.files, AppPage.notes, AppPage.groups, AppPage.focus, AppPage.settings])
               SoftCard(
                 color: i == _selectedIndex ? p.ink : p.surfaceAlt,
                 padding: const EdgeInsets.all(16),
@@ -274,6 +277,10 @@ class _HomeScreenState extends State<HomeScreen> {
       goTo: _onItemTapped,
       child: Scaffold(
         backgroundColor: p.canvas,
+        // Each tab has its own Scaffold that already makes room for the
+        // keyboard; resizing here too made screens jump and left fields
+        // hidden behind the keyboard.
+        resizeToAvoidBottomInset: false,
         body: wide
             ? Row(
                 children: [
@@ -299,7 +306,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               )
             : body,
-        bottomNavigationBar: wide
+        // Hide the nav while typing so it doesn't sit on top of the keyboard.
+        bottomNavigationBar: wide || MediaQuery.of(context).viewInsets.bottom > 0
             ? null
             : SafeArea(
                 top: false,

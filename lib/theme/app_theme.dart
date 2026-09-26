@@ -162,6 +162,77 @@ class AppTheme {
         side: BorderSide.none,
       ),
       dividerTheme: DividerThemeData(color: p.border, space: 1),
+      // Calendar pickers: black selected day, blue "today", rounded sheet.
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: p.surface,
+        surfaceTintColor: Colors.transparent,
+        headerBackgroundColor: p.canvas,
+        headerForegroundColor: p.textPrimary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+        dayShape: const WidgetStatePropertyAll(CircleBorder()),
+        dayBackgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.ink : null),
+        dayForegroundColor: WidgetStateProperty.resolveWith((s) {
+          if (s.contains(WidgetState.selected)) return p.onInk;
+          if (s.contains(WidgetState.disabled)) return p.textMuted;
+          return p.textPrimary;
+        }),
+        todayBackgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.ink : null),
+        todayForegroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.onInk : p.accent),
+        todayBorder: BorderSide(color: p.accent, width: 1.5),
+        yearBackgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.ink : null),
+        yearForegroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.onInk : p.textPrimary),
+        rangeSelectionBackgroundColor: p.accentSoft,
+        confirmButtonStyle: TextButton.styleFrom(foregroundColor: p.textPrimary, textStyle: const TextStyle(fontWeight: FontWeight.w700)),
+        cancelButtonStyle: TextButton.styleFrom(foregroundColor: p.textSecondary),
+      ),
+      timePickerTheme: TimePickerThemeData(
+        backgroundColor: p.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+        dialBackgroundColor: p.surfaceAlt,
+        dialHandColor: p.ink,
+        hourMinuteShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      // Menus: rounded, soft, never the old square boxes.
+      popupMenuTheme: PopupMenuThemeData(
+        color: p.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 8,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        textStyle: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w500),
+      ),
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(p.surface),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(22))),
+        ),
+      ),
+      dropdownMenuTheme: DropdownMenuThemeData(
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(p.surface),
+          shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(22))),
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.ink : p.surfaceAlt),
+          foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.onInk : p.textPrimary),
+          side: const WidgetStatePropertyAll(BorderSide.none),
+          shape: const WidgetStatePropertyAll(StadiumBorder()),
+        ),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        shape: const CircleBorder(),
+        fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.accent : null),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(backgroundColor: p.ink, foregroundColor: p.onInk, shape: const StadiumBorder()),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: p.textPrimary, textStyle: const TextStyle(fontWeight: FontWeight.w600)),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(color: p.accent),
+      sliderTheme: SliderThemeData(activeTrackColor: p.accent, thumbColor: p.ink, inactiveTrackColor: p.surfaceAlt),
     );
   }
 }

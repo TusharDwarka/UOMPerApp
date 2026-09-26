@@ -18,14 +18,14 @@
             android:layout_weight="1"
             android:layout_height="wrap_content"
             android:text="Upcoming Tasks"
-            android:textColor="#E0E0E0"
+            android:textColor="@color/widget_text_primary"
             android:textSize="14sp"
             android:textStyle="bold" />
         <ImageView
             android:layout_width="16dp"
             android:layout_height="16dp"
             android:src="@android:drawable/ic_menu_agenda"
-            android:tint="#2962FF" />
+            android:tint="@color/widget_accent" />
     </LinearLayout>
 
     <FrameLayout
@@ -33,7 +33,7 @@
         android:layout_height="1dp"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="12dp"
-        android:background="#33FFFFFF" />
+        android:background="@color/widget_divider" />
 
     <!-- Main Body: 70/30 Split -->
     <LinearLayout
@@ -58,7 +58,7 @@
             android:layout_height="match_parent"
             android:layout_marginLeft="8dp"
             android:layout_marginRight="8dp"
-            android:background="#33FFFFFF" />
+            android:background="@color/widget_divider" />
 
         <!-- Right Side: Mini Calendar (35%) -->
         <LinearLayout
@@ -72,7 +72,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="MONTH"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/widget_text_primary"
                 android:textSize="12sp"
                 android:textStyle="bold"
                 android:gravity="center"
@@ -84,13 +84,13 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:layout_marginBottom="4dp">
-                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="M" android:textSize="9sp" android:textColor="#B0BEC5" android:gravity="center"/>
-                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="T" android:textSize="9sp" android:textColor="#B0BEC5" android:gravity="center"/>
-                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="W" android:textSize="9sp" android:textColor="#B0BEC5" android:gravity="center"/>
-                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="T" android:textSize="9sp" android:textColor="#B0BEC5" android:gravity="center"/>
-                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="F" android:textSize="9sp" android:textColor="#B0BEC5" android:gravity="center"/>
-                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="S" android:textSize="9sp" android:textColor="#B0BEC5" android:gravity="center"/>
-                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="S" android:textSize="9sp" android:textColor="#FF5252" android:gravity="center"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="M" android:textSize="9sp" android:textColor="@color/widget_text_secondary" android:gravity="center"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="T" android:textSize="9sp" android:textColor="@color/widget_text_secondary" android:gravity="center"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="W" android:textSize="9sp" android:textColor="@color/widget_text_secondary" android:gravity="center"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="T" android:textSize="9sp" android:textColor="@color/widget_text_secondary" android:gravity="center"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="F" android:textSize="9sp" android:textColor="@color/widget_text_secondary" android:gravity="center"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="S" android:textSize="9sp" android:textColor="@color/widget_text_secondary" android:gravity="center"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="S" android:textSize="9sp" android:textColor="@color/widget_danger" android:gravity="center"/>
             </LinearLayout>
 
             <!-- Calendar Grid -->

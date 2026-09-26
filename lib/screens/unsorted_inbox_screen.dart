@@ -4,6 +4,7 @@ import 'package:open_filex/open_filex.dart';
 import '../providers/resource_provider.dart';
 import '../providers/timetable_provider.dart';
 import '../models/module_resource.dart';
+import 'pdf_viewer_screen.dart';
 
 class UnsortedInboxScreen extends StatelessWidget {
   const UnsortedInboxScreen({super.key});
@@ -98,7 +99,9 @@ class UnsortedInboxScreen extends StatelessWidget {
                 ),
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
-                  onTap: () => _openFile(file.filePath),
+                  onTap: () => PdfViewerScreen.isPdf(file.fileName)
+                      ? PdfViewerScreen.openFile(context, file.filePath, title: file.fileName)
+                      : _openFile(file.filePath),
                   leading: Icon(_getFileIcon(file.fileName), color: _getFileIconColor(file.fileName), size: 32),
                   title: Text(file.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
                   subtitle: Text("Added ${file.addedAt.day}/${file.addedAt.month}/${file.addedAt.year}", style: TextStyle(fontSize: 12, color: Colors.grey[500])),

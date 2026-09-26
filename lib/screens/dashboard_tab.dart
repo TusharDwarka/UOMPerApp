@@ -413,10 +413,8 @@ class _DashboardTabState extends State<DashboardTab> {
     }
 
     final s = next.session;
-    final stats = timetable.getAttendanceStats(s.subject);
-    final rate = ((stats['rate'] as double) * 100).round();
-    final presents = stats['presents'] as int;
-    final total = presents + (stats['absences'] as int);
+    // Open work for this module (replaces the old attendance %).
+    final openForModule = timetable.pendingTasks.where((t) => t.subject.toLowerCase() == s.subject.toLowerCase()).length;
 
     String status;
     if (next.inProgress) {
@@ -442,15 +440,12 @@ class _DashboardTabState extends State<DashboardTab> {
             children: [
               Flexible(child: TagPill(status, color: next.inProgress ? p.accent : p.textPrimary, outlined: true)),
               const Spacer(),
-              if (total > 0)
+              if (openForModule > 0)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('$rate%', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700, letterSpacing: -1, color: p.textPrimary)),
-                    Text.rich(TextSpan(children: [
-                      TextSpan(text: '$presents', style: TextStyle(fontWeight: FontWeight.w800, color: p.textPrimary)),
-                      TextSpan(text: ' / $total attended'),
-                    ]), style: TextStyle(fontSize: 11, color: p.textSecondary)),
+                    Text('$openForModule', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700, letterSpacing: -1, color: p.textPrimary)),
+                    Text(openForModule == 1 ? 'task due' : 'tasks due', style: TextStyle(fontSize: 11, color: p.textSecondary)),
                   ],
                 ),
             ],
@@ -578,23 +573,44 @@ class _DashboardTabState extends State<DashboardTab> {
           Row(
             children: [
               const Icon(Icons.north_east_rounded, size: 18),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text('Weekly focus', maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
-              ),
-              const SizedBox(width: 8),
-              if (wow != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(8)),
-                  child: Text('${wow >= 0 ? '+' : ''}$wow%', style: TextStyle(color: p.onInk, fontSize: 12, fontWeight: FontWeight.w700)),
-                ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(total == 0 ? 'Start a session →' : '${total ~/ 60}h ${total % 60}m',
-                    textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: p.textSecondary, fontWeight: FontWeight.w600)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Weekly focus', style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
+                    Text(total == 0 ? 'No sessions yet this week' : '${total ~/ 60}h ${total % 60}m this week',
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: p.textSecondary)),
+                  ],
+                ),
+              ),
+              if (wow != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: p.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+                  child: Text('${wow >= 0 ? '+' : ''}$wow%',
+                      style: TextStyle(color: p.textPrimary, fontSize: 12, fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Material(
+                color: p.ink,
+                shape: const StadiumBorder(),
+                child: InkWell(
+                  customBorder: const StadiumBorder(),
+                  onTap: () => HomeNavigation.of(context, AppPage.focus),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 9, 14, 9),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.play_arrow_rounded, size: 18, color: p.onInk),
+                        const SizedBox(width: 4),
+                        Text('Focus', style: TextStyle(color: p.onInk, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ],
           ),

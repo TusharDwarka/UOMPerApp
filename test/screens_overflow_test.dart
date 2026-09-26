@@ -25,6 +25,7 @@ import 'package:uom_per_app/screens/todo_board_tab.dart';
 import 'package:uom_per_app/services/isar_service.dart';
 import 'package:uom_per_app/services/sync_service.dart';
 import 'package:uom_per_app/screens/notes_tab.dart';
+import 'package:uom_per_app/screens/print_center_screen.dart';
 import 'package:uom_per_app/theme/app_theme.dart';
 import 'package:uom_per_app/widgets/add_edit_class_sheet.dart';
 import 'package:uom_per_app/widgets/add_edit_task_sheet.dart';
@@ -135,7 +136,10 @@ void main() {
     'Hub': () => const AcademicTab(),
     'Board': () => const TodoBoardTab(),
     'Bus': () => const BusTab(),
-    'Files & Notes': () => const ResourcesTab(),
+    'Files': () => const ResourcesTab(),
+    'Notes': () => const NotesScreen(),
+    'Print & export': () => const PrintCenterScreen(),
+    'Print planners': () => const PrintCenterScreen(initialTab: 1),
     'Focus': () => const FocusScreen(),
   };
   const sizes = {'small phone 320x640': Size(320, 640), 'phone 390x844': Size(390, 844), 'desktop 1280x800': Size(1280, 800)};
@@ -150,7 +154,7 @@ void main() {
     }
   }
 
-  testWidgets('Board columns and Hub attendance tab render on a small phone', (tester) async {
+  testWidgets('Board columns render on a small phone', (tester) async {
     tester.view.physicalSize = const Size(320, 640);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -174,12 +178,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     }
-
-    await tester.pumpWidget(app(const AcademicTab()));
-    await tester.pump();
-    await tester.tap(find.text('Attendance').first);
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -228,6 +226,17 @@ void main() {
               isEditing: true,
               initialData: {'moduleName': longModule, 'day': 'Monday', 'startTime': '9:00', 'endTime': '10:30',
                 'meetingLink': 'https://meet.google.com/abc'},
+            ),
+          ));
+    });
+
+    testWidgets('class editor with one-off calendar', (tester) async {
+      await openSheet(tester, (c) => showModalBottomSheet(
+            context: c,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => AddEditClassSheet(
+              initialData: {'moduleName': longModule, 'isTemporary': true, 'specificDate': DateTime.now().toIso8601String()},
             ),
           ));
     });

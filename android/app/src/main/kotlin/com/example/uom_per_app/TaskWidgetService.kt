@@ -70,13 +70,15 @@ class TaskWidgetFactory(private val context: Context) : RemoteViewsService.Remot
                 }
             } catch (e: Exception) {}
 
-            val colorHex = when (type) {
-                "Exam" -> android.graphics.Color.parseColor("#FF5252") // Red
-                "Test" -> android.graphics.Color.parseColor("#FF9800") // Orange
-                "Assignment" -> android.graphics.Color.parseColor("#2196F3") // Blue
-                "Homework" -> android.graphics.Color.parseColor("#4CAF50") // Green
-                "Project" -> android.graphics.Color.parseColor("#9C27B0") // Purple
-                else -> android.graphics.Color.parseColor("#9E9E9E") // Grey
+            // A colour the user picked in the app wins over the type colour.
+            val customColor = if (item.has("color")) item.optLong("color", 0L).toInt() else 0
+            val colorHex = if (customColor != 0) customColor else when (type) {
+                "Exam" -> android.graphics.Color.parseColor("#FF1744") // matches app palette
+                "Test" -> android.graphics.Color.parseColor("#FF6D00")
+                "Assignment" -> android.graphics.Color.parseColor("#2962FF")
+                "Homework" -> android.graphics.Color.parseColor("#00BFA5")
+                "Project" -> android.graphics.Color.parseColor("#7C4DFF")
+                else -> android.graphics.Color.parseColor("#546E7A")
             }
 
             // Set the vertical color bar
@@ -85,7 +87,7 @@ class TaskWidgetFactory(private val context: Context) : RemoteViewsService.Remot
             // Highlight urgent titles
             if (isUrgent) {
                 rv.setTextViewText(R.id.item_task_title, "⚠️ $title")
-                rv.setTextColor(R.id.item_task_title, android.graphics.Color.parseColor("#FF5252")) // Red text
+                rv.setTextColor(R.id.item_task_title, android.graphics.Color.parseColor("#FF5A5F")) // overdue
             } else {
                 rv.setTextViewText(R.id.item_task_title, title)
                 rv.setTextColor(R.id.item_task_title, android.graphics.Color.parseColor("#FFFFFF")) // White text

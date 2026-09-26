@@ -9,6 +9,7 @@ import '../providers/timetable_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ui.dart';
 import 'resources_tab.dart' show fileIcon, fileIconColor;
+import 'pdf_viewer_screen.dart';
 
 /// One folder (module or custom) split into user-editable sections.
 class ModuleResourcesScreen extends StatefulWidget {
@@ -220,6 +221,10 @@ class _FileRow extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) async {
+    if (PdfViewerScreen.isPdf(file.fileName)) {
+      await PdfViewerScreen.openFile(context, file.filePath, title: file.fileName);
+      return;
+    }
     final result = await OpenFilex.open(file.filePath);
     if (result.type != ResultType.done && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open: ${result.message}')));
@@ -252,12 +257,21 @@ class _FileRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: targetFolder,
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Folder'),
-                    items: folders.map((f) => DropdownMenuItem(value: f, child: Text(f, overflow: TextOverflow.ellipsis))).toList(),
-                    onChanged: (v) => setSheet(() => targetFolder = v ?? targetFolder),
+                  Row(
+                    children: [
+                      const Text('Folder', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: ChoicePill<String>(
+                          title: 'Move to folder',
+                          value: targetFolder,
+                          options: folders.contains(targetFolder) ? folders : [targetFolder, ...folders],
+                          labelOf: (f) => f,
+                          iconOf: (_) => Icons.folder_rounded,
+                          onChanged: (v) => setSheet(() => targetFolder = v),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   Wrap(

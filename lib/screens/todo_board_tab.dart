@@ -2,17 +2,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import '../models/academic_task.dart';
+import '../providers/focus_provider.dart';
 import '../providers/timetable_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/meeting_links.dart';
 import '../utils/time_utils.dart';
 import '../widgets/add_edit_task_sheet.dart';
 import '../widgets/ui.dart';
+import 'home_screen.dart' show HomeNavigation, AppPage;
+import 'print_center_screen.dart';
 
 /// Kanban board: To Do → In Progress → Done.
 ///
@@ -129,6 +128,18 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                     _move(t, s);
                   },
                 ),
+            if (t.effectiveStatus != TaskStatus.done && t.syncId != null)
+              ListTile(
+                leading: const Icon(Icons.timer_outlined),
+                title: const Text('Focus on this'),
+                subtitle: const Text('Start a focus session linked to this task'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.read<FocusProvider>().setTask(t.syncId, t.title, subject: t.subject);
+                  if (t.effectiveStatus == TaskStatus.todo) _move(t, TaskStatus.doing);
+                  HomeNavigation.of(context, AppPage.focus);
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.edit_rounded),
               title: const Text('Edit'),
@@ -181,7 +192,11 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
               badge: CountBadge(openCount),
               eyebrow: 'Your to-dos, deadlines & exams',
               actions: [
-                CircleIconButton(icon: Icons.ios_share_rounded, tooltip: 'Share / print', onPressed: _showPrintMenu),
+                CircleIconButton(
+                  icon: Icons.print_rounded,
+                  tooltip: 'Print & export',
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrintCenterScreen())),
+                ),
                 CircleIconButton(
                   icon: Icons.add_rounded,
                   filled: true,
@@ -439,479 +454,6 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
       },
     );
   }
-
-  // ═══════════════════════════════════════════
-  // SHARE / PRINT (unchanged export logic)
-  // ═══════════════════════════════════════════
-  void _showPrintMenu() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.3,
-          maxChildSize: 0.85,
-          expand: false,
-          builder: (_, scrollController) {
-            return SingleChildScrollView(
-              controller: scrollController,
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(child: Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 16), decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(4)))),
-                  Text("Share / Print Tasks", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
-                  const SizedBox(height: 6),
-                  Text("Choose format and filter", style: TextStyle(fontSize: 13, color: Colors.grey[500])),
-                  const SizedBox(height: 20),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.blue.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: isDark ? Colors.white10 : Colors.blue.withValues(alpha: 0.1)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [
-                          Icon(Icons.picture_as_pdf, color: Colors.red[400], size: 18),
-                          const SizedBox(width: 8),
-                          Text("PDF (Print-Ready)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white70 : Colors.black87)),
-                        ]),
-                        const SizedBox(height: 12),
-                        _buildPrintOption(ctx, Icons.select_all, "All Tasks", null, isDark, isPdf: true),
-                        _buildPrintOption(ctx, Icons.local_fire_department, "Exams & Tests", (t) => t.type == 'Exam' || t.type == 'Test', isDark, isPdf: true),
-                        _buildPrintOption(ctx, Icons.assignment, "Assignments", (t) => t.type == 'Assignment', isDark, isPdf: true),
-                        _buildPrintOption(ctx, Icons.pending_actions, "Pending Only", (t) => !t.isCompleted, isDark, isPdf: true),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.green.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: isDark ? Colors.white10 : Colors.green.withValues(alpha: 0.1)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [
-                          Icon(Icons.text_snippet, color: Colors.green[400], size: 18),
-                          const SizedBox(width: 8),
-                          Flexible(child: Text("Text (Share via WhatsApp, etc.)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white70 : Colors.black87))),
-                        ]),
-                        const SizedBox(height: 12),
-                        _buildPrintOption(ctx, Icons.select_all, "All Tasks", null, isDark, isPdf: false),
-                        _buildPrintOption(ctx, Icons.local_fire_department, "Exams & Tests", (t) => t.type == 'Exam' || t.type == 'Test', isDark, isPdf: false),
-                        _buildPrintOption(ctx, Icons.pending_actions, "Pending Only", (t) => !t.isCompleted, isDark, isPdf: false),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                ],
-              ),
-            );
-          },
-        );
-      }
-    );
-  }
-
-  Widget _buildPrintOption(BuildContext ctx, IconData icon, String label, bool Function(AcademicTask)? filter, bool isDark, {required bool isPdf}) {
-    return InkWell(
-      onTap: () {
-        Navigator.pop(ctx);
-        if (isPdf) {
-          _generatePdf(filter, label);
-        } else {
-          _shareTasks(filter, label);
-        }
-      },
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 10),
-        margin: const EdgeInsets.only(bottom: 4),
-        decoration: BoxDecoration(
-          color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.grey[50],
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: isDark ? Colors.blueAccent : Colors.indigo, size: 18),
-            const SizedBox(width: 12),
-            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
-            const Spacer(),
-            Icon(isPdf ? Icons.print : Icons.share, size: 16, color: Colors.grey[400]),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════
-  // TEXT SHARE
-  // ═══════════════════════════════════════════
-  void _shareTasks(bool Function(AcademicTask)? filter, String label) {
-    final timetable = Provider.of<TimetableProvider>(context, listen: false);
-    var tasks = timetable.tasks.toList();
-    if (filter != null) tasks = tasks.where(filter).toList();
-    
-    if (tasks.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No tasks to share!")));
-      return;
-    }
-
-    tasks.sort((a, b) {
-      if (a.type == 'Exam' && b.type != 'Exam') return -1;
-      if (b.type == 'Exam' && a.type != 'Exam') return 1;
-      return a.dueDate.compareTo(b.dueDate);
-    });
-
-    final buffer = StringBuffer();
-    buffer.writeln("📋 UOMPer — $label");
-    buffer.writeln("━" * 30);
-    buffer.writeln();
-
-    String? lastType;
-    for (final t in tasks) {
-      if (t.type != lastType) {
-        lastType = t.type;
-        String emoji;
-        switch(t.type) {
-          case 'Exam': emoji = '🔴'; break;
-          case 'Test': emoji = '🟠'; break;
-          case 'Assignment': emoji = '🔵'; break;
-          case 'Homework': emoji = '📗'; break;
-          case 'Project': emoji = '🟣'; break;
-          default: emoji = '⚪';
-        }
-        buffer.writeln("$emoji ${t.type.toUpperCase()}S");
-        buffer.writeln("─" * 20);
-      }
-      final status = t.isCompleted ? "✅" : "⬜";
-      final date = DateFormat('MMM d, h:mm a').format(t.dueDate);
-      buffer.writeln("$status ${t.title}");
-      buffer.writeln("   📚 ${t.subject} • 📅 $date");
-      if (t.description.isNotEmpty) {
-        final parts = t.description.split('\n---ROOM---\n');
-        if (parts[0].isNotEmpty) buffer.writeln("   📝 ${parts[0]}");
-        if (parts.length > 1 && parts[1].isNotEmpty) buffer.writeln("   📍 Room: ${parts[1]}");
-      }
-      buffer.writeln();
-    }
-    
-    buffer.writeln("━" * 30);
-    buffer.writeln("Shared from UOMPer App");
-    
-    Share.share(buffer.toString(), subject: "UOMPer — $label");
-  }
-
-  // ═══════════════════════════════════════════
-  // PDF GENERATION
-  // ═══════════════════════════════════════════
-  Future<void> _generatePdf(bool Function(AcademicTask)? filter, String label) async {
-    final timetable = Provider.of<TimetableProvider>(context, listen: false);
-    var tasks = timetable.tasks.toList();
-    if (filter != null) tasks = tasks.where(filter).toList();
-    
-    if (tasks.isEmpty) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No tasks to print!")));
-      return;
-    }
-
-    // Sort: high stakes first, then by date
-    tasks.sort((a, b) {
-      const priority = {'Exam': 0, 'Test': 1, 'Assignment': 2, 'Homework': 3, 'Project': 4, 'Other': 5};
-      final pa = priority[a.type] ?? 5;
-      final pb = priority[b.type] ?? 5;
-      if (pa != pb) return pa.compareTo(pb);
-      return a.dueDate.compareTo(b.dueDate);
-    });
-
-    // Helper: Sanitize string to remove unsupported characters (emojis, etc.) for PDF
-    String sanitize(String input) {
-      // The built-in PDF fonts cover Latin-1 (so "é" is fine). Map common
-      // typographic characters to plain ones; intl's time formats use a
-      // narrow no-break space (U+202F) before AM/PM.
-      final mapped = input
-          .replaceAll(RegExp('[   ]'), ' ')
-          .replaceAll(RegExp('[‘’]'), "'")
-          .replaceAll(RegExp('[“”]'), '"')
-          .replaceAll(RegExp('[–—]'), '-')
-          .replaceAll('→', '->');
-      return mapped.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\n\r\t]'), '?');
-    }
-    
-    final pdf = pw.Document();
-    final now = DateFormat('MMMM d, yyyy').format(DateTime.now());
-
-    // Helper: blend a PdfColor towards white (lighten)
-    PdfColor lighten(PdfColor c, double amount) {
-      return PdfColor(c.red + (1.0 - c.red) * amount, c.green + (1.0 - c.green) * amount, c.blue + (1.0 - c.blue) * amount);
-    }
-
-    // Color mapping for PDF
-    PdfColor typeColor(String type) {
-      switch(type) {
-        case 'Exam': return PdfColors.red;
-        case 'Test': return PdfColors.orange;
-        case 'Assignment': return PdfColors.indigo;
-        case 'Homework': return PdfColors.teal;
-        case 'Project': return PdfColors.purple;
-        default: return PdfColors.blueGrey;
-      }
-    }
-
-    PdfColor typeBg(String type) {
-      return lighten(typeColor(type), 0.9);
-    }
-
-    // Count by type
-    final examCount = tasks.where((t) => t.type == 'Exam' || t.type == 'Test').length;
-    final assignCount = tasks.where((t) => t.type == 'Assignment').length;
-    final hwCount = tasks.where((t) => t.type == 'Homework').length;
-    final doneCount = tasks.where((t) => t.isCompleted).length;
-    final pendingCount = tasks.where((t) => !t.isCompleted).length;
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(40),
-        header: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text("UOMPer", style: pw.TextStyle(fontSize: 28, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo)),
-                    pw.SizedBox(height: 4),
-                    pw.Text(label, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700)),
-                  ],
-                ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text(now, style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey600)),
-                    pw.SizedBox(height: 2),
-                    pw.Text("${tasks.length} tasks total", style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey500)),
-                  ],
-                )
-              ],
-            ),
-            pw.SizedBox(height: 12),
-            // Stats bar
-            pw.Row(
-              children: [
-                _buildPdfStat("Exams/Tests", "$examCount", PdfColors.red),
-                pw.SizedBox(width: 8),
-                _buildPdfStat("Assignments", "$assignCount", PdfColors.indigo),
-                pw.SizedBox(width: 8),
-                _buildPdfStat("Homework", "$hwCount", PdfColors.teal),
-                pw.SizedBox(width: 8),
-                _buildPdfStat("Pending", "$pendingCount", PdfColors.orange),
-                pw.SizedBox(width: 8),
-                _buildPdfStat("Done", "$doneCount", PdfColors.green),
-              ],
-            ),
-            pw.SizedBox(height: 16),
-            pw.Container(height: 2, color: PdfColors.indigo),
-            pw.SizedBox(height: 16),
-          ],
-        ),
-        footer: (context) => pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children: [
-            pw.Text("Generated by UOMPer App", style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey500)),
-            pw.Text("Page ${context.pageNumber} of ${context.pagesCount}", style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey500)),
-          ],
-        ),
-        build: (context) {
-          final widgets = <pw.Widget>[];
-          String? lastType;
-
-          for (final task in tasks) {
-            // Section Header when type changes
-            if (task.type != lastType) {
-              lastType = task.type;
-              if (widgets.isNotEmpty) widgets.add(pw.SizedBox(height: 16));
-              
-              widgets.add(
-                pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: pw.BoxDecoration(
-                    color: typeColor(task.type),
-                    borderRadius: pw.BorderRadius.circular(6),
-                  ),
-                  child: pw.Row(
-                    mainAxisSize: pw.MainAxisSize.min,
-                    children: [
-                      pw.Text(
-                        "${task.type.toUpperCase()}S",
-                        style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-              widgets.add(pw.SizedBox(height: 8));
-            }
-
-            // Parse note & room
-            String note = '';
-            String room = '';
-            if (task.description.isNotEmpty) {
-              final parts = task.description.split('\n---ROOM---\n');
-              note = sanitize(parts[0]);
-              if (parts.length > 1) room = sanitize(parts[1]);
-            }
-            final displayTitle = sanitize(task.title);
-            final displaySubject = sanitize(task.subject);
-
-            final now = DateTime.now();
-            final today = DateTime(now.year, now.month, now.day);
-            final taskDate = DateTime(task.dueDate.year, task.dueDate.month, task.dueDate.day);
-            final daysUntil = taskDate.difference(today).inDays;
-            String urgency = '';
-            PdfColor urgencyColor = PdfColors.grey;
-            if (!task.isCompleted && daysUntil < 0) {
-              urgency = 'OVERDUE';
-              urgencyColor = PdfColors.red;
-            } else if (!task.isCompleted && daysUntil == 0) {
-              urgency = 'TODAY';
-              urgencyColor = PdfColors.red;
-            } else if (!task.isCompleted && daysUntil == 1) {
-              urgency = 'TOMORROW';
-              urgencyColor = PdfColors.orange;
-            } else if (!task.isCompleted && daysUntil <= 3) {
-              urgency = '${daysUntil}d LEFT';
-              urgencyColor = PdfColors.amber;
-            }
-
-            // Task Card
-            widgets.add(
-              pw.Container(
-                margin: const pw.EdgeInsets.only(bottom: 6),
-                padding: const pw.EdgeInsets.all(12),
-                decoration: pw.BoxDecoration(
-                  color: task.isCompleted ? PdfColor.fromHex('#F0F0F0') : typeBg(task.type),
-                  // borderRadius: pw.BorderRadius.circular(8), // REMOVED: Cannot mix borderRadius with non-uniform Border
-                  border: pw.Border(
-                    left: pw.BorderSide(color: typeColor(task.type), width: 3),
-                  ),
-                ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                      children: [
-                        pw.Expanded(
-                          child: pw.Text(
-                            displayTitle,
-                            style: pw.TextStyle(
-                              fontSize: 13,
-                              fontWeight: pw.FontWeight.bold,
-                              color: task.isCompleted ? PdfColors.grey : PdfColors.black,
-                              decoration: task.isCompleted ? pw.TextDecoration.lineThrough : null,
-                            ),
-                          ),
-                        ),
-                        if (task.isCompleted)
-                          pw.Container(
-                            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: pw.BoxDecoration(color: PdfColors.green, borderRadius: pw.BorderRadius.circular(4)),
-                            child: pw.Text("DONE", style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
-                          ),
-                        if (!task.isCompleted && urgency.isNotEmpty)
-                          pw.Container(
-                            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: pw.BoxDecoration(color: urgencyColor, borderRadius: pw.BorderRadius.circular(4)),
-                            child: pw.Text(urgency, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
-                          ),
-                      ],
-                    ),
-                    pw.SizedBox(height: 4),
-                    pw.Row(
-                      children: [
-                        pw.Container(
-                          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: pw.BoxDecoration(color: lighten(typeColor(task.type), 0.85), borderRadius: pw.BorderRadius.circular(4)),
-                          child: pw.Text(displaySubject, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: typeColor(task.type))),
-                        ),
-                        pw.SizedBox(width: 10),
-                        pw.Text(
-                          sanitize(DateFormat('EEE, MMM d @ h:mm a').format(task.dueDate)),
-                          style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
-                        ),
-                        if (room.isNotEmpty) ...[
-                          pw.SizedBox(width: 10),
-                          pw.Text("Room: $room", style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
-                        ],
-                      ],
-                    ),
-                    if (note.isNotEmpty) ...[
-                      pw.SizedBox(height: 4),
-                      pw.Container(
-                        padding: const pw.EdgeInsets.all(6),
-                        decoration: pw.BoxDecoration(
-                          color: PdfColor.fromHex('#FAFAFA'),
-                          borderRadius: pw.BorderRadius.circular(4),
-                        ),
-                        child: pw.Text(note, style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          }
-
-          return widgets;
-        },
-      ),
-    );
-
-    // Show print/share dialog
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: "UOMPer_${label.replaceAll(' ', '_')}_${DateFormat('yyyyMMdd').format(DateTime.now())}",
-    );
-  }
-
-  static PdfColor _lightenStatic(PdfColor c, double amount) {
-    return PdfColor(c.red + (1.0 - c.red) * amount, c.green + (1.0 - c.green) * amount, c.blue + (1.0 - c.blue) * amount);
-  }
-
-  pw.Widget _buildPdfStat(String label, String value, PdfColor color) {
-    return pw.Expanded(
-      child: pw.Container(
-        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        decoration: pw.BoxDecoration(
-          color: _lightenStatic(color, 0.9),
-          borderRadius: pw.BorderRadius.circular(6),
-          border: pw.Border.all(color: _lightenStatic(color, 0.6)),
-        ),
-        child: pw.Column(
-          children: [
-            pw.Text(value, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: color)),
-            pw.SizedBox(height: 2),
-            pw.Text(label, style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600)),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _TaskCard extends StatelessWidget {
@@ -1026,6 +568,15 @@ class _TaskCard extends StatelessWidget {
                           style: TextStyle(fontSize: 12, color: p.textSecondary)),
                     ),
                   ],
+                  Builder(builder: (context) {
+                    final spent = context.select<FocusProvider, int>((f) => f.minutesForTask(t.syncId));
+                    if (spent == 0) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text('⏱ ${spent >= 60 ? '${spent ~/ 60}h ${spent % 60}m' : '${spent}m'}',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: p.textSecondary)),
+                    );
+                  }),
                   const Spacer(),
                   if (onAdvance != null)
                     Tooltip(

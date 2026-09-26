@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
+import 'ui.dart';
 
 /// A beautiful iOS-style scroll-wheel time picker with presets.
 /// Returns a [TimeOfDay] when the user taps "Done".
@@ -88,16 +90,18 @@ class _ScrollTimePickerSheetState extends State<_ScrollTimePickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
-    final dimColor = isDark ? Colors.white38 : Colors.black26;
-    final accentBlue = const Color(0xFF2962FF);
+    final p = Palette.of(context);
+    final isDark = p.isDark;
+    final bgColor = p.surface;
+    // Selected values sit on the black pill, so they use the ink contrast colour.
+    final textColor = p.onInk;
+    final dimColor = p.textMuted;
+    final accentBlue = p.accent;
 
     return Container(
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: SafeArea(
         top: false,
@@ -106,11 +110,11 @@ class _ScrollTimePickerSheetState extends State<_ScrollTimePickerSheet> {
           children: [
             // Handle
             const SizedBox(height: 12),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
             const SizedBox(height: 16),
 
             // Title
-            Text("Time", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+            Text("Time", style: TextStyle(fontSize: 26, fontWeight: FontWeight.w300, letterSpacing: -0.8, color: p.textPrimary)),
             const SizedBox(height: 16),
 
             // Scroll Wheels
@@ -121,13 +125,9 @@ class _ScrollTimePickerSheetState extends State<_ScrollTimePickerSheet> {
                   // Selection highlight band
                   Center(
                     child: Container(
-                      height: 44,
+                      height: 48,
                       margin: const EdgeInsets.symmetric(horizontal: 40),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: isDark ? Colors.white12 : Colors.grey[300]!),
-                      ),
+                      decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(40)),
                     ),
                   ),
                   Row(
@@ -152,7 +152,7 @@ class _ScrollTimePickerSheetState extends State<_ScrollTimePickerSheet> {
                                   '${_hours[index]}',
                                   style: TextStyle(
                                     fontSize: isSelected ? 28 : 18,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w400,
+                                    fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
                                     color: isSelected ? textColor : dimColor,
                                   ),
                                 ),
@@ -165,7 +165,7 @@ class _ScrollTimePickerSheetState extends State<_ScrollTimePickerSheet> {
                       // Colon separator
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(":", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: textColor)),
+                        child: Text(":", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w300, color: textColor)),
                       ),
 
                       // Minute wheel
@@ -187,7 +187,7 @@ class _ScrollTimePickerSheetState extends State<_ScrollTimePickerSheet> {
                                   _minutes[index].toString().padLeft(2, '0'),
                                   style: TextStyle(
                                     fontSize: isSelected ? 28 : 18,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w400,
+                                    fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
                                     color: isSelected ? textColor : dimColor,
                                   ),
                                 ),
@@ -218,7 +218,7 @@ class _ScrollTimePickerSheetState extends State<_ScrollTimePickerSheet> {
                                   _periods[index],
                                   style: TextStyle(
                                     fontSize: isSelected ? 22 : 16,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w400,
+                                    fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
                                     color: isSelected ? textColor : dimColor,
                                   ),
                                 ),
@@ -268,16 +268,7 @@ class _ScrollTimePickerSheetState extends State<_ScrollTimePickerSheet> {
               child: SizedBox(
                 width: double.infinity,
                 height: 52,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context, _buildTimeOfDay()),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accentBlue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
-                  ),
-                  child: const Text("Done", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
+                child: InkPillButton(label: 'Done', icon: Icons.check_rounded, expand: true, onPressed: () => Navigator.pop(context, _buildTimeOfDay())),
               ),
             ),
             const SizedBox(height: 16),
@@ -297,16 +288,15 @@ class _ScrollTimePickerSheetState extends State<_ScrollTimePickerSheet> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? accentBlue.withValues(alpha: 0.15) : (isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey[100]),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isActive ? accentBlue : (isDark ? Colors.white12 : Colors.grey[300]!)),
+          color: isActive ? accentBlue : Palette(isDark).surfaceAlt,
+          borderRadius: BorderRadius.circular(40),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 13,
             fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-            color: isActive ? accentBlue : (isDark ? Colors.white70 : Colors.black54),
+            color: isActive ? Colors.white : Palette(isDark).textSecondary,
           ),
         ),
       ),

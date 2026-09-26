@@ -220,7 +220,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   Future<void> _addEventToMine(GroupEvent e) async {
     await context.read<TimetableProvider>().saveTask(AcademicTask(
           title: e.title,
-          type: const ['Assignment', 'Homework', 'Test', 'Exam', 'Project', 'Event'].contains(e.type) ? e.type : 'Event',
+          type: e.type,
           subject: _group?.name ?? 'Group',
           dueDate: e.end ?? e.start,
           startDate: e.end != null && !isSameDate(e.start, e.end!) ? e.start : null,
@@ -861,12 +861,7 @@ class _GroupSessionSheetState extends State<_GroupSessionSheet> {
             TextField(controller: _subject, autofocus: widget.existing == null, textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(labelText: 'Module')),
             const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              initialValue: _day,
-              items: _weekdays.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-              onChanged: (v) => setState(() => _day = v ?? _day),
-              decoration: const InputDecoration(labelText: 'Day'),
-            ),
+            WeekdayPicker(selected: _day, onChanged: (d) => setState(() => _day = d)),
             const SizedBox(height: 10),
             Row(children: [
               Expanded(child: _timeBox(p, 'Starts', _start, () => _pick(true))),
@@ -934,7 +929,10 @@ class _GroupEventSheetState extends State<_GroupEventSheet> {
   late final _room = TextEditingController(text: widget.existing?.room ?? '');
   late final _link = TextEditingController(text: widget.existing?.meetingLink ?? '');
   late final _notes = TextEditingController(text: widget.existing?.notes ?? '');
-  late String _type = widget.existing?.type ?? 'Assignment';
+  static const _types = ['Assignment', 'Test', 'Exam', 'Other'];
+  late String _type = _types.contains(widget.existing?.type) ? widget.existing!.type : (widget.existing == null ? 'Assignment' : 'Other');
+  late final _customType = TextEditingController(
+      text: widget.existing != null && !_types.contains(widget.existing!.type) ? widget.existing!.type : '');
   late DateTime _start = widget.existing?.start ?? DateTime.now().add(const Duration(days: 1));
   late DateTime? _endDate = widget.existing?.end;
   late int? _color = widget.existing?.colorValue;
@@ -946,6 +944,7 @@ class _GroupEventSheetState extends State<_GroupEventSheet> {
     _room.dispose();
     _link.dispose();
     _notes.dispose();
+    _customType.dispose();
     super.dispose();
   }
 
@@ -973,7 +972,7 @@ class _GroupEventSheetState extends State<_GroupEventSheet> {
               spacing: 6,
               runSpacing: 6,
               children: [
-                for (final t in const ['Assignment', 'Test', 'Exam', 'Project', 'Event'])
+                for (final t in _types)
                   ChoiceChip(
                     label: Text(t),
                     selected: _type == t,
@@ -984,6 +983,14 @@ class _GroupEventSheetState extends State<_GroupEventSheet> {
                   ),
               ],
             ),
+            if (_type == 'Other') ...[
+              const SizedBox(height: 10),
+              TextField(
+                controller: _customType,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(labelText: 'Name this type', hintText: 'e.g. Meetup, Presentation'),
+              ),
+            ],
             const SizedBox(height: 10),
             Row(children: [
               Expanded(
@@ -1072,7 +1079,7 @@ class _GroupEventSheetState extends State<_GroupEventSheet> {
                   GroupEvent(
                     id: widget.existing?.id ?? '',
                     title: _title.text.trim(),
-                    type: _type,
+                    type: _type == 'Other' ? (_customType.text.trim().isEmpty ? 'Other' : _customType.text.trim()) : _type,
                     start: _start,
                     end: _endDate,
                     room: _room.text.trim(),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../services/bus_repository.dart';
 import '../services/sync_service.dart';
@@ -90,6 +91,114 @@ class _BusTabState extends State<BusTab> {
 
   // ───────────── Route actions ─────────────
 
+  // ───────────── Share / import / presets ─────────────
+
+  void _shareRoute() {
+    final r = _route;
+    if (r == null) return;
+    Share.share(BusRepository.shareMessage(r), subject: 'Bus timetable: ${r['location_name']}');
+  }
+
+  Future<void> _importRoute() async {
+    final text = await showControllerDialog<String>(
+      context,
+      builder: (ctx, controller) => AlertDialog(
+        title: const Text('Import a bus route'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Paste the message a friend shared from their Bus tab (it contains a UOMBUS1: code).'),
+            const SizedBox(height: 12),
+            TextField(controller: controller, autofocus: true, maxLines: 4, decoration: const InputDecoration(hintText: 'Paste here')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('Import')),
+        ],
+      ),
+    );
+    if (text == null || text.trim().isEmpty || !mounted) return;
+    final route = BusRepository.decodeRoute(text);
+    if (route == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("That doesn't contain a valid bus route code")));
+      return;
+    }
+    _addRoutes([route]);
+  }
+
+  Future<void> _addPreset() async {
+    final presets = BusRepository.presets;
+    final picked = await showChoiceSheet<int>(
+      context,
+      title: 'Add a ready-made route',
+      options: List.generate(presets.length, (i) => i),
+      selected: null,
+      labelOf: (i) => _shortName(presets[i]['location_name'].toString()),
+      subtitleOf: (i) => 'Route ${presets[i]['bus_route']}',
+      iconOf: (_) => Icons.directions_bus_rounded,
+    );
+    if (picked != null) _addRoutes([presets[picked]]);
+  }
+
+  Future<void> _addRoutes(List<Map<String, dynamic>> routes) async {
+    setState(() {
+      _routes.addAll(routes);
+      _selected = _routes.length - 1;
+    });
+    BusRepository.setSelectedIndex(_selected);
+    await _save();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added ${_shortName(routes.last['location_name'].toString())}')));
+    }
+  }
+
+  Widget _buildEmpty(Palette p) {
+    Widget option(IconData icon, String title, String subtitle, VoidCallback onTap) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: SoftCard(
+            radius: 26,
+            onTap: onTap,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: p.accentSoft, shape: BoxShape.circle),
+                  child: Icon(icon, color: p.accent),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: p.textPrimary)),
+                      Text(subtitle, style: TextStyle(fontSize: 12, color: p.textSecondary)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: p.textMuted),
+              ],
+            ),
+          ),
+        );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Add the buses you take', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w300, color: p.textPrimary)),
+          const SizedBox(height: 4),
+          Text('Everyone lives somewhere different, so start with your own route.', style: TextStyle(color: p.textSecondary)),
+          const SizedBox(height: 18),
+          option(Icons.add_road_rounded, 'Create a route', 'Type in the stop and the times', _addRoute),
+          option(Icons.download_rounded, 'Import from a friend', 'Paste a route they shared from their Bus tab', _importRoute),
+          option(Icons.bookmark_add_outlined, 'Use a ready-made route', "Réduit ⇄ L'Escalier (200), Réduit → Mahebourg (198)", _addPreset),
+        ],
+      ),
+    );
+  }
+
   Future<void> _addRoute() async {
     final result = await showModalBottomSheet<Map<String, String>>(
       context: context,
@@ -165,6 +274,15 @@ class _BusTabState extends State<BusTab> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            ListTile(
+              leading: const Icon(Icons.ios_share_rounded),
+              title: const Text('Share this route'),
+              subtitle: const Text('Send it to friends who take the same bus'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _shareRoute();
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.edit_rounded),
               title: const Text('Rename route'),
@@ -365,20 +483,13 @@ class _BusTabState extends State<BusTab> {
                     title: 'Bus',
                     eyebrow: '${DateFormat('EEEE').format(now)} · ${DateFormat('HH:mm').format(now)}',
                     actions: [
+                      CircleIconButton(icon: Icons.download_rounded, tooltip: 'Import a shared route', onPressed: _importRoute),
                       if (_route != null) CircleIconButton(icon: Icons.more_horiz_rounded, tooltip: 'Route options', onPressed: _showRouteMenu),
                       CircleIconButton(icon: Icons.add_rounded, filled: true, tooltip: 'New route', onPressed: _addRoute),
                     ],
                   ),
                   if (_routes.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 60),
-                      child: EmptyState(
-                        icon: Icons.directions_bus_outlined,
-                        title: 'No routes yet',
-                        subtitle: 'Add the buses you take to and from campus.',
-                        action: InkPillButton(label: 'Add route', icon: Icons.add, onPressed: _addRoute),
-                      ),
-                    )
+                    _buildEmpty(p)
                   else ...[
                     _buildRouteSelector(p),
                     const SizedBox(height: 14),
