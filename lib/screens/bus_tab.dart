@@ -271,11 +271,12 @@ class _BusTabState extends State<BusTab> {
   void _showRouteMenu() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => SheetScaffold(
         title: _route?['location_name'] ?? 'Route',
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: ListView(
+          shrinkWrap: true,
           children: [
             ListTile(
               leading: const Icon(Icons.ios_share_rounded),

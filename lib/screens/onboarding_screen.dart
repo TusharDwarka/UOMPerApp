@@ -8,6 +8,8 @@ import '../providers/timetable_provider.dart';
 import '../services/ai_service.dart';
 import '../widgets/add_edit_class_sheet.dart';
 import '../services/notification_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -257,26 +259,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = Palette.of(context);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF8F9FE),
+      backgroundColor: p.canvas,
       body: SafeArea(
         child: Column(
           children: [
-            // Progress indicator
-            _buildProgressBar(isDark),
-            // Pages
+            _buildProgressBar(p),
             Expanded(
               child: PageView(
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
-                  _buildStep1CourseName(isDark),
-                  _buildStep2Upload(isDark),
-                  _buildStep3Processing(isDark),
-                  _buildStep4Confirm(isDark),
-                  _buildStep5Permissions(isDark),
+                  _buildStep1CourseName(p),
+                  _buildStep2Upload(p),
+                  _buildStep3Processing(p),
+                  _buildStep4Confirm(p),
+                  _buildStep5Permissions(p),
                 ],
               ),
             ),
@@ -286,20 +286,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     );
   }
 
-  Widget _buildProgressBar(bool isDark) {
-    return Container(
-      height: 4,
-      margin: const EdgeInsets.only(top: 20, left: 30, right: 30),
+  Widget _buildProgressBar(Palette p) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
       child: Row(
         children: List.generate(5, (index) {
           return Expanded(
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
+              height: 4,
               margin: const EdgeInsets.symmetric(horizontal: 4),
               decoration: BoxDecoration(
-                color: index <= _currentStep
-                    ? (isDark ? const Color(0xFF5C6BC0) : const Color(0xFF3949AB))
-                    : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
+                color: index <= _currentStep ? p.ink : p.border,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -309,156 +307,153 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     );
   }
 
+  // ── Shared pieces (same language as the sign-in screen) ──
+
+  Widget _badge(Palette p, IconData icon) => Container(
+        width: 64,
+        height: 64,
+        decoration: BoxDecoration(color: p.ink, shape: BoxShape.circle),
+        child: Icon(icon, color: p.onInk, size: 30),
+      );
+
+  Widget _heading(Palette p, String title, String subtitle) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(fontSize: 40, height: 1.05, fontWeight: FontWeight.w300, letterSpacing: -1.6, color: p.textPrimary)),
+          const SizedBox(height: 10),
+          Text(subtitle, style: TextStyle(fontSize: 15, height: 1.4, color: p.textSecondary)),
+        ],
+      );
+
+  Widget _primaryButton(String label, VoidCallback onTap, {IconData icon = Icons.arrow_forward_rounded, bool isLoading = false}) {
+    final p = Palette.of(context);
+    return SizedBox(
+      width: double.infinity,
+      child: isLoading
+          ? Center(child: SizedBox(width: 26, height: 26, child: CircularProgressIndicator(strokeWidth: 2.6, color: p.accent)))
+          : InkPillButton(label: label, icon: icon, expand: true, onPressed: onTap),
+    );
+  }
+
+  Widget _dateTile(Palette p, {required String label, required String value, required IconData icon, required VoidCallback onTap, Widget? trailing}) {
+    return SoftCard(
+      radius: 22,
+      padding: const EdgeInsets.fromLTRB(18, 12, 8, 12),
+      onTap: onTap,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: p.textSecondary),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: p.textSecondary)),
+                const SizedBox(height: 2),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: p.textPrimary)),
+              ],
+            ),
+          ),
+          trailing ?? Padding(padding: const EdgeInsets.all(12), child: Icon(Icons.expand_more_rounded, color: p.textMuted)),
+        ],
+      ),
+    );
+  }
+
+  Widget _errorBox(String message) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(18)),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, size: 18, color: Colors.red[400]),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message, style: TextStyle(color: Colors.red[400], fontSize: 13))),
+        ],
+      ),
+    );
+  }
+
+  String _ymd(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _pickSemesterStart() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _semesterStart,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+    );
+    if (picked == null) return;
+    setState(() {
+      _semesterStart = picked;
+      _semesterStartController.text = _ymd(picked);
+      // Auto-update end date
+      _semesterEnd = picked.add(const Duration(days: 105));
+      _semesterEndController.text = _ymd(_semesterEnd!);
+    });
+  }
+
+  Future<void> _pickSemesterEnd() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _semesterEnd ?? _semesterStart.add(const Duration(days: 90)),
+      firstDate: _semesterStart,
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+    );
+    if (picked == null) return;
+    setState(() {
+      _semesterEnd = picked;
+      _semesterEndController.text = _ymd(picked);
+    });
+  }
+
   // ==========================================
   // STEP 1: Course Name
   // ==========================================
-  Widget _buildStep1CourseName(bool isDark) {
-    final accentColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF2962FF);
-
+  Widget _buildStep1CourseName(Palette p) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(30),
+      padding: const EdgeInsets.fromLTRB(22, 28, 22, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 40),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(Icons.school_rounded, size: 40, color: accentColor),
-          ),
-          const SizedBox(height: 30),
-          Text(
-            "What are you\nstudying?",
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              color: isDark ? Colors.white : const Color(0xFF1A1D1E),
-              height: 1.2,
+          _badge(p, Icons.school_rounded),
+          const SizedBox(height: 26),
+          _heading(p, 'What are\nyou studying?', 'Your course name helps the AI read your timetable.'),
+          const SizedBox(height: 28),
+          SoftCard(
+            padding: const EdgeInsets.all(18),
+            child: TextField(
+              controller: _courseNameController,
+              textCapitalization: TextCapitalization.words,
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: p.textPrimary),
+              decoration: const InputDecoration(hintText: 'e.g. BSc Data Science', prefixIcon: Icon(Icons.edit_rounded, size: 20)),
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            "Enter your course or programme name. This helps the AI understand your timetable better.",
-            style: TextStyle(fontSize: 16, color: isDark ? Colors.grey[400] : Colors.grey[600], height: 1.5),
-          ),
-          const SizedBox(height: 40),
-          TextField(
-            controller: _courseNameController,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black),
-            decoration: InputDecoration(
-              hintText: "e.g. BSc Data Science, Agriculture...",
-              hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontWeight: FontWeight.normal),
-              filled: true,
-              fillColor: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              prefixIcon: Padding(
-                padding: const EdgeInsets.only(left: 16, right: 8),
-                child: Icon(Icons.edit_rounded, color: accentColor),
-              ),
-            ),
-            textCapitalization: TextCapitalization.words,
-          ),
-          const SizedBox(height: 24),
-
-          // Semester Start Date
-          Text("Semester Start Date", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey[600])),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: () async {
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: _semesterStart,
-                firstDate: DateTime(2020),
-                lastDate: DateTime(2030),
-              );
-              if (picked != null) {
-                setState(() {
-                  _semesterStart = picked;
-                  _semesterStartController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-                  
-                  // Auto-update end date
-                  _semesterEnd = picked.add(const Duration(days: 105));
-                  _semesterEndController.text = '${_semesterEnd!.year}-${_semesterEnd!.month.toString().padLeft(2, '0')}-${_semesterEnd!.day.toString().padLeft(2, '0')}';
-                });
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.calendar_today_rounded, color: accentColor, size: 20),
-                  const SizedBox(width: 16),
-                  Text(
-                    _semesterStartController.text,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black),
+          const SectionLabel('Semester'),
+          _dateTile(p,
+              label: 'Starts', value: _semesterStartController.text, icon: Icons.calendar_today_rounded, onTap: _pickSemesterStart),
+          const SizedBox(height: 10),
+          _dateTile(
+            p,
+            label: 'Ends (optional)',
+            value: _semesterEndController.text.isEmpty ? 'No end date' : _semesterEndController.text,
+            icon: Icons.event_rounded,
+            onTap: _pickSemesterEnd,
+            trailing: _semesterEnd == null
+                ? null
+                : IconButton(
+                    tooltip: 'Clear end date',
+                    icon: Icon(Icons.close_rounded, size: 20, color: p.textSecondary),
+                    onPressed: () => setState(() {
+                      _semesterEnd = null;
+                      _semesterEndController.clear();
+                    }),
                   ),
-                  const Spacer(),
-                  Icon(Icons.arrow_drop_down, color: isDark ? Colors.grey[500] : Colors.grey),
-                ],
-              ),
-            ),
           ),
-
-          const SizedBox(height: 24),
-          const Text("Semester End (Optional)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () async {
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: _semesterEnd ?? _semesterStart.add(const Duration(days: 90)),
-                firstDate: _semesterStart,
-                lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-              );
-              if (picked != null) {
-                setState(() {
-                  _semesterEnd = picked;
-                  _semesterEndController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-                });
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey[100],
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.event_outlined, color: isDark ? Colors.white70 : Colors.black87),
-                  const SizedBox(width: 12),
-                  Text(
-                    _semesterEndController.text.isEmpty ? "No End Date" : _semesterEndController.text,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black),
-                  ),
-                  const Spacer(),
-                  if (_semesterEnd != null)
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _semesterEnd = null;
-                          _semesterEndController.clear();
-                        });
-                      },
-                      child: const Icon(Icons.clear, color: Colors.grey, size: 20),
-                    )
-                  else
-                    Icon(Icons.arrow_drop_down, color: isDark ? Colors.grey[500] : Colors.grey),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 50),
-          _buildContinueButton("Continue", () {
+          const SizedBox(height: 32),
+          _primaryButton('Continue', () {
             if (_courseNameController.text.trim().isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text("Please enter your course name")),
@@ -466,7 +461,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               return;
             }
             _goToStep(1);
-          }, isDark),
+          }),
         ],
       ),
     );
@@ -475,154 +470,74 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   // ==========================================
   // STEP 2: Upload Timetable
   // ==========================================
-  Widget _buildStep2Upload(bool isDark) {
-    final accentColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF2962FF);
-
+  Widget _buildStep2Upload(Palette p) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(30),
+      padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 20),
+          CircleIconButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => _goToStep(0)),
+          const SizedBox(height: 22),
+          _heading(p, 'Add your\ntimetable', 'Snap or upload it and the AI pulls out every class. Or build it by hand.'),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 16),
+            _errorBox(_errorMessage!),
+          ],
+          const SizedBox(height: 24),
           Row(
             children: [
-              GestureDetector(
-                onTap: () => _goToStep(0),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey[100],
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.arrow_back, size: 20, color: isDark ? Colors.white : Colors.black),
-                ),
+              Expanded(
+                child: _buildUploadCard(p,
+                    icon: Icons.camera_alt_rounded, label: 'Camera', subtitle: 'Take a photo', onTap: () => _pickImage(ImageSource.camera)),
               ),
-              const SizedBox(width: 16),
-              Text("Upload Timetable", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildUploadCard(p, icon: Icons.picture_as_pdf_rounded, label: 'PDF', subtitle: 'Upload document', onTap: _pickPdf),
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            "Upload your timetable (Image or PDF). The AI will extract all your classes automatically. Or, you can build it manually.",
-            style: TextStyle(fontSize: 15, color: isDark ? Colors.grey[400] : Colors.grey[600], height: 1.5),
-          ),
-
-          if (_errorMessage != null) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 20),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 13))),
-                ],
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 30),
-
-          // Upload options
           Row(
             children: [
               Expanded(
-                child: _buildUploadCard(
-                  icon: Icons.camera_alt_rounded,
-                  label: "Camera",
-                  subtitle: "Take a photo",
-                  onTap: () => _pickImage(ImageSource.camera),
-                  isDark: isDark,
-                ),
+                child: _buildUploadCard(p,
+                    icon: Icons.photo_library_rounded, label: 'Gallery', subtitle: 'Pick an image', onTap: () => _pickImage(ImageSource.gallery)),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
-                child: _buildUploadCard(
-                  icon: Icons.picture_as_pdf_rounded,
-                  label: "PDF",
-                  subtitle: "Upload document",
-                  onTap: _pickPdf,
-                  isDark: isDark,
-                ),
+                child: _buildUploadCard(p,
+                    icon: Icons.edit_calendar_rounded, label: 'Manual', subtitle: 'Build it yourself', onTap: _skipToManualBuilder),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildUploadCard(
-                  icon: Icons.photo_library_rounded,
-                  label: "Gallery",
-                  subtitle: "Pick an image",
-                  onTap: () => _pickImage(ImageSource.gallery),
-                  isDark: isDark,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildUploadCard(
-                  icon: Icons.edit_calendar_rounded,
-                  label: "Manual",
-                  subtitle: "Build it yourself",
-                  onTap: _skipToManualBuilder,
-                  isDark: isDark,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-
-          // File preview
           if (_selectedFileBytes != null) ...[
-            const SizedBox(height: 24),
-            Container(
-              width: double.infinity,
+            const SizedBox(height: 16),
+            SoftCard(
+              radius: 24,
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.green.withValues(alpha: 0.5), width: 2),
-                color: Colors.green.withValues(alpha: 0.05),
-              ),
+              border: Border.all(color: const Color(0xFF00C853), width: 1.5),
               child: Row(
                 children: [
-                  Icon(
-                    _selectedMimeType == 'application/pdf' ? Icons.picture_as_pdf : Icons.image,
-                    color: Colors.green,
-                    size: 40,
-                  ),
-                  const SizedBox(width: 16),
+                  Icon(_selectedMimeType == 'application/pdf' ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+                      color: const Color(0xFF00C853), size: 32),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          _selectedFileName ?? 'File selected',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          'Ready for AI analysis',
-                          style: TextStyle(color: Colors.green[700], fontSize: 12),
-                        ),
+                        Text(_selectedFileName ?? 'File selected', maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontWeight: FontWeight.w700, color: p.textPrimary)),
+                        Text('Ready for AI analysis', style: TextStyle(fontSize: 12, color: p.textSecondary)),
                       ],
                     ),
                   ),
-                  const Icon(Icons.check_circle, color: Colors.green),
+                  const Icon(Icons.check_circle_rounded, color: Color(0xFF00C853)),
                 ],
               ),
             ),
           ],
-
-          const SizedBox(height: 40),
-          _buildContinueButton("Analyze with AI ✨", () {
+          const SizedBox(height: 28),
+          _primaryButton('Analyze with AI', () {
             if (_selectedFileBytes == null) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text("Please select a timetable file first, or choose Manual")),
@@ -630,45 +545,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               return;
             }
             _processWithAi();
-          }, isDark),
+          }, icon: Icons.auto_awesome_rounded),
         ],
       ),
     );
   }
 
-  Widget _buildUploadCard({
-    required IconData icon,
-    required String label,
-    required String subtitle,
-    required VoidCallback onTap,
-    required bool isDark,
-  }) {
-    final accentColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF2962FF);
-    return GestureDetector(
+  Widget _buildUploadCard(Palette p, {required IconData icon, required String label, required String subtitle, required VoidCallback onTap}) {
+    return SoftCard(
+      radius: 26,
+      padding: const EdgeInsets.fromLTRB(16, 18, 12, 18),
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 16),
-        decoration: BoxDecoration(
-          color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: isDark ? Colors.white10 : Colors.grey[200]!),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: accentColor.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: accentColor, size: 28),
-            ),
-            const SizedBox(height: 14),
-            Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black)),
-            const SizedBox(height: 4),
-            Text(subtitle, style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[500] : Colors.grey)),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(color: p.accentSoft, shape: BoxShape.circle),
+            child: Icon(icon, color: p.accent, size: 22),
+          ),
+          const SizedBox(height: 14),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: p.textPrimary)),
+          const SizedBox(height: 2),
+          Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: p.textSecondary)),
+        ],
       ),
     );
   }
@@ -676,48 +578,41 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   // ==========================================
   // STEP 3: Processing / Loading
   // ==========================================
-  Widget _buildStep3Processing(bool isDark) {
-    final accentColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF2962FF);
-
+  Widget _buildStep3Processing(Palette p) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedBuilder(
               animation: _pulseController,
-              builder: (context, child) {
-                return Transform.scale(
-                  scale: 1.0 + (_pulseController.value * 0.15),
-                  child: Container(
-                    padding: const EdgeInsets.all(30),
-                    decoration: BoxDecoration(
-                      color: accentColor.withValues(alpha: 0.1 + (_pulseController.value * 0.05)),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.auto_awesome, size: 50, color: accentColor),
-                  ),
-                );
-              },
+              builder: (context, child) => Transform.scale(scale: 1.0 + (_pulseController.value * 0.12), child: child),
+              child: Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(color: p.ink, shape: BoxShape.circle),
+                child: Icon(Icons.auto_awesome_rounded, size: 40, color: p.onInk),
+              ),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 36),
             Text(
-              "Analyzing your timetable...",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
+              'Reading your\ntimetable…',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 32, height: 1.1, fontWeight: FontWeight.w300, letterSpacing: -1.2, color: p.textPrimary),
             ),
             const SizedBox(height: 12),
             Text(
-              "AI is reading your schedule and extracting all classes, times, and locations.",
+              'The AI is pulling out every class, time and room.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15, color: isDark ? Colors.grey[400] : Colors.grey[600], height: 1.5),
+              style: TextStyle(fontSize: 15, height: 1.4, color: p.textSecondary),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 32),
             SizedBox(
-              width: 200,
-              child: LinearProgressIndicator(
-                backgroundColor: isDark ? Colors.white10 : Colors.grey[200],
-                valueColor: AlwaysStoppedAnimation(accentColor),
+              width: 180,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(minHeight: 4, backgroundColor: p.surfaceAlt, color: p.accent),
               ),
             ),
           ],
@@ -729,9 +624,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   // ==========================================
   // STEP 4: Confirm Parsed Sessions
   // ==========================================
-  Widget _buildStep4Confirm(bool isDark) {
-    final accentColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF2962FF);
+  Widget _buildStep4Confirm(Palette p) {
     final selectedCount = _sessionSelected.where((s) => s).length;
+    final manual = _parsedSessions.isEmpty;
 
     // Group sessions by day for display
     final Map<String, List<int>> grouped = {};
@@ -750,235 +645,154 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
     return Column(
       children: [
-        // Header
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+          padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
           child: Row(
             children: [
-              GestureDetector(
-                onTap: () => _goToStep(1),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey[100],
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.arrow_back, size: 20, color: isDark ? Colors.white : Colors.black),
-                ),
-              ),
-              const SizedBox(width: 16),
+              CircleIconButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => _goToStep(1)),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_parsedSessions.isEmpty ? "Build Classes" : "Confirm Classes", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
-                    Text(_parsedSessions.isEmpty ? "Add your classes manually" : "$selectedCount of ${_parsedSessions.length} sessions selected", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                    Text(manual ? 'Build classes' : 'Confirm classes', maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 26, fontWeight: FontWeight.w300, letterSpacing: -0.8, color: p.textPrimary)),
+                    Text(manual ? 'Add your classes by hand' : '$selectedCount of ${_parsedSessions.length} selected',
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: p.textSecondary)),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-                ),
-                child: Text(_parsedSessions.isEmpty ? "✎ Manual Mode" : "✓ Parsed", style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
+              const SizedBox(width: 8),
+              TagPill(manual ? 'Manual' : 'AI parsed',
+                  icon: manual ? Icons.edit_rounded : Icons.auto_awesome_rounded,
+                  color: manual ? p.textSecondary : const Color(0xFF00C853)),
             ],
           ),
         ),
-
-        const SizedBox(height: 16),
-
-        // Sessions list
+        const SizedBox(height: 8),
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.fromLTRB(22, 0, 22, 24),
             children: [
               for (final day in sortedDays) ...[
                 Padding(
-                  padding: const EdgeInsets.only(top: 16, bottom: 8, left: 4),
-                  child: Text(
-                    day.toUpperCase(),
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: accentColor, letterSpacing: 1.5),
-                  ),
+                  padding: const EdgeInsets.only(top: 18, bottom: 8, left: 4),
+                  child: Text(day.toUpperCase(),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: p.textSecondary, letterSpacing: 1.4)),
                 ),
-                for (final idx in grouped[day]!)
-                  _buildSessionCard(idx, isDark),
+                for (final idx in grouped[day]!) _buildSessionCard(idx, p),
               ],
-              
-              if (_parsedSessions.isEmpty)
+              if (manual)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 40),
                   child: Center(
                     child: Text(
-                      "No classes added yet.\nTap 'Add Class' to start building.",
+                      "No classes added yet.\nTap 'Add a class' to start building.",
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400]),
+                      style: TextStyle(color: p.textMuted),
                     ),
                   ),
                 ),
-
-              const SizedBox(height: 20),
-              // Add class manually button
+              const SizedBox(height: 12),
               Center(
                 child: TextButton.icon(
                   onPressed: _showAddEditClassSheet,
-                  icon: const Icon(Icons.add_circle_outline),
-                  label: const Text("Add Class Manually"),
-                  style: TextButton.styleFrom(
-                    foregroundColor: accentColor,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Add a class'),
                 ),
               ),
-
-              const SizedBox(height: 100), // Bottom padding for button
             ],
           ),
         ),
-
-        // Bottom action
-        Container(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF8F9FE),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, -4))],
-          ),
-          child: _buildContinueButton("Looks Good! Save ${selectedCount} classes", _saveAndFinish, isDark, isLoading: _isSaving),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 8, 22, 16),
+          child: _primaryButton(selectedCount == 1 ? 'Save 1 class' : 'Save $selectedCount classes', _saveAndFinish,
+              icon: Icons.check_rounded, isLoading: _isSaving),
         ),
       ],
     );
   }
 
-  Widget _buildSessionCard(int index, bool isDark) {
+  Widget _buildSessionCard(int index, Palette p) {
     final s = _parsedSessions[index];
     final isSelected = _sessionSelected[index];
+    const colors = AppColors.eventPalette;
+    final accent = colors[(s['moduleName'] ?? '').hashCode.abs() % colors.length];
 
-    final colorOption = (s['moduleName'] ?? '').hashCode.abs() % 6;
-    final colors = [
-      const Color(0xFF2962FF),
-      const Color(0xFF7B1FA2),
-      const Color(0xFF00695C),
-      const Color(0xFFEF6C00),
-      const Color(0xFFC62828),
-      const Color(0xFF2E7D32),
-    ];
-    final accent = colors[colorOption];
-
-    return GestureDetector(
-      onTap: () => setState(() => _sessionSelected[index] = !_sessionSelected[index]),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isDark ? accent.withValues(alpha: 0.12) : accent.withValues(alpha: 0.08))
-              : (isDark ? Colors.white.withValues(alpha: 0.03) : Colors.grey[100]),
-          borderRadius: BorderRadius.circular(18),
-          border: Border(left: BorderSide(color: isSelected ? accent : Colors.grey, width: 3)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    s['moduleName'] ?? 'Unknown Module',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: isSelected ? (isDark ? Colors.white : Colors.black) : Colors.grey,
-                      decoration: isSelected ? null : TextDecoration.lineThrough,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Opacity(
+        opacity: isSelected ? 1 : 0.5,
+        child: SoftCard(
+          radius: 22,
+          padding: const EdgeInsets.fromLTRB(14, 12, 4, 12),
+          onTap: () => setState(() => _sessionSelected[index] = !_sessionSelected[index]),
+          child: Row(
+            children: [
+              Container(width: 4, height: 40, decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(4))),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      s['moduleName'] ?? 'Unknown Module',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        color: p.textPrimary,
+                        decoration: isSelected ? null : TextDecoration.lineThrough,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "${s['startTime']} – ${s['endTime']}  •  ${s['location'] ?? 'TBD'}",
-                    style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                  ),
-                  if (s['moduleCode'] != null && s['moduleCode'].toString().isNotEmpty)
-                    Text(s['moduleCode'], style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[500] : Colors.grey)),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      "${s['startTime']} – ${s['endTime']}  •  ${s['location'] ?? 'TBD'}",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: p.textSecondary),
+                    ),
+                    if (s['moduleCode'] != null && s['moduleCode'].toString().isNotEmpty)
+                      Text(s['moduleCode'].toString(), style: TextStyle(fontSize: 11, color: p.textMuted)),
+                  ],
+                ),
               ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.edit_rounded, size: 20),
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
-              onPressed: () => _showAddEditClassSheet(index: index),
-            ),
-            Checkbox(
-              value: isSelected,
-              onChanged: (v) => setState(() => _sessionSelected[index] = v ?? true),
-              activeColor: accent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-            ),
-          ],
+              IconButton(
+                tooltip: 'Edit',
+                icon: Icon(Icons.edit_rounded, size: 20, color: p.textSecondary),
+                onPressed: () => _showAddEditClassSheet(index: index),
+              ),
+              Checkbox(
+                value: isSelected,
+                onChanged: (v) => setState(() => _sessionSelected[index] = v ?? true),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildContinueButton(String label, VoidCallback onTap, bool isDark, {bool isLoading = false}) {
-    final accentColor = isDark ? const Color(0xFF5C6BC0) : const Color(0xFF2962FF);
-    return SizedBox(
-      width: double.infinity,
-      height: 58,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: accentColor,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-        ),
-        child: isLoading 
-            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-            : Text(label),
       ),
     );
   }
 
   // --- Step 5: Notifications ---
-  Widget _buildStep5Permissions(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(30.0),
+  Widget _buildStep5Permissions(Palette p) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(22, 28, 22, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.15), shape: BoxShape.circle),
-            child: const Icon(Icons.notifications_active_rounded, size: 60, color: Colors.orange),
-          ),
+          _badge(p, Icons.notifications_active_rounded),
+          const SizedBox(height: 26),
+          _heading(p, 'Never miss\na class', "We'll nudge you 15 minutes before each class starts."),
           const SizedBox(height: 40),
-          Text(
-            "Never Miss a Class",
-            style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: isDark ? Colors.white : const Color(0xFF1A1A1A), height: 1.1),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            "Do you want to be notified 15 minutes before your classes start?",
-            style: TextStyle(fontSize: 18, color: isDark ? Colors.white70 : Colors.black87, height: 1.4),
-          ),
-          const Spacer(),
-          _buildContinueButton("Yes, Enable Notifications", () => _finishSetup(true), isDark),
-          const SizedBox(height: 15),
-          SizedBox(
-            width: double.infinity,
+          _primaryButton('Turn on reminders', () => _finishSetup(true), icon: Icons.notifications_rounded),
+          const SizedBox(height: 8),
+          Center(
             child: TextButton(
               onPressed: () => _finishSetup(false),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                foregroundColor: isDark ? Colors.white60 : Colors.black54,
-              ),
-              child: const Text("Not Now", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: Text('Not now', style: TextStyle(color: p.textSecondary)),
             ),
-          )
+          ),
         ],
       ),
     );

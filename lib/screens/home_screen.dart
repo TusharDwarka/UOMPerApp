@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:provider/provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/resource_provider.dart';
 import '../providers/timetable_provider.dart';
@@ -21,9 +22,24 @@ import 'schedule_tab.dart';
 import 'settings_tab.dart';
 import 'todo_board_tab.dart';
 
-/// Page indices. Mobile shows the first five in the pill bar plus "More".
+/// Page indices. Mobile shows the user's first [barSlots] pages (see
+/// [navOrderFrom]) in the pill bar plus "More".
 class AppPage {
   static const home = 0, schedule = 1, hub = 2, board = 3, bus = 4, files = 5, notes = 6, groups = 7, focus = 8, settings = 9;
+  static const count = 10, barSlots = 5;
+}
+
+const _navOrderKey = 'nav_order';
+
+/// Saved page order → full valid order: keeps the user's order, drops
+/// unknown/duplicate entries and appends pages added in newer versions.
+List<int> navOrderFrom(List<String>? saved) {
+  final order = <int>{};
+  for (final s in saved ?? const <String>[]) {
+    final i = int.tryParse(s);
+    if (i != null && i >= 0 && i < AppPage.count) order.add(i);
+  }
+  return [...order, for (var i = 0; i < AppPage.count; i++) if (!order.contains(i)) i];
 }
 
 class NavDest {
@@ -66,6 +82,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  List<int> _navOrder = navOrderFrom(null);
   StreamSubscription? _intentDataStreamSubscription;
   StreamSubscription? _homeWidgetSubscription;
 
@@ -87,6 +104,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    SharedPreferences.getInstance().then((prefs) {
+      if (mounted) setState(() => _navOrder = navOrderFrom(prefs.getStringList(_navOrderKey)));
+    });
     if (_isMobile) {
       _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
         if (value.isNotEmpty) _handleSharedFiles(value);
@@ -226,22 +246,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
+  List<int> get _barPages => _navOrder.take(AppPage.barSlots).toList();
+
   void _showMoreSheet() {
     final p = Palette.of(context);
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => SheetScaffold(
         title: 'More',
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _editBar();
+            },
+            icon: const Icon(Icons.tune_rounded, size: 18),
+            label: const Text('Edit bar'),
+          ),
+        ],
         child: GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
           childAspectRatio: 1.9,
-          physics: const NeverScrollableScrollPhysics(),
           children: [
-            for (final i in [AppPage.files, AppPage.notes, AppPage.groups, AppPage.focus, AppPage.settings])
+            for (final i in _navOrder.skip(AppPage.barSlots))
               SoftCard(
                 color: i == _selectedIndex ? p.ink : p.surfaceAlt,
                 padding: const EdgeInsets.all(16),
@@ -266,10 +298,98 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Drag pages into the top five to put them in the bar; the rest live
+  /// under More.
+  void _editBar() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSheet) {
+        final p = Palette.of(ctx);
+        return ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+          child: SheetScaffold(
+            title: 'Edit bar',
+            actions: [
+              TextButton(
+                onPressed: () => setSheet(() => _setNavOrder(navOrderFrom(null))),
+                child: const Text('Reset'),
+              ),
+            ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Drag ☰ to reorder. The top ${AppPage.barSlots} sit in the bar, the rest under More.',
+                    style: TextStyle(color: p.textSecondary)),
+                const SizedBox(height: 10),
+                Flexible(
+                  child: ReorderableListView(
+                    shrinkWrap: true,
+                    buildDefaultDragHandles: false,
+                    onReorder: (from, to) => setSheet(() {
+                      final list = [..._navOrder];
+                      final item = list.removeAt(from);
+                      list.insert(to > from ? to - 1 : to, item);
+                      _setNavOrder(list);
+                    }),
+                    children: [
+                      for (var i = 0; i < _navOrder.length; i++)
+                        Padding(
+                          key: ValueKey(_navOrder[i]),
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Material(
+                            color: i < AppPage.barSlots ? p.accentSoft : p.surfaceAlt,
+                            borderRadius: BorderRadius.circular(22),
+                            // Long-press anywhere, or drag the handle straight away.
+                            child: ReorderableDelayedDragStartListener(
+                              index: i,
+                              child: Row(
+                                children: [
+                                  const SizedBox(width: 16),
+                                  Icon(_destinations[_navOrder[i]].icon, color: p.textPrimary),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Text(_destinations[_navOrder[i]].label,
+                                        style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
+                                  ),
+                                  Text(i < AppPage.barSlots ? 'Bar' : 'More',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.textSecondary)),
+                                  ReorderableDragStartListener(
+                                    index: i,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(14),
+                                      child: Icon(Icons.drag_handle_rounded, color: p.textSecondary),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  void _setNavOrder(List<int> order) {
+    setState(() => _navOrder = order);
+    SharedPreferences.getInstance().then((prefs) => prefs.setStringList(_navOrderKey, [for (final i in order) '$i']));
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final wide = MediaQuery.of(context).size.width > 800;
+    final bar = _barPages;
+    final slot = bar.indexOf(_selectedIndex);
 
     final body = IndexedStack(index: _selectedIndex, children: _pages);
 
@@ -315,11 +435,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
                   child: PillNavBar(
                     items: [
-                      for (var i = 0; i < 5; i++) _destinations[i],
-                      _selectedIndex >= 5 ? _destinations[_selectedIndex] : const NavDest(Icons.more_horiz_rounded, 'More'),
+                      for (final i in bar) _destinations[i],
+                      slot == -1 ? _destinations[_selectedIndex] : const NavDest(Icons.more_horiz_rounded, 'More'),
                     ],
-                    selected: _selectedIndex >= 5 ? 5 : _selectedIndex,
-                    onTap: (slot) => slot == 5 ? _showMoreSheet() : _onItemTapped(slot),
+                    selected: slot == -1 ? bar.length : slot,
+                    onTap: (s) => s == bar.length ? _showMoreSheet() : _onItemTapped(bar[s]),
                   ),
                 ),
               ),
