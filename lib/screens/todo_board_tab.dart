@@ -114,11 +114,12 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
   void _showCardMenu(AcademicTask t) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => SheetScaffold(
         title: t.title,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: ListView(
+          shrinkWrap: true,
           children: [
             for (final s in TaskStatus.all)
               if (s != t.effectiveStatus)

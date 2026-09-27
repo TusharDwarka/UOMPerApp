@@ -21,6 +21,13 @@ class GroupsScreen extends StatefulWidget {
 class _GroupsScreenState extends State<GroupsScreen> {
   int _tab = 0;
   String _query = '';
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
   int? _yearFilter;
   int? _semesterFilter;
 
@@ -193,100 +200,107 @@ class _GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
+  /// Search + filters scroll with the results: pinned above them they
+  /// overflowed once the keyboard left little room.
   Widget _discover(Palette p, GroupService service) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-          child: TextField(
-            decoration: const InputDecoration(hintText: 'Search programme or name, e.g. Data Science', prefixIcon: Icon(Icons.search_rounded)),
-            onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
-          ),
+    final filters = [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+        child: TextField(
+          controller: _search,
+          decoration: const InputDecoration(hintText: 'Search programme or name', prefixIcon: Icon(Icons.search_rounded)),
+          onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
         ),
-        SizedBox(
-          height: 44,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            children: [
-              for (final y in [null, 1, 2, 3, 4, 5])
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(y == null ? 'All years' : 'Y$y'),
-                    selected: _yearFilter == y,
-                    showCheckmark: false,
-                    selectedColor: p.ink,
-                    labelStyle: TextStyle(color: _yearFilter == y ? p.onInk : p.textPrimary, fontWeight: FontWeight.w600),
-                    onSelected: (_) => setState(() => _yearFilter = y),
-                  ),
+      ),
+      SizedBox(
+        height: 48,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          children: [
+            for (final y in [null, 1, 2, 3, 4, 5])
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(y == null ? 'All years' : 'Y$y'),
+                  selected: _yearFilter == y,
+                  showCheckmark: false,
+                  selectedColor: p.ink,
+                  labelStyle: TextStyle(color: _yearFilter == y ? p.onInk : p.textPrimary, fontWeight: FontWeight.w600),
+                  onSelected: (_) => setState(() => _yearFilter = y),
                 ),
-              Container(width: 1, margin: const EdgeInsets.fromLTRB(4, 10, 12, 10), color: p.border),
-              for (final sem in [null, 1, 2])
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(sem == null ? 'Any sem' : 'S$sem'),
-                    selected: _semesterFilter == sem,
-                    showCheckmark: false,
-                    selectedColor: p.ink,
-                    labelStyle: TextStyle(color: _semesterFilter == sem ? p.onInk : p.textPrimary, fontWeight: FontWeight.w600),
-                    onSelected: (_) => setState(() => _semesterFilter = sem),
-                  ),
+              ),
+            Container(width: 1, margin: const EdgeInsets.fromLTRB(4, 10, 12, 10), color: p.border),
+            for (final sem in [null, 1, 2])
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(sem == null ? 'Any sem' : 'S$sem'),
+                  selected: _semesterFilter == sem,
+                  showCheckmark: false,
+                  selectedColor: p.ink,
+                  labelStyle: TextStyle(color: _semesterFilter == sem ? p.onInk : p.textPrimary, fontWeight: FontWeight.w600),
+                  onSelected: (_) => setState(() => _semesterFilter = sem),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
-        Expanded(
-          child: StreamBuilder<List<StudyGroup>>(
-            stream: _public,
-            builder: (context, snap) {
-              if (snap.hasError) {
-                return EmptyState(icon: Icons.cloud_off_rounded, title: 'Could not load', subtitle: '${snap.error}');
-              }
-              if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-              final list = snap.data!.where((g) {
-                if (_yearFilter != null && g.year != _yearFilter) return false;
-                if (_semesterFilter != null && g.semester != _semesterFilter) return false;
-                if (_query.isEmpty) return true;
-                return g.name.toLowerCase().contains(_query) ||
-                    g.programme.toLowerCase().contains(_query) ||
-                    g.description.toLowerCase().contains(_query);
-              }).toList()
-                ..sort((a, b) => a.name.compareTo(b.name));
-              if (list.isEmpty) {
-                return EmptyState(
-                  icon: Icons.travel_explore_rounded,
-                  title: 'No public groups found',
-                  subtitle: 'Be the first — create one for your programme and year.',
-                  action: InkPillButton(label: 'Create group', icon: Icons.add, onPressed: _create),
-                );
-              }
-              return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-                itemCount: list.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, i) => _GroupCard(
-                  group: list[i],
-                  onTap: () => _open(list[i]),
-                  trailing: InkPillButton(
-                    label: 'Join',
-                    onPressed: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      try {
-                        await service.joinPublic(list[i]);
-                        if (mounted) _open(list[i]);
-                      } catch (e) {
-                        messenger.showSnackBar(SnackBar(content: Text('Could not join: ${_clean(e)}')));
-                      }
-                    },
-                  ),
+      ),
+    ];
+    // One ListView root in every state keeps the search field's element (and
+    // focus) alive while results load or change.
+    return StreamBuilder<List<StudyGroup>>(
+      stream: _public,
+      builder: (context, snap) {
+        Widget page(List<Widget> body) =>
+            ListView(padding: const EdgeInsets.only(bottom: 32), children: [...filters, ...body]);
+        if (snap.hasError) {
+          return page([EmptyState(icon: Icons.cloud_off_rounded, title: 'Could not load', subtitle: '${snap.error}')]);
+        }
+        if (!snap.hasData) return page(const [Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator()))]);
+        final list = snap.data!.where((g) {
+          if (_yearFilter != null && g.year != _yearFilter) return false;
+          if (_semesterFilter != null && g.semester != _semesterFilter) return false;
+          if (_query.isEmpty) return true;
+          return g.name.toLowerCase().contains(_query) ||
+              g.programme.toLowerCase().contains(_query) ||
+              g.description.toLowerCase().contains(_query);
+        }).toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
+        if (list.isEmpty) {
+          return page([
+            EmptyState(
+              icon: Icons.travel_explore_rounded,
+              title: 'No public groups found',
+              subtitle: 'Be the first — create one for your programme and year.',
+              action: InkPillButton(label: 'Create group', icon: Icons.add, onPressed: _create),
+            ),
+          ]);
+        }
+        return page([
+          for (final g in list)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+              child: _GroupCard(
+                key: ValueKey(g.id),
+                group: g,
+                onTap: () => _open(g),
+                trailing: InkPillButton(
+                  label: 'Join',
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    try {
+                      await service.joinPublic(g);
+                      if (mounted) _open(g);
+                    } catch (e) {
+                      messenger.showSnackBar(SnackBar(content: Text('Could not join: ${_clean(e)}')));
+                    }
+                  },
                 ),
-              );
-            },
-          ),
-        ),
-      ],
+              ),
+            ),
+        ]);
+      },
     );
   }
 }
@@ -297,7 +311,7 @@ class _GroupCard extends StatefulWidget {
   final VoidCallback onTap;
   final Widget? trailing;
   final bool showNext;
-  const _GroupCard({required this.group, required this.onTap, this.trailing, this.showNext = false});
+  const _GroupCard({super.key, required this.group, required this.onTap, this.trailing, this.showNext = false});
 
   @override
   State<_GroupCard> createState() => _GroupCardState();

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +11,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uom_per_app/models/academic_task.dart';
 import 'package:uom_per_app/models/attendance_record.dart';
 import 'package:uom_per_app/models/class_session.dart';
+import 'package:uom_per_app/models/group_models.dart';
+import 'package:uom_per_app/screens/group_detail_screen.dart';
+import 'package:uom_per_app/screens/onboarding_screen.dart';
+import 'package:uom_per_app/services/bus_repository.dart';
+import 'package:uom_per_app/services/group_service.dart';
 import 'package:uom_per_app/providers/focus_provider.dart';
 import 'package:uom_per_app/providers/note_provider.dart';
 import 'package:uom_per_app/providers/resource_provider.dart';
@@ -41,7 +47,45 @@ class FakeIsarService implements IsarService {
   Future<void> cleanDb() async {}
 }
 
-const longModule = 'Advanced Statistical Methods for Data Science and Machine Learning';
+/// GroupService without Firebase: every stream the detail screen reads.
+class FakeGroupService extends GroupService {
+  final List<GroupSession> fakeSessions;
+  FakeGroupService(this.fakeSessions);
+
+  @override
+  String? get uid => 'me';
+  @override
+  Stream<StudyGroup?> watchGroup(String gid) =>
+      Stream.value(const StudyGroup(id: 'g', name: 'Data Science Year 2 Cohort A', ownerId: 'me', programme: 'Data Science'));
+  @override
+  Stream<List<GroupMember>> members(String gid) =>
+      Stream.value(const [GroupMember(uid: 'me', displayName: 'Me Myself', role: 'leader')]);
+  @override
+  Stream<List<GroupSession>> sessions(String gid) => Stream.value(fakeSessions);
+  @override
+  Stream<List<GroupEvent>> events(String gid) => Stream.value(const []);
+  @override
+  Stream<List<GroupMessage>> messages(String gid, {int limit = 150}) => Stream.value(const []);
+  @override
+  Stream<Map<String, String>> eventDone(String gid, String eventId) => Stream.value(const {});
+  @override
+  Future<int?> reminderMinutesFor(String gid) async => null;
+  @override
+  Future<void> publishStats(String gid,
+      {required int focusMinutes, required int tasksDone, required int streak, String visibility = 'full'}) async {}
+  @override
+  Future<void> scheduleGroupReminders(String gid, String groupName, List<GroupSession> sessions, List<GroupEvent> events) async {}
+}
+
+/// Phone viewport with status/gesture-bar insets, like a real device.
+void _phone(WidgetTester tester, Size size) {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1.0;
+  tester.view.padding = const FakeViewPadding(top: 24, bottom: 24);
+  addTearDown(tester.view.reset);
+}
+
+const longModule ='Advanced Statistical Methods for Data Science and Machine Learning';
 
 TimetableProvider seededTimetable(SyncService sync, IsarService isar) {
   final now = DateTime.now();
@@ -141,6 +185,7 @@ void main() {
     'Print & export': () => const PrintCenterScreen(),
     'Print planners': () => const PrintCenterScreen(initialTab: 1),
     'Focus': () => const FocusScreen(),
+    'Onboarding': () => const OnboardingScreen(),
   };
   const sizes = {'small phone 320x640': Size(320, 640), 'phone 390x844': Size(390, 844), 'desktop 1280x800': Size(1280, 800)};
 
@@ -273,6 +318,114 @@ void main() {
     testWidgets('note editor', (tester) async {
       await openSheet(tester, (c) async => showNoteEditor(c));
     });
+  });
+
+  for (final size in const [Size(320, 640), Size(390, 844)]) {
+    testWidgets('bus route menu fits at ${size.width.toInt()}x${size.height.toInt()}', (tester) async {
+      _phone(tester, size);
+      SharedPreferences.setMockInitialValues({
+        SyncService.busPrefsKey: jsonEncode([BusRepository.presets.first]),
+      });
+      await tester.pumpWidget(Provider<SyncService>.value(
+        value: SyncService(FakeIsarService()),
+        child: MaterialApp(theme: AppTheme.light(), home: const BusTab()),
+      ));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byTooltip('Route options'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(find.text('Delete route'), 50, scrollable: find.byType(Scrollable).last);
+      expect(find.text('Delete route'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  Future<void> pumpGroup(WidgetTester tester, List<GroupSession> sessions) async {
+    _phone(tester, const Size(360, 640));
+    final isar = FakeIsarService();
+    final sync = SyncService(isar);
+    final focus = FocusProvider();
+    addTearDown(focus.dispose);
+    await tester.pumpWidget(MultiProvider(
+      providers: [
+        Provider<GroupService>.value(value: FakeGroupService(sessions)),
+        ChangeNotifierProvider(create: (_) => seededTimetable(sync, isar)),
+        ChangeNotifierProvider.value(value: focus),
+      ],
+      child: MaterialApp(theme: AppTheme.light(), home: const GroupDetailScreen(groupId: 'g')),
+    ));
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+
+  testWidgets('group timetable scrolls the header away; tabs stay pinned', (tester) async {
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    await pumpGroup(tester, [
+      for (var i = 0; i < 20; i++)
+        GroupSession(id: '$i', subject: 'Module $i', day: days[i % 5], startTime: '${8 + i % 8}:00', endTime: '${9 + i % 8}:00', room: 'Room $i'),
+    ]);
+    final error = tester.takeException();
+    expect(error, isNull, reason: '$error');
+    await tester.drag(find.text('Module 0'), const Offset(0, -400));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Back').hitTestable(), findsNothing);
+    expect(find.text('Timetable').hitTestable(), findsOneWidget, reason: 'tabs stay pinned');
+    for (final tab in ['Events', 'Chat', 'Members', 'Ranking', 'Timetable']) {
+      await tester.ensureVisible(find.text(tab));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(tab));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: tab);
+    }
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('group timetable empty state renders', (tester) async {
+    await pumpGroup(tester, const []);
+    expect(tester.takeException(), isNull);
+    expect(find.text('No shared timetable yet'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  for (final dark in [false, true]) {
+    testWidgets('onboarding steps fit on a 320px phone (${dark ? 'dark' : 'light'})', (tester) async {
+      _phone(tester, const Size(320, 640));
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+        home: const OnboardingScreen(),
+      ));
+      await tester.enterText(find.byType(TextField), longModule);
+      await tester.ensureVisible(find.text('Continue'));
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('Manual'), findsOneWidget);
+      await tester.ensureVisible(find.text('Manual'));
+      await tester.tap(find.text('Manual'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('Build classes'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  test('bottom bar order: saved order kept, unknown dropped, missing pages appended', () {
+    expect(navOrderFrom(null), List.generate(AppPage.count, (i) => i));
+    final saved = navOrderFrom(['6', '0', '99', 'x', '4', '6']);
+    expect(saved.take(3), [6, 0, 4]);
+    expect(saved.toSet().length, AppPage.count);
+    expect(saved.length, AppPage.count);
+  });
+
+  testWidgets('tapping checklist text does not toggle; the box does', (tester) async {
+    final toggled = <int>[];
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: NoteBody(text: '☐ buy milk', onToggle: toggled.add))));
+    await tester.tap(find.text('buy milk'), warnIfMissed: false);
+    expect(toggled, isEmpty);
+    await tester.tap(find.byIcon(Icons.check_box_outline_blank_rounded));
+    expect(toggled, [0]);
   });
 
   for (final width in [280.0, 320.0, 360.0, 412.0]) {

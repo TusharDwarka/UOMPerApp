@@ -44,6 +44,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   int? _reminderMinutes;
   int _tab = 0;
   final _msgController = TextEditingController();
+  final _outer = ScrollController();
   bool _announce = false;
   String? _error;
 
@@ -115,6 +116,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       s.cancel();
     }
     _msgController.dispose();
+    _outer.dispose();
     super.dispose();
   }
 
@@ -144,11 +146,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   Future<void> _pickReminder() async {
     final choice = await showModalBottomSheet<int>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => SheetScaffold(
         title: 'Remind me before group classes',
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: ListView(
+          shrinkWrap: true,
           children: [
             for (final m in [-1, 5, 10, 15, 30, 60])
               ListTile(
@@ -277,68 +280,90 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     final g = _group;
     final accent = g?.colorValue != null ? Color(g!.colorValue!) : p.accent;
 
+    // The header scrolls away with the tab content so the timetable gets the
+    // whole screen; the tab pills stay pinned at the top of the body.
+    final header = Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 16, 0),
+          child: Row(
+            children: [
+              CircleIconButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => Navigator.pop(context)),
+              const Spacer(),
+              CircleIconButton(
+                icon: _reminderMinutes == null ? Icons.notifications_none_rounded : Icons.notifications_active_rounded,
+                tooltip: 'Class reminders',
+                onPressed: _pickReminder,
+              ),
+              const SizedBox(width: 8),
+              CircleIconButton(icon: Icons.person_add_alt_1_rounded, tooltip: 'Invite', onPressed: _shareCode),
+              const SizedBox(width: 8),
+              CircleIconButton(
+                icon: _isOwner ? Icons.delete_outline_rounded : Icons.logout_rounded,
+                tooltip: _isOwner ? 'Delete group' : 'Leave group',
+                onPressed: _leaveOrDelete,
+              ),
+            ],
+          ),
+        ),
+        ScreenHeader(
+          title: g?.name ?? 'Group',
+          eyebrow: g?.subtitle,
+          badge: CountBadge(_members.length),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+        ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text('Could not load everything: $_error', style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+          ),
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: _nextClassCard(p, accent)),
+        const SizedBox(height: 12),
+      ],
+    );
+
     return Scaffold(
       backgroundColor: p.canvas,
       body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 16, 0),
-              child: Row(
-                children: [
-                  CircleIconButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => Navigator.pop(context)),
-                  const Spacer(),
-                  CircleIconButton(
-                    icon: _reminderMinutes == null ? Icons.notifications_none_rounded : Icons.notifications_active_rounded,
-                    tooltip: 'Class reminders',
-                    onPressed: _pickReminder,
-                  ),
-                  const SizedBox(width: 8),
-                  CircleIconButton(icon: Icons.person_add_alt_1_rounded, tooltip: 'Invite', onPressed: _shareCode),
-                  const SizedBox(width: 8),
-                  CircleIconButton(
-                    icon: _isOwner ? Icons.delete_outline_rounded : Icons.logout_rounded,
-                    tooltip: _isOwner ? 'Delete group' : 'Leave group',
-                    onPressed: _leaveOrDelete,
-                  ),
-                ],
-              ),
-            ),
-            ScreenHeader(
-              title: g?.name ?? 'Group',
-              eyebrow: g?.subtitle,
-              badge: CountBadge(_members.length),
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-            ),
-            if (_error != null)
+        child: NestedScrollView(
+          controller: _outer,
+          headerSliverBuilder: (context, _) => [SliverToBoxAdapter(child: header)],
+          body: Column(
+            children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text('Could not load everything: $_error', style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                child: PillSegmented<int>(
+                  values: const [0, 1, 2, 3, 4],
+                  selected: _tab,
+                  scrollable: true,
+                  labelOf: (i) => const ['Timetable', 'Events', 'Chat', 'Members', 'Ranking'][i],
+                  countOf: (i) => i == 1 ? _events.where((e) => !e.start.isBefore(dateOnly(DateTime.now()))).length : (i == 3 ? _members.length : null),
+                  onChanged: (i) {
+                    setState(() => _tab = i);
+                    // Chat needs the full height for the message box.
+                    if (i == 2) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (_outer.hasClients) {
+                          _outer.animateTo(_outer.position.maxScrollExtent,
+                              duration: const Duration(milliseconds: 250), curve: Curves.easeOutCubic);
+                        }
+                      });
+                    }
+                  },
+                ),
               ),
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: _nextClassCard(p, accent)),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: PillSegmented<int>(
-                values: const [0, 1, 2, 3, 4],
-                selected: _tab,
-                scrollable: true,
-                labelOf: (i) => const ['Timetable', 'Events', 'Chat', 'Members', 'Ranking'][i],
-                countOf: (i) => i == 1 ? _events.where((e) => !e.start.isBefore(dateOnly(DateTime.now()))).length : (i == 3 ? _members.length : null),
-                onChanged: (i) => setState(() => _tab = i),
+              const SizedBox(height: 8),
+              Expanded(
+                child: switch (_tab) {
+                  0 => _timetableTab(p),
+                  1 => _eventsTab(p),
+                  2 => _chatTab(p),
+                  3 => _membersTab(p),
+                  _ => _rankingTab(p),
+                },
               ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: switch (_tab) {
-                0 => _timetableTab(p),
-                1 => _eventsTab(p),
-                2 => _chatTab(p),
-                3 => _membersTab(p),
-                _ => _rankingTab(p),
-              },
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -416,7 +441,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
       children: [
-        Row(
+        // Wrap, not Row: both buttons don't fit side by side on narrow phones.
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
           children: [
             if (_sessions.isNotEmpty)
               TextButton.icon(
@@ -424,7 +451,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 icon: const Icon(Icons.download_rounded, size: 18),
                 label: const Text('Copy to my schedule'),
               ),
-            const Spacer(),
             if (_canPost)
               TextButton.icon(
                 onPressed: () => _editSession(),
@@ -773,6 +799,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           child: _messages.isEmpty
               ? const EmptyState(icon: Icons.forum_outlined, title: 'Say hi 👋', subtitle: 'Share notes, ask about deadlines, plan study sessions.')
               : ListView.builder(
+                  // Reversed lists can't share the header's scroll; chat
+                  // scrolls on its own.
+                  primary: false,
                   reverse: true,
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                   itemCount: _messages.length,

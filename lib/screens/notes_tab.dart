@@ -270,6 +270,7 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
     _subjectController = TextEditingController(text: widget.note?.subject == 'General' ? '' : (widget.note?.subject ?? ''));
     _pinned = widget.note?.isPinned ?? false;
     _selectedColorIndex = widget.note != null ? widget.note!.colorIndex % widget.colors.length : Random().nextInt(widget.colors.length);
+    _contentFocus.addListener(() => setState(() {}));
   }
 
   @override
@@ -448,7 +449,6 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
   Widget _tool(IconData icon, String tip, VoidCallback? onTap) => IconButton(
         tooltip: tip,
         onPressed: onTap,
-        visualDensity: VisualDensity.compact,
         icon: Icon(icon, color: onTap == null ? Colors.black26 : Colors.black87),
       );
 
@@ -489,9 +489,14 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final bg = widget.colors[_selectedColorIndex];
+    final mq = MediaQuery.of(context);
+    // With the keyboard up the writing area used to shrink to a sliver on
+    // small phones: use the full height and tuck away the colour/tag rows.
+    final typing = mq.viewInsets.bottom > 0;
+    final writing = typing && _contentFocus.hasFocus;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.88,
+      height: typing ? mq.size.height - mq.padding.top : mq.size.height * 0.88,
       decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, top: 10, left: 20, right: 12),
       child: Column(
@@ -528,41 +533,45 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
               ),
             ],
           ),
-          SizedBox(
-            height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: List.generate(widget.colors.length, (index) {
-                final isSelected = _selectedColorIndex == index;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedColorIndex = index),
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: widget.colors[index],
-                      shape: BoxShape.circle,
-                      border: Border.all(color: isSelected ? Colors.black : Colors.black12, width: isSelected ? 2 : 1),
+          if (!typing) ...[
+            SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: List.generate(widget.colors.length, (index) {
+                  final isSelected = _selectedColorIndex == index;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedColorIndex = index),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: widget.colors[index],
+                        shape: BoxShape.circle,
+                        border: Border.all(color: isSelected ? Colors.black : Colors.black12, width: isSelected ? 2 : 1),
+                      ),
                     ),
-                  ),
-                );
-              }),
+                  );
+                }),
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
+            const SizedBox(height: 10),
+          ],
           TextField(
             controller: _titleController,
             style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600, color: Colors.black),
             decoration: const InputDecoration.collapsed(hintText: 'Title', hintStyle: TextStyle(color: Colors.black38), filled: false),
           ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _subjectController,
-            style: const TextStyle(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w600),
-            decoration:
-                const InputDecoration.collapsed(hintText: 'Module / tag', hintStyle: TextStyle(color: Colors.black26), filled: false),
-          ),
+          if (!writing) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: _subjectController,
+              style: const TextStyle(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w600),
+              decoration:
+                  const InputDecoration.collapsed(hintText: 'Module / tag', hintStyle: TextStyle(color: Colors.black26), filled: false),
+            ),
+          ],
           Divider(height: 26, color: p.isDark ? Colors.black26 : Colors.black12),
           Expanded(
             child: _preview
@@ -700,26 +709,30 @@ class NoteBody extends StatelessWidget {
         ));
       } else if (l.startsWith('☐ ') || l.startsWith('☑ ')) {
         final done = l.startsWith('☑ ');
-        children.add(InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: onToggle == null ? null : () => onToggle!(i),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(done ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
-                    size: fontSize + 4, color: done ? Colors.black87 : Colors.black45),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text.rich(TextSpan(children: _inline(l.substring(2))),
-                      style: base.copyWith(
-                        decoration: done ? TextDecoration.lineThrough : null,
-                        color: done ? Colors.black38 : base.color,
-                      )),
+        // Only the box toggles: a tap on the text falls through to the card,
+        // so checklist-heavy notes still open when tapped.
+        children.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onToggle == null ? null : () => onToggle!(i),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 0, 8, 4),
+                  child: Icon(done ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                      size: fontSize + 6, color: done ? Colors.black87 : Colors.black45),
                 ),
-              ],
-            ),
+              ),
+              Expanded(
+                child: Text.rich(TextSpan(children: _inline(l.substring(2))),
+                    style: base.copyWith(
+                      decoration: done ? TextDecoration.lineThrough : null,
+                      color: done ? Colors.black38 : base.color,
+                    )),
+              ),
+            ],
           ),
         ));
       } else if (l.startsWith('• ') || l.startsWith('- ')) {
