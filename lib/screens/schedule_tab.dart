@@ -282,9 +282,8 @@ class _ScheduleTabState extends State<ScheduleTab> {
                         alignment: Alignment.topLeft,
                         maxHeight: double.infinity,
                         child: compact
-                            ? Text(s.moduleCode.isNotEmpty && laneWidth < 70 ? s.moduleCode : s.subject,
+                            ? _compactLabel(s, laneWidth,
                                 maxLines: math.max(1, (height - 7) ~/ 13),
-                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                     fontSize: 10.5, height: 1.2, fontWeight: FontWeight.w700, color: textColor, decoration: strike))
                             : Column(
@@ -320,6 +319,19 @@ class _ScheduleTabState extends State<ScheduleTab> {
           );
         }),
     ];
+  }
+
+  /// Narrow lanes show the module code shrunk onto one line (it used to wrap
+  /// mid-word: "CS / 20 / 01"); wider ones show the wrapped name.
+  Widget _compactLabel(ClassSession s, double laneWidth, {required int maxLines, required TextStyle style}) {
+    if (s.moduleCode.isNotEmpty && laneWidth < 70) {
+      return FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.topLeft,
+        child: Text(s.moduleCode, maxLines: 1, style: style),
+      );
+    }
+    return Text(s.subject, maxLines: maxLines, overflow: TextOverflow.ellipsis, style: style);
   }
 
   /// Mon–Fri (plus weekend days that have classes) side by side.

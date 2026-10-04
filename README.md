@@ -3,12 +3,37 @@
 A companion app for University of Mauritius students — timetable, deadlines, bus times, files, focus
 timer and study groups — on Android and Windows, synced through one account.
 
+## ⬇️ Download
+
+Grab the latest build from [**Releases**](https://github.com/TusharDwarka/UOMPerApp/releases/latest):
+
+- **Android** — `UOMPer-v3.1-android.apk`. Open it on your phone and allow "install unknown apps" when asked.
+- **Windows** — `UOMPer-v3.1-windows.zip`. Unzip anywhere and run `uom_per_app.exe` (keep the other files next to it).
+  Windows SmartScreen may warn because the app isn't signed: *More info → Run anyway*.
+
+> v3.1 is a preview with patches — more updates are coming.
+
+## 📸 Screenshots
+
+| Home | Day | Week | Month |
+|:---:|:---:|:---:|:---:|
+| ![Home](docs/screenshots/dashboard.png) | ![Day view](docs/screenshots/schedule_day.png) | ![Week grid](docs/screenshots/schedule_week.png) | ![Month calendar](docs/screenshots/schedule_month.png) |
+
+| Board | Focus |
+|:---:|:---:|
+| ![Board](docs/screenshots/board.png) | ![Focus](docs/screenshots/focus.png) |
+
+<sub>Rendered from the real screens with demo data: `flutter test tools/readme_screenshots_test.dart --update-goldens`.</sub>
+
 ## ✨ Features
 
 ### 📅 Schedule
 - AI timetable import (photo/PDF), week-aware classes, one-off classes.
+- **Day, Week and Month views**: the day timeline, a Mon–Fri grid of the whole week, and a month calendar (tap a day to open it).
 - Day view with correct hour alignment, early/late classes, side-by-side overlapping classes and a live "now" line.
 - Tap a class for homework, a reminder and **Join Meet/Teams/Zoom** (paste a link on any class or event).
+- **Lecturer cancelled it?** Mark that one class as cancelled — it's crossed out and skipped by reminders, "next class" and
+  the widget, on all your devices. Undo from the same sheet.
 
 ### 🗓 Academic Hub
 - Calendar with **per-event colours** and **multi-day (spanning) events** drawn as continuous bars.
