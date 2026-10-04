@@ -404,23 +404,34 @@ class _HomeScreenState extends State<HomeScreen> {
         body: wide
             ? Row(
                 children: [
-                  NavigationRail(
-                    selectedIndex: _selectedIndex,
-                    onDestinationSelected: _onItemTapped,
-                    extended: MediaQuery.of(context).size.width > 1100,
-                    backgroundColor: p.surface,
-                    indicatorColor: p.ink,
-                    selectedIconTheme: IconThemeData(color: p.onInk),
-                    unselectedIconTheme: IconThemeData(color: p.textSecondary),
-                    selectedLabelTextStyle: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w700),
-                    unselectedLabelTextStyle: TextStyle(color: p.textSecondary),
-                    leading: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: CircleAvatar(backgroundColor: p.ink, child: Icon(Icons.school_rounded, color: p.onInk)),
+                  // A rotated phone is "wide" but only ~360px tall: 10 rail
+                  // items don't fit, so the rail scrolls instead of overflowing.
+                  LayoutBuilder(
+                    builder: (context, c) => SingleChildScrollView(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: c.maxHeight),
+                        child: IntrinsicHeight(
+                          child: NavigationRail(
+                            selectedIndex: _selectedIndex,
+                            onDestinationSelected: _onItemTapped,
+                            extended: MediaQuery.of(context).size.width > 1100,
+                            backgroundColor: p.surface,
+                            indicatorColor: p.ink,
+                            selectedIconTheme: IconThemeData(color: p.onInk),
+                            unselectedIconTheme: IconThemeData(color: p.textSecondary),
+                            selectedLabelTextStyle: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w700),
+                            unselectedLabelTextStyle: TextStyle(color: p.textSecondary),
+                            leading: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              child: CircleAvatar(backgroundColor: p.ink, child: Icon(Icons.school_rounded, color: p.onInk)),
+                            ),
+                            destinations: [
+                              for (final d in _destinations) NavigationRailDestination(icon: Icon(d.icon), label: Text(d.label)),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                    destinations: [
-                      for (final d in _destinations) NavigationRailDestination(icon: Icon(d.icon), label: Text(d.label)),
-                    ],
                   ),
                   Expanded(child: body),
                 ],

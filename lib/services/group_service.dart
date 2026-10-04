@@ -391,11 +391,10 @@ class GroupService {
       groupName = ((await _group(gid).get()).data()?['name'] as String?) ?? groupName;
     } catch (_) {}
     for (final m in fresh) {
-      await NotificationService().scheduleOneOff(
+      await NotificationService().showNow(
         key: 'announcement|$gid|${m.id}',
         title: '📣 $groupName',
         body: '${m.senderName}: ${m.text}',
-        at: DateTime.now().add(const Duration(seconds: 2)),
       );
     }
   }
