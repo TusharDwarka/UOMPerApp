@@ -467,9 +467,25 @@ class TimetableProvider extends ChangeNotifier {
     return "Week $w${online ? ' (Online)' : ''}";
   }
 
-  List<ClassSession> _sessionsFor(List<ClassSession> source, DateTime date) {
+  static String _dateKey(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
+
+  bool isCancelled(ClassSession s, DateTime date) => s.cancelledDates?.contains(_dateKey(date)) ?? false;
+
+  /// Marks (or un-marks) one occurrence of [s] as cancelled.
+  Future<void> setCancelled(ClassSession s, DateTime date, bool cancelled) async {
+    final key = _dateKey(date);
+    final set = {...?s.cancelledDates};
+    cancelled ? set.add(key) : set.remove(key);
+    // Drop entries older than ~2 months so the list doesn't grow forever.
+    final cutoff = _dateKey(DateTime.now().subtract(const Duration(days: 60)));
+    s.cancelledDates = (set.where((d) => d.compareTo(cutoff) >= 0).toList()..sort());
+    await addSession(s);
+  }
+
+  List<ClassSession> _sessionsFor(List<ClassSession> source, DateTime date, {bool includeCancelled = false}) {
     final dayName = DateFormat('EEEE').format(date);
     return source.where((s) {
+      if (!includeCancelled && isCancelled(s, date)) return false;
       // One-off classes match on their date even if `day` disagrees.
       if (s.specificDate != null) return isSameDay(date, s.specificDate!);
       return s.day == dayName && _shouldShowSession(s, date);
@@ -481,7 +497,9 @@ class TimetableProvider extends ChangeNotifier {
   List<ClassSession> getEventsForDay(DateTime date) => _sessionsFor(userSessions, date);
 
   /// The signed-in user's own classes for [date] (ignores the friend swap).
-  List<ClassSession> getClassesForDate(DateTime date) => _sessionsFor(_userSessions, date);
+  /// Cancelled classes are left out unless [includeCancelled].
+  List<ClassSession> getClassesForDate(DateTime date, {bool includeCancelled = false}) =>
+      _sessionsFor(_userSessions, date, includeCancelled: includeCancelled);
 
   /// Finds the class in progress, or the next one within [lookaheadDays].
   UpcomingClass? findNextClass(DateTime now, {int lookaheadDays = 7, bool skipToday = false}) {

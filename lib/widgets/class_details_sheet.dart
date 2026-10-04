@@ -81,6 +81,7 @@ Future<void> editClass(BuildContext context, {ClassSession? session, DateTime? f
   if (session != null) {
     updated.id = session.id;
     updated.syncId = session.syncId;
+    updated.cancelledDates = session.cancelledDates;
   }
   await provider.addSession(updated);
 }
@@ -106,6 +107,7 @@ class _ClassDetails extends StatelessWidget {
     final p = Palette.of(context);
     final timetable = context.watch<TimetableProvider>();
     final colors = moduleColors(session.subject, p.isDark);
+    final cancelled = timetable.isCancelled(session, date);
 
     Widget action(IconData icon, String label, VoidCallback onTap, {Color? color}) => Expanded(
           child: SoftCard(
@@ -144,7 +146,13 @@ class _ClassDetails extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(session.subject,
-                style: TextStyle(fontSize: 30, height: 1.1, fontWeight: FontWeight.w300, letterSpacing: -1, color: p.textPrimary)),
+                style: TextStyle(
+                    fontSize: 30,
+                    height: 1.1,
+                    fontWeight: FontWeight.w300,
+                    letterSpacing: -1,
+                    color: p.textPrimary,
+                    decoration: cancelled ? TextDecoration.lineThrough : null)),
             const SizedBox(height: 8),
             Text('${session.startTime} – ${session.endTime}  ·  ${session.room}',
                 style: TextStyle(fontSize: 15, color: p.textSecondary, fontWeight: FontWeight.w500)),
@@ -170,7 +178,7 @@ class _ClassDetails extends StatelessWidget {
                   }
                   final start = date.add(Duration(minutes: session.startMinutes));
                   if (start.subtract(Duration(minutes: minutes)).isBefore(DateTime.now())) {
-                    messenger.showSnackBar(const SnackBar(content: Text('This class has already started')));
+                    messenger.showSnackBar(const SnackBar(content: Text('Too late for a reminder — this class starts soon')));
                     return;
                   }
                   await NotificationService().scheduleClassReminder(
@@ -189,6 +197,24 @@ class _ClassDetails extends StatelessWidget {
                   editClass(hostContext, session: session);
                 }),
               ],
+            ),
+            const SizedBox(height: 10),
+            // Lecturer won't hold this one: crossed out on the schedule and
+            // skipped by reminders, "next class" and the widget.
+            OutlinedButton.icon(
+              icon: Icon(cancelled ? Icons.undo_rounded : Icons.event_busy_rounded),
+              label: Text(cancelled
+                  ? 'Class is back on · ${DateFormat('EEE d MMM').format(date)}'
+                  : 'Lecturer cancelled it · ${DateFormat('EEE d MMM').format(date)}'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: cancelled ? p.textPrimary : AppColors.danger,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+              ),
+              onPressed: () async {
+                Navigator.pop(context);
+                await timetable.setCancelled(session, date, !cancelled);
+              },
             ),
           ],
         ),

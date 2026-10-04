@@ -46,6 +46,14 @@ class NotificationService {
         onDidReceiveNotificationResponse: (details) {},
       );
       _isInitialized = true;
+      // Android 13+ needs the runtime permission. It used to be asked only
+      // in onboarding/Settings, so a second device that skipped onboarding
+      // never showed any reminder. No dialog if already decided.
+      if (await areRemindersEnabled()) {
+        await _notificationsPlugin
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+            ?.requestNotificationsPermission();
+      }
     } catch (e) {
       debugPrint('Notification init failed: $e');
     }
@@ -112,7 +120,7 @@ class NotificationService {
         await _notificationsPlugin.zonedSchedule(
           id: id,
           title: 'Upcoming: $subject',
-          body: 'Starts in $minutesBefore min at $room',
+          body: minutesBefore == 0 ? 'Starting now at $room' : 'Starts in $minutesBefore min at $room',
           scheduledDate: tz.TZDateTime.from(reminderTime, tz.local),
           notificationDetails: const NotificationDetails(
             android: AndroidNotificationDetails('class_reminders', 'Class Reminders'),
@@ -260,20 +268,43 @@ class NotificationService {
     required DateTime at,
   }) async {
     if (!_isInitialized || at.isBefore(DateTime.now())) return;
+    for (final mode in [AndroidScheduleMode.exactAllowWhileIdle, AndroidScheduleMode.inexactAllowWhileIdle]) {
+      try {
+        await _notificationsPlugin.zonedSchedule(
+          id: stableHash(key) % 2000000000,
+          title: title,
+          body: body,
+          scheduledDate: tz.TZDateTime.from(at, tz.local),
+          notificationDetails: _generalDetails,
+          // Exact first: inexact alarms were arriving minutes late (or after
+          // the class had started). Falls back if exact alarms are denied.
+          androidScheduleMode: mode,
+        );
+        return;
+      } catch (e) {
+        debugPrint('scheduleOneOff ($mode) failed: $e');
+      }
+    }
+  }
+
+  static const _generalDetails = NotificationDetails(
+    android: AndroidNotificationDetails('general', 'General', importance: Importance.high, priority: Priority.high),
+    iOS: DarwinNotificationDetails(),
+  );
+
+  /// Shows a notification right away (group announcements). These used to be
+  /// "scheduled 2 s from now" as inexact alarms, which Android delays.
+  Future<void> showNow({required String key, required String title, required String body}) async {
+    if (!_isInitialized) return;
     try {
-      await _notificationsPlugin.zonedSchedule(
+      await _notificationsPlugin.show(
         id: stableHash(key) % 2000000000,
         title: title,
         body: body,
-        scheduledDate: tz.TZDateTime.from(at, tz.local),
-        notificationDetails: const NotificationDetails(
-          android: AndroidNotificationDetails('general', 'General', importance: Importance.high, priority: Priority.high),
-          iOS: DarwinNotificationDetails(),
-        ),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        notificationDetails: _generalDetails,
       );
     } catch (e) {
-      debugPrint('scheduleOneOff failed: $e');
+      debugPrint('showNow failed: $e');
     }
   }
 

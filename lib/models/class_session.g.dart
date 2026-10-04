@@ -17,63 +17,68 @@ const ClassSessionSchema = CollectionSchema(
   name: r'ClassSession',
   id: 9125337502516925396,
   properties: {
-    r'day': PropertySchema(
+    r'cancelledDates': PropertySchema(
       id: 0,
+      name: r'cancelledDates',
+      type: IsarType.stringList,
+    ),
+    r'day': PropertySchema(
+      id: 1,
       name: r'day',
       type: IsarType.string,
     ),
     r'endTime': PropertySchema(
-      id: 1,
+      id: 2,
       name: r'endTime',
       type: IsarType.string,
     ),
     r'isUser': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'isUser',
       type: IsarType.bool,
     ),
     r'meetingLink': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'meetingLink',
       type: IsarType.string,
     ),
     r'moduleCode': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'moduleCode',
       type: IsarType.string,
     ),
     r'room': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'room',
       type: IsarType.string,
     ),
     r'specificDate': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'specificDate',
       type: IsarType.dateTime,
     ),
     r'startTime': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'startTime',
       type: IsarType.string,
     ),
     r'subject': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'subject',
       type: IsarType.string,
     ),
     r'syncId': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'syncId',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'updatedAt',
       type: IsarType.dateTime,
     ),
     r'weeks': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'weeks',
       type: IsarType.longList,
     )
@@ -112,6 +117,18 @@ int _classSessionEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
+  {
+    final list = object.cancelledDates;
+    if (list != null) {
+      bytesCount += 3 + list.length * 3;
+      {
+        for (var i = 0; i < list.length; i++) {
+          final value = list[i];
+          bytesCount += value.length * 3;
+        }
+      }
+    }
+  }
   bytesCount += 3 + object.day.length * 3;
   bytesCount += 3 + object.endTime.length * 3;
   {
@@ -145,18 +162,19 @@ void _classSessionSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeString(offsets[0], object.day);
-  writer.writeString(offsets[1], object.endTime);
-  writer.writeBool(offsets[2], object.isUser);
-  writer.writeString(offsets[3], object.meetingLink);
-  writer.writeString(offsets[4], object.moduleCode);
-  writer.writeString(offsets[5], object.room);
-  writer.writeDateTime(offsets[6], object.specificDate);
-  writer.writeString(offsets[7], object.startTime);
-  writer.writeString(offsets[8], object.subject);
-  writer.writeString(offsets[9], object.syncId);
-  writer.writeDateTime(offsets[10], object.updatedAt);
-  writer.writeLongList(offsets[11], object.weeks);
+  writer.writeStringList(offsets[0], object.cancelledDates);
+  writer.writeString(offsets[1], object.day);
+  writer.writeString(offsets[2], object.endTime);
+  writer.writeBool(offsets[3], object.isUser);
+  writer.writeString(offsets[4], object.meetingLink);
+  writer.writeString(offsets[5], object.moduleCode);
+  writer.writeString(offsets[6], object.room);
+  writer.writeDateTime(offsets[7], object.specificDate);
+  writer.writeString(offsets[8], object.startTime);
+  writer.writeString(offsets[9], object.subject);
+  writer.writeString(offsets[10], object.syncId);
+  writer.writeDateTime(offsets[11], object.updatedAt);
+  writer.writeLongList(offsets[12], object.weeks);
 }
 
 ClassSession _classSessionDeserialize(
@@ -166,20 +184,21 @@ ClassSession _classSessionDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = ClassSession(
-    day: reader.readStringOrNull(offsets[0]) ?? '',
-    endTime: reader.readStringOrNull(offsets[1]) ?? '',
-    isUser: reader.readBoolOrNull(offsets[2]) ?? true,
-    meetingLink: reader.readStringOrNull(offsets[3]),
-    moduleCode: reader.readStringOrNull(offsets[4]) ?? '',
-    room: reader.readStringOrNull(offsets[5]) ?? '',
-    specificDate: reader.readDateTimeOrNull(offsets[6]),
-    startTime: reader.readStringOrNull(offsets[7]) ?? '',
-    subject: reader.readStringOrNull(offsets[8]) ?? '',
-    weeks: reader.readLongList(offsets[11]),
+    day: reader.readStringOrNull(offsets[1]) ?? '',
+    endTime: reader.readStringOrNull(offsets[2]) ?? '',
+    isUser: reader.readBoolOrNull(offsets[3]) ?? true,
+    meetingLink: reader.readStringOrNull(offsets[4]),
+    moduleCode: reader.readStringOrNull(offsets[5]) ?? '',
+    room: reader.readStringOrNull(offsets[6]) ?? '',
+    specificDate: reader.readDateTimeOrNull(offsets[7]),
+    startTime: reader.readStringOrNull(offsets[8]) ?? '',
+    subject: reader.readStringOrNull(offsets[9]) ?? '',
+    weeks: reader.readLongList(offsets[12]),
   );
+  object.cancelledDates = reader.readStringList(offsets[0]);
   object.id = id;
-  object.syncId = reader.readStringOrNull(offsets[9]);
-  object.updatedAt = reader.readDateTimeOrNull(offsets[10]);
+  object.syncId = reader.readStringOrNull(offsets[10]);
+  object.updatedAt = reader.readDateTimeOrNull(offsets[11]);
   return object;
 }
 
@@ -191,28 +210,30 @@ P _classSessionDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readStringOrNull(offset) ?? '') as P;
+      return (reader.readStringList(offset)) as P;
     case 1:
       return (reader.readStringOrNull(offset) ?? '') as P;
     case 2:
-      return (reader.readBoolOrNull(offset) ?? true) as P;
-    case 3:
-      return (reader.readStringOrNull(offset)) as P;
-    case 4:
       return (reader.readStringOrNull(offset) ?? '') as P;
+    case 3:
+      return (reader.readBoolOrNull(offset) ?? true) as P;
+    case 4:
+      return (reader.readStringOrNull(offset)) as P;
     case 5:
       return (reader.readStringOrNull(offset) ?? '') as P;
     case 6:
-      return (reader.readDateTimeOrNull(offset)) as P;
-    case 7:
       return (reader.readStringOrNull(offset) ?? '') as P;
+    case 7:
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 8:
       return (reader.readStringOrNull(offset) ?? '') as P;
     case 9:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset) ?? '') as P;
     case 10:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 11:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 12:
       return (reader.readLongList(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -379,6 +400,250 @@ extension ClassSessionQueryWhere
 
 extension ClassSessionQueryFilter
     on QueryBuilder<ClassSession, ClassSession, QFilterCondition> {
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'cancelledDates',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'cancelledDates',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesElementEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'cancelledDates',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesElementGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'cancelledDates',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesElementLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'cancelledDates',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesElementBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'cancelledDates',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesElementStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'cancelledDates',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesElementEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'cancelledDates',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesElementContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'cancelledDates',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesElementMatches(String pattern,
+          {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'cancelledDates',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesElementIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'cancelledDates',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesElementIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'cancelledDates',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'cancelledDates',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'cancelledDates',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'cancelledDates',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'cancelledDates',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'cancelledDates',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition>
+      cancelledDatesLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'cancelledDates',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
+    });
+  }
+
   QueryBuilder<ClassSession, ClassSession, QAfterFilterCondition> dayEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -2167,6 +2432,13 @@ extension ClassSessionQuerySortThenBy
 
 extension ClassSessionQueryWhereDistinct
     on QueryBuilder<ClassSession, ClassSession, QDistinct> {
+  QueryBuilder<ClassSession, ClassSession, QDistinct>
+      distinctByCancelledDates() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'cancelledDates');
+    });
+  }
+
   QueryBuilder<ClassSession, ClassSession, QDistinct> distinctByDay(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2253,6 +2525,13 @@ extension ClassSessionQueryProperty
   QueryBuilder<ClassSession, int, QQueryOperations> idProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'id');
+    });
+  }
+
+  QueryBuilder<ClassSession, List<String>?, QQueryOperations>
+      cancelledDatesProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'cancelledDates');
     });
   }
 

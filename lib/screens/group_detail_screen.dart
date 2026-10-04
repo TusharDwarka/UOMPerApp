@@ -328,41 +328,48 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         child: NestedScrollView(
           controller: _outer,
           headerSliverBuilder: (context, _) => [SliverToBoxAdapter(child: header)],
-          body: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-                child: PillSegmented<int>(
-                  values: const [0, 1, 2, 3, 4],
-                  selected: _tab,
-                  scrollable: true,
-                  labelOf: (i) => const ['Timetable', 'Events', 'Chat', 'Members', 'Ranking'][i],
-                  countOf: (i) => i == 1 ? _events.where((e) => !e.start.isBefore(dateOnly(DateTime.now()))).length : (i == 3 ? _members.length : null),
-                  onChanged: (i) {
-                    setState(() => _tab = i);
-                    // Chat needs the full height for the message box.
-                    if (i == 2) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (_outer.hasClients) {
-                          _outer.animateTo(_outer.position.maxScrollExtent,
-                              duration: const Duration(milliseconds: 250), curve: Curves.easeOutCubic);
-                        }
-                      });
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: switch (_tab) {
-                  0 => _timetableTab(p),
-                  1 => _eventsTab(p),
-                  2 => _chatTab(p),
-                  3 => _membersTab(p),
-                  _ => _rankingTab(p),
-                },
-              ),
-            ],
+          // On a rotated phone the header can fill the screen, leaving the
+          // body a few px until it scrolls away; draw nothing rather than
+          // overflowing the tab pills.
+          body: LayoutBuilder(
+            builder: (context, c) => c.maxHeight < 80
+                ? const SizedBox.shrink()
+                : Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                        child: PillSegmented<int>(
+                          values: const [0, 1, 2, 3, 4],
+                          selected: _tab,
+                          scrollable: true,
+                          labelOf: (i) => const ['Timetable', 'Events', 'Chat', 'Members', 'Ranking'][i],
+                          countOf: (i) => i == 1 ? _events.where((e) => !e.start.isBefore(dateOnly(DateTime.now()))).length : (i == 3 ? _members.length : null),
+                          onChanged: (i) {
+                            setState(() => _tab = i);
+                            // Chat needs the full height for the message box.
+                            if (i == 2) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (_outer.hasClients) {
+                                  _outer.animateTo(_outer.position.maxScrollExtent,
+                                      duration: const Duration(milliseconds: 250), curve: Curves.easeOutCubic);
+                                }
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: switch (_tab) {
+                          0 => _timetableTab(p),
+                          1 => _eventsTab(p),
+                          2 => _chatTab(p),
+                          3 => _membersTab(p),
+                          _ => _rankingTab(p),
+                        },
+                      ),
+                    ],
+                  ),
           ),
         ),
       ),

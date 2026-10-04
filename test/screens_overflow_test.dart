@@ -36,6 +36,8 @@ import 'package:uom_per_app/theme/app_theme.dart';
 import 'package:uom_per_app/widgets/add_edit_class_sheet.dart';
 import 'package:uom_per_app/widgets/add_edit_task_sheet.dart';
 import 'package:uom_per_app/widgets/class_details_sheet.dart';
+import 'package:uom_per_app/utils/time_utils.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 /// Isar can't open inside `flutter test`; screens only need providers.
 class FakeIsarService implements IsarService {
@@ -187,7 +189,14 @@ void main() {
     'Focus': () => const FocusScreen(),
     'Onboarding': () => const OnboardingScreen(),
   };
-  const sizes = {'small phone 320x640': Size(320, 640), 'phone 390x844': Size(390, 844), 'desktop 1280x800': Size(1280, 800)};
+  const sizes = {
+    'small phone 320x640': Size(320, 640),
+    'phone 390x844': Size(390, 844),
+    'desktop 1280x800': Size(1280, 800),
+    // Rotated phones: wide but very short.
+    'landscape 844x390': Size(844, 390),
+    'small landscape 640x320': Size(640, 320),
+  };
 
   for (final screen in screens.entries) {
     for (final size in sizes.entries) {
@@ -222,6 +231,42 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  for (final size in const [Size(320, 640), Size(844, 390), Size(1280, 800)]) {
+    testWidgets('Schedule week grid and month view fit ${size.width.toInt()}x${size.height.toInt()}', (tester) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final isar = FakeIsarService();
+      final sync = SyncService(isar);
+      final tp = seededTimetable(sync, isar);
+      await tester.pumpWidget(MultiProvider(
+        providers: [Provider<SyncService>.value(value: sync), ChangeNotifierProvider.value(value: tp)],
+        child: MaterialApp(theme: AppTheme.light(), home: const ScheduleTab()),
+      ));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.tap(find.text('Week'));
+      await tester.pumpAndSettle();
+      expect(find.text('Databases'), findsOneWidget, reason: 'week grid shows the class');
+      await tester.tap(find.text('Month'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TableCalendar<ClassSession>), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  test('a cancelled class drops out of reminders/next class but stays on the schedule', () {
+    final isar = FakeIsarService();
+    final tp = seededTimetable(SyncService(isar), isar);
+    final today = dateOnly(DateTime.now());
+    final db = tp.getClassesForDate(today).firstWhere((s) => s.subject == 'Databases');
+    db.cancelledDates = [DateFormat('yyyy-MM-dd').format(today)];
+    expect(tp.isCancelled(db, today), isTrue);
+    expect(tp.isCancelled(db, today.add(const Duration(days: 7))), isFalse);
+    expect(tp.getClassesForDate(today).map((s) => s.subject), isNot(contains('Databases')));
+    expect(tp.getClassesForDate(today, includeCancelled: true).map((s) => s.subject), contains('Databases'));
+    expect(ClassSession.fromSyncJson(db.toSyncJson()).cancelledDates, db.cancelledDates);
+  });
+
   testWidgets('Board columns render on a small phone', (tester) async {
     tester.view.physicalSize = const Size(320, 640);
     tester.view.devicePixelRatio = 1.0;
@@ -249,9 +294,10 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  group('bottom sheets fit on a 320px phone', () {
+  for (final sheetSize in const [Size(320, 640), Size(640, 320)]) {
+  group('bottom sheets fit at ${sheetSize.width.toInt()}x${sheetSize.height.toInt()}', () {
     Future<void> openSheet(WidgetTester tester, Future<void> Function(BuildContext) open) async {
-      tester.view.physicalSize = const Size(320, 640);
+      tester.view.physicalSize = sheetSize;
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -319,8 +365,9 @@ void main() {
       await openSheet(tester, (c) async => showNoteEditor(c));
     });
   });
+  }
 
-  for (final size in const [Size(320, 640), Size(390, 844)]) {
+  for (final size in const [Size(320, 640), Size(390, 844), Size(640, 320)]) {
     testWidgets('bus route menu fits at ${size.width.toInt()}x${size.height.toInt()}', (tester) async {
       _phone(tester, size);
       SharedPreferences.setMockInitialValues({
@@ -340,8 +387,8 @@ void main() {
     });
   }
 
-  Future<void> pumpGroup(WidgetTester tester, List<GroupSession> sessions) async {
-    _phone(tester, const Size(360, 640));
+  Future<void> pumpGroup(WidgetTester tester, List<GroupSession> sessions, {Size size = const Size(360, 640)}) async {
+    _phone(tester, size);
     final isar = FakeIsarService();
     final sync = SyncService(isar);
     final focus = FocusProvider();
@@ -369,6 +416,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('Back').hitTestable(), findsNothing);
     expect(find.text('Timetable').hitTestable(), findsOneWidget, reason: 'tabs stay pinned');
+    for (final tab in ['Events', 'Chat', 'Members', 'Ranking', 'Timetable']) {
+      await tester.ensureVisible(find.text(tab));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(tab));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: tab);
+    }
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('group screen tabs fit a rotated phone', (tester) async {
+    await pumpGroup(tester, [
+      const GroupSession(id: '1', subject: longModule, day: 'Monday', startTime: '9:00', endTime: '10:00', room: 'Lab 1'),
+    ], size: const Size(640, 320));
+    expect(tester.takeException(), isNull);
+    // Header fills the short screen; scroll it away to reach the tabs.
+    await tester.drag(find.byType(NestedScrollView), const Offset(0, -400));
+    await tester.pumpAndSettle();
     for (final tab in ['Events', 'Chat', 'Members', 'Ranking', 'Timetable']) {
       await tester.ensureVisible(find.text(tab));
       await tester.pumpAndSettle();

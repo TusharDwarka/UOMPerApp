@@ -25,6 +25,9 @@ class ClassSession {
   // Weeks this session is active (e.g. [1, 2, 3, 6, 10])
   List<int>? weeks;
 
+  /// Dates ("yyyy-MM-dd") this class won't happen (lecturer cancelled).
+  List<String>? cancelledDates;
+
   /// Google Meet / Microsoft Teams / Zoom link for online sessions.
   String? meetingLink;
 
@@ -76,6 +79,7 @@ class ClassSession {
         'specificDate': specificDate?.toIso8601String(),
         'weeks': weeks,
         'meetingLink': meetingLink,
+        'cancelledDates': cancelledDates,
         'updatedAt': updatedAt?.toIso8601String(),
       };
 
@@ -92,6 +96,7 @@ class ClassSession {
       weeks: json['weeks'] != null ? List<int>.from(json['weeks']) : null,
       meetingLink: json['meetingLink'],
     )
+      ..cancelledDates = json['cancelledDates'] != null ? List<String>.from(json['cancelledDates']) : null
       ..syncId = json['syncId']
       ..updatedAt = json['updatedAt'] != null ? DateTime.tryParse(json['updatedAt']) : null;
   }
