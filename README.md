@@ -137,7 +137,7 @@ at [uomper.pages.dev](https://uomper.pages.dev). Download buttons pick up the ne
 so publishing a release doesn't need a redeploy. To publish changes to the site itself:
 
 ```bash
-npx wrangler@4 pages deploy website --project-name uomper --branch Year2Improvement
+npx wrangler@4 pages deploy website --project-name uomper --branch main
 ```
 
 Pushing to GitHub does **not** redeploy the site.
