@@ -1,9 +1,0 @@
-// Cloudflare Worker that serves the landing page in website/ as static files.
-{
-  "name": "uomperapp",
-  "compatibility_date": "2026-11-01",
-  "assets": {
-    "directory": "./website",
-    "not_found_handling": "404-page"
-  }
-}
