@@ -496,7 +496,7 @@ class TimetableProvider extends ChangeNotifier {
   Map<String, DateTime> _endedModules = {};
 
   /// Modules that finished before the semester (final test done, etc.).
-  /// Their classes stop showing after the end day, everywhere.
+  /// Their classes stop showing from the end day on, everywhere.
   void setEndedModules(Map<String, DateTime> ended) {
     if (mapEquals(ended, _endedModules)) return;
     _endedModules = Map.unmodifiable(ended);
@@ -509,12 +509,12 @@ class TimetableProvider extends ChangeNotifier {
 
   bool isModuleEnded(String subject) => _endedModules.containsKey(subject.trim().toLowerCase());
 
-  /// True once [s]'s module has ended. Only an end inside the current
-  /// semester counts, so a module ended last semester never hides a new
-  /// timetable that happens to reuse its name.
+  /// True once [s]'s module has ended (it's gone from that day on). Only an
+  /// end inside the current semester counts, so a module ended last semester
+  /// never hides a new timetable that happens to reuse its name.
   bool _endedBy(ClassSession s, DateTime date) {
     final end = _endedModules[s.subject.trim().toLowerCase()];
-    return end != null && dateOnly(date).isAfter(end) && end.isAfter(dateOnly(_semesterStart));
+    return end != null && !dateOnly(date).isBefore(end) && !end.isBefore(dateOnly(_semesterStart));
   }
 
   List<ClassSession> _sessionsFor(List<ClassSession> source, DateTime date, {bool includeCancelled = false}) {
@@ -729,7 +729,11 @@ class TimetableProvider extends ChangeNotifier {
     List<AttendanceRecord> attendance = const [],
     String? courseName,
     DateTime? semesterStart,
+    int? studyYear,
+    int? semester,
   }) {
+    if (studyYear != null) _studyYear = studyYear;
+    if (semester != null) _semester = semester;
     _userSessions = [...sessions]..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
     _tasks = [...tasks];
     _attendanceRecords = [...attendance];

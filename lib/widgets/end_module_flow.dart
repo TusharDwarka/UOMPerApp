@@ -13,7 +13,7 @@ import 'ui.dart';
 
 /// "End module": for a module that finishes before the semester does (final
 /// test done, lab module over...). Two confirmations, then confetti. Its
-/// classes stop showing after today; marks go to Grades.
+/// classes leave the timetable straight away; marks go to Grades.
 Future<void> startEndModuleFlow(BuildContext context, String moduleName) async {
   final timetable = context.read<TimetableProvider>();
   final records = context.read<RecordProvider>();
@@ -43,7 +43,7 @@ Future<void> startEndModuleFlow(BuildContext context, String moduleName) async {
     message: failed
         ? '$moduleName is over. That mark is below the pass mark, so let\'s plan the resit next.'
         : '$moduleName is finished${mark != null ? ' with ${_fmt(mark)}% (${Grading.letter(mark)})' : ''}. '
-            'Its classes are off your timetable from tomorrow.',
+            'Its classes are off your timetable now.',
     footer: 'Changed your mind? Grades → the module → "Put back on timetable".',
     showFor: const Duration(seconds: 3),
     work: () => records.endModule(moduleName, year: timetable.studyYear, semester: timetable.semester, mark: mark),
@@ -112,7 +112,7 @@ class _AcknowledgeDialogState extends State<_AcknowledgeDialog> {
           children: [
             Text('Step 1 of 2', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: p.accent)),
             const SizedBox(height: 10),
-            point(Icons.event_busy_rounded, 'Its classes disappear from your timetable, reminders and widget after today.'),
+            point(Icons.event_busy_rounded, 'Its classes leave your timetable, reminders and widget right away.'),
             point(Icons.workspace_premium_outlined, 'It moves to Grades, where you can add the final mark (or a resit).'),
             point(
                 Icons.task_alt_rounded,

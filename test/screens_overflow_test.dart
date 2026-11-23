@@ -19,7 +19,6 @@ import 'package:uom_per_app/services/group_service.dart';
 import 'package:uom_per_app/providers/focus_provider.dart';
 import 'package:uom_per_app/models/module_record.dart';
 import 'package:uom_per_app/providers/record_provider.dart';
-import 'package:uom_per_app/screens/activity_screen.dart';
 import 'package:uom_per_app/screens/grades_screen.dart';
 import 'package:uom_per_app/services/activity_log.dart';
 import 'package:uom_per_app/providers/note_provider.dart';
@@ -143,7 +142,11 @@ List<ModuleRecord> seededRecords() => [
       ModuleRecord(name: 'Databases', credits: 3, year: 2, semester: 1, status: ModuleStatus.ended, mark: 72),
       ModuleRecord(name: longModule, code: 'STAT 2201', credits: 6, year: 2, semester: 1, status: ModuleStatus.resit,
           mark: 35, resitDate: DateTime.now().add(const Duration(days: 20))),
-      ModuleRecord(name: 'Mobile Computing', credits: 4, year: 2, semester: 1),
+      ModuleRecord(name: 'Mobile Computing', credits: 4, year: 2, semester: 1, parts: [
+        AssessmentPart(name: 'Class test 1', weight: 20, score: 14, outOf: 20),
+        AssessmentPart(name: 'Assignment', weight: 20, score: 65),
+        AssessmentPart(name: 'Final exam', weight: 60),
+      ]),
       ModuleRecord(name: 'Programming I', credits: 3, year: 1, semester: 2, status: ModuleStatus.ended, mark: 58.5),
       ModuleRecord(name: 'Maths for Computing', credits: 3, year: 1, semester: 2, status: ModuleStatus.ended, mark: 44, resitMark: 61),
     ];
@@ -210,7 +213,6 @@ void main() {
     'Onboarding': () => const OnboardingScreen(),
     'Grades': () => const GradesScreen(),
     'CPA calculator': () => const Scaffold(body: CpaCalculator()),
-    'Activity': () => const ActivityScreen(),
   };
   const sizes = {
     'small phone 320x640': Size(320, 640),
@@ -235,6 +237,57 @@ void main() {
     testWidgets('Dashboard in holiday mode renders on ${size.key}', (tester) async {
       await pumpScreen(tester, const DashboardTab(), size: size.value, dark: false, holiday: true);
     });
+  }
+
+  for (final size in [const Size(320, 640), const Size(390, 844), const Size(1280, 800)]) {
+    for (final dark in [false, true]) {
+      testWidgets('Module sheet with assessments renders on ${size.width.toInt()}x${size.height.toInt()} (${dark ? 'dark' : 'light'})',
+          (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final isar = FakeIsarService();
+        final sync = SyncService(isar);
+        await tester.pumpWidget(MultiProvider(
+          providers: [
+            Provider<SyncService>.value(value: sync),
+            ChangeNotifierProvider(create: (_) => seededTimetable(sync, isar)),
+            ChangeNotifierProvider(create: (ctx) => RecordProvider(sync)..debugSetData(records: seededRecords())),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            darkTheme: AppTheme.dark(),
+            themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+            home: const GradesScreen(),
+          ),
+        ));
+        await tester.pump();
+        await tester.scrollUntilVisible(find.text('Mobile Computing'), 150, scrollable: find.byType(Scrollable).first);
+        expect(find.text('so far'), findsOneWidget); // ongoing module with results
+        await tester.tap(find.text('Mobile Computing'));
+        await tester.pumpAndSettle();
+        expect(find.text("How it's marked"), findsOneWidget);
+        expect(find.textContaining('so far on 40% of the module'), findsOneWidget);
+        await tester.scrollUntilVisible(find.text('Final exam'), 200, scrollable: find.byType(Scrollable).last);
+        await tester.pumpAndSettle();
+        // Fill the exam in: the module gets its final mark.
+        final exam = find.ancestor(of: find.text('Final exam'), matching: find.byType(Column)).first;
+        await tester.enterText(find.descendant(of: exam, matching: find.byType(TextFormField)).at(2), '50');
+        await tester.pump();
+        // 14 + 13 + 30 = 57
+        expect(find.textContaining('Final mark: 57%'), findsOneWidget);
+
+        // CPA calculator starts the ongoing module on its average so far.
+        await tester.tapAt(const Offset(10, 10));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('CPA calculator'));
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(find.textContaining('on track'), 150, scrollable: find.byType(Scrollable).first);
+        expect(find.textContaining('on track'), findsWidgets);
+        await tester.pumpWidget(const SizedBox());
+      });
+    }
   }
 
   testWidgets('Schedule grid has real width and shows class blocks', (tester) async {

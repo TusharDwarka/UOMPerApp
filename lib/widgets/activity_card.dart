@@ -8,7 +8,7 @@ import '../providers/timetable_provider.dart';
 import '../services/activity_log.dart';
 import '../theme/app_theme.dart';
 import '../utils/time_utils.dart';
-import '../widgets/ui.dart';
+import 'ui.dart';
 
 /// One day's activity: finished tasks, notes written and minutes focused.
 class DayActivity {
@@ -50,15 +50,23 @@ Map<DateTime, DayActivity> buildActivity({
   return out;
 }
 
-/// GitHub-style contribution graph of the last year.
-class ActivityScreen extends StatefulWidget {
-  const ActivityScreen({super.key});
-
-  @override
-  State<ActivityScreen> createState() => _ActivityScreenState();
+/// Blue shades in the app's accent (level 0 = empty).
+Color heatColor(Palette p, int level) {
+  const light = [Color(0xFFEBEDF0), Color(0xFFC6D6FF), Color(0xFF8BABFF), Color(0xFF4A7BFF), Color(0xFF2962FF)];
+  const dark = [Color(0xFF2A2D31), Color(0xFF1C2A57), Color(0xFF263F94), Color(0xFF3A62DD), Color(0xFF6F90FF)];
+  return (p.isDark ? dark : light)[level.clamp(0, 4)];
 }
 
-class _ActivityScreenState extends State<ActivityScreen> {
+/// Home section: a GitHub-style graph of the last year (tasks finished,
+/// notes and focus) with the current streak. Tap a square to see that day.
+class ActivityCard extends StatefulWidget {
+  const ActivityCard({super.key});
+
+  @override
+  State<ActivityCard> createState() => _ActivityCardState();
+}
+
+class _ActivityCardState extends State<ActivityCard> {
   final _scroll = ScrollController();
   DateTime? _selected;
   bool _scrolledToEnd = false;
@@ -75,7 +83,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final log = context.watch<ActivityLog>();
     final timetable = context.watch<TimetableProvider>();
     final notes = context.watch<NoteProvider>();
-    // Focus ticks every second while running; the heatmap doesn't need that.
+    // Focus ticks every second while running; the graph doesn't need that.
     final focus = context.read<FocusProvider>();
 
     final today = dateOnly(DateTime.now());
@@ -90,7 +98,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
       focusMinutesOn: focus.minutesOn,
     );
 
-    final total = data.values.fold(0, (a, d) => a + d.score);
     final activeDays = data.length;
     var current = 0;
     for (var d = data.containsKey(today) ? today : today.subtract(const Duration(days: 1));
@@ -113,132 +120,77 @@ class _ActivityScreenState extends State<ActivityScreen> {
       });
     }
 
-    return Scaffold(
-      backgroundColor: p.canvas,
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 40),
-          children: [
-            const ScreenHeader(title: 'Activity', eyebrow: 'Tasks finished, notes and focus — every day'),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(children: [
-                Expanded(child: _stat(p, '$total', 'contributions\nthis year')),
-                const SizedBox(width: 10),
-                Expanded(child: _stat(p, '$current', 'day\nstreak', accent: current > 0)),
-                const SizedBox(width: 10),
-                Expanded(child: _stat(p, '$longest', 'longest\nstreak')),
-              ]),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: SoftCard(
-                padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(left: 6, bottom: 8),
-                      child: Text('$activeDays active day${activeDays == 1 ? '' : 's'} in the last year',
-                          style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
-                    ),
-                    _Heatmap(
-                      controller: _scroll,
-                      firstMonday: firstMonday,
-                      today: today,
-                      data: data,
-                      selected: sel,
-                      onTap: (d) => setState(() => _selected = sel == d ? null : d),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text('Less', style: TextStyle(fontSize: 11, color: p.textSecondary)),
-                        for (var l = 0; l <= 4; l++)
-                          Container(
-                            width: 11,
-                            height: 11,
-                            margin: const EdgeInsets.symmetric(horizontal: 2),
-                            decoration: BoxDecoration(color: heatColor(p, l), borderRadius: BorderRadius.circular(3)),
-                          ),
-                        Text('More', style: TextStyle(fontSize: 11, color: p.textSecondary)),
-                        const SizedBox(width: 6),
-                      ],
-                    ),
-                  ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionLabel(
+          'Activity',
+          padding: const EdgeInsets.fromLTRB(4, 0, 0, 8),
+          trailing: current > 0
+              ? TagPill('$current day streak', color: p.accent, icon: Icons.local_fire_department_rounded)
+              : null,
+        ),
+        SoftCard(
+          radius: 28,
+          padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 6, right: 6, bottom: 8),
+                child: Text(
+                  '$activeDays active day${activeDays == 1 ? '' : 's'} this year · longest streak $longest',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: p.textPrimary),
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: sel == null
-                    ? Text('Tap a square to see that day.', key: const ValueKey('hint'), style: TextStyle(color: p.textSecondary))
-                    : SoftCard(
-                        key: ValueKey(sel),
-                        radius: 24,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(DateFormat('EEEE d MMMM yyyy').format(sel),
-                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: p.textPrimary)),
-                            const SizedBox(height: 10),
-                            if (selData == null)
-                              Text('No activity — a rest day.', style: TextStyle(color: p.textSecondary))
-                            else ...[
-                              _line(p, Icons.task_alt_rounded, '${selData.tasks} task${selData.tasks == 1 ? '' : 's'} finished'),
-                              _line(p, Icons.sticky_note_2_outlined, '${selData.notes} note${selData.notes == 1 ? '' : 's'} written'),
-                              _line(p, Icons.timer_outlined, '${selData.focusMinutes} min focused'),
-                            ],
-                          ],
-                        ),
-                      ),
+              _Heatmap(
+                controller: _scroll,
+                firstMonday: firstMonday,
+                today: today,
+                data: data,
+                selected: sel,
+                onTap: (d) => setState(() => _selected = sel == d ? null : d),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: Text(
+                        key: ValueKey(sel),
+                        sel == null
+                            ? 'Tasks, notes & focus'
+                            : selData == null
+                                ? '${DateFormat('EEE d MMM').format(sel)} · rest day'
+                                : '${DateFormat('EEE d MMM').format(sel)} · ${selData.tasks} task${selData.tasks == 1 ? '' : 's'}, '
+                                    '${selData.notes} note${selData.notes == 1 ? '' : 's'}, ${selData.focusMinutes} min',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11, color: sel == null ? p.textSecondary : p.textPrimary,
+                            fontWeight: sel == null ? FontWeight.w400 : FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  for (var l = 0; l <= 4; l++)
+                    Container(
+                      width: 10,
+                      height: 10,
+                      margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                      decoration: BoxDecoration(color: heatColor(p, l), borderRadius: BorderRadius.circular(3)),
+                    ),
+                  const SizedBox(width: 6),
+                ],
+              ),
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
-
-  Widget _line(Palette p, IconData icon, String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Row(children: [
-          Icon(icon, size: 18, color: p.textSecondary),
-          const SizedBox(width: 10),
-          Text(text, style: TextStyle(color: p.textPrimary)),
-        ]),
-      );
-
-  Widget _stat(Palette p, String value, String label, {bool accent = false}) => SoftCard(
-        radius: 22,
-        color: accent ? p.ink : null,
-        padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(value,
-                maxLines: 1,
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.w600, color: accent ? p.onInk : p.textPrimary)),
-            Text(label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, height: 1.2, color: accent ? p.onInk.withValues(alpha: 0.75) : p.textSecondary)),
-          ],
-        ),
-      );
-}
-
-/// Green shades like GitHub's graph (level 0 = empty).
-Color heatColor(Palette p, int level) {
-  const light = [Color(0xFFEBEDF0), Color(0xFF9BE9A8), Color(0xFF40C463), Color(0xFF30A14E), Color(0xFF216E39)];
-  const dark = [Color(0xFF2A2D31), Color(0xFF0E4429), Color(0xFF006D32), Color(0xFF26A641), Color(0xFF39D353)];
-  return (p.isDark ? dark : light)[level.clamp(0, 4)];
 }
 
 class _Heatmap extends StatelessWidget {

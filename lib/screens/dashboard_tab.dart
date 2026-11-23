@@ -22,6 +22,7 @@ import '../theme/app_theme.dart';
 import '../utils/bus_utils.dart';
 import '../utils/meeting_links.dart';
 import '../utils/time_utils.dart';
+import '../widgets/activity_card.dart';
 import '../widgets/add_edit_task_sheet.dart';
 import '../widgets/class_details_sheet.dart';
 import '../widgets/end_semester_dialog.dart';
@@ -50,11 +51,12 @@ class _DashboardTabState extends State<DashboardTab> {
     'next': 'Next class',
     'cards': 'Next deadline & bus',
     'focus': 'Weekly focus',
+    'activity': 'Activity',
     'deadlines': 'Upcoming deadlines',
     'today': "Today's schedule",
   };
-  List<String> _order = const ['next', 'cards', 'focus', 'deadlines', 'today'];
-  Set<String> _enabled = const {'next', 'cards', 'focus', 'today'};
+  List<String> _order = const ['next', 'cards', 'focus', 'activity', 'deadlines', 'today'];
+  Set<String> _enabled = const {'next', 'cards', 'focus', 'activity', 'today'};
 
   Future<void> _loadSections() async {
     final prefs = await SharedPreferences.getInstance();
@@ -66,7 +68,10 @@ class _DashboardTabState extends State<DashboardTab> {
         // Keep saved order, append any sections added in newer versions.
         _order = [...order.where(_sectionLabels.containsKey), ..._sectionLabels.keys.where((k) => !order.contains(k))];
       }
-      if (enabled != null) _enabled = enabled.toSet();
+      if (enabled != null) {
+        // Sections new since the order was saved start switched on.
+        _enabled = {...enabled, if (order != null) ..._sectionLabels.keys.where((k) => !order.contains(k))};
+      }
     });
   }
 
@@ -398,6 +403,7 @@ class _DashboardTabState extends State<DashboardTab> {
                           const SizedBox(height: 14),
                         ],
                       'focus' => [_buildProductivity(p, focus, timetable), const SizedBox(height: 24)],
+                      'activity' => [const ActivityCard(), const SizedBox(height: 20)],
                       'deadlines' => [..._upcomingDeadlines(p, pending), const SizedBox(height: 14)],
                       'today' => [
                       SectionLabel(

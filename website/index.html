@@ -56,9 +56,9 @@
       <div class="hero-copy">
         <a class="pill glass" href="#download" data-cursor="target">
           <span class="pill-dot"></span>
-          <span class="shiny" data-version-label>v3.1 is out</span>
+          <span class="shiny" data-version-label>v3.3 is out</span>
           <span class="pill-sep">·</span>
-          <span class="muted">Week, month &amp; cancelled classes</span>
+          <span class="muted">Marks, CPA &amp; what you need</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         </a>
 
@@ -82,13 +82,13 @@
             Windows
           </a>
         </div>
-        <p class="hero-note reveal">Free · Works offline · <span data-version>v3.1</span></p>
+        <p class="hero-note reveal">Free · Works offline · <span data-version>v3.3</span></p>
       </div>
 
       <div class="hero-phones" aria-label="App screenshots">
         <figure class="phone phone-l"><img src="assets/screens/schedule_week.webp" width="390" height="844" alt="Week timetable grid"></figure>
         <figure class="phone phone-c"><img src="assets/screens/dashboard.webp" width="390" height="844" alt="Home dashboard with today's classes" fetchpriority="high"></figure>
-        <figure class="phone phone-r"><img src="assets/screens/board.webp" width="390" height="844" alt="Kanban task board"></figure>
+        <figure class="phone phone-r"><img src="assets/screens/grades.webp" width="390" height="844" alt="Grades with CPA and module marks"></figure>
       </div>
     </section>
 
@@ -96,9 +96,9 @@
     <div class="marquee" aria-hidden="true">
       <div class="marquee-track">
         <span>Timetable</span><b>✦</b><span>Deadlines</span><b>✦</b><span>Bus times</span><b>✦</b><span>Module files</span><b>✦</b>
-        <span>Focus timer</span><b>✦</b><span>Cohort groups</span><b>✦</b><span>Notes</span><b>✦</b><span>Printable planners</span><b>✦</b>
+        <span>Focus timer</span><b>✦</b><span>Grades &amp; CPA</span><b>✦</b><span>Cohort groups</span><b>✦</b><span>Notes</span><b>✦</b><span>Printable planners</span><b>✦</b>
         <span>Timetable</span><b>✦</b><span>Deadlines</span><b>✦</b><span>Bus times</span><b>✦</b><span>Module files</span><b>✦</b>
-        <span>Focus timer</span><b>✦</b><span>Cohort groups</span><b>✦</b><span>Notes</span><b>✦</b><span>Printable planners</span><b>✦</b>
+        <span>Focus timer</span><b>✦</b><span>Grades &amp; CPA</span><b>✦</b><span>Cohort groups</span><b>✦</b><span>Notes</span><b>✦</b><span>Printable planners</span><b>✦</b>
       </div>
     </div>
 
@@ -122,6 +122,19 @@
           <div class="card-icon">🚫</div>
           <h3>Lecturer cancelled?</h3>
           <p>Cross out that one class. Reminders, “next class” and the widget skip it — on every device.</p>
+        </article>
+
+        <article class="card glass spot reveal span-2">
+          <div class="card-icon">🎓</div>
+          <h3>Know the mark you need.</h3>
+          <p>Add how each module is marked — class tests, assignments, activities, the final exam — or pick a template. Fill in results as they come back and see your average so far, what you need on the rest for a pass, C, B or A, and your CPA across every year.</p>
+          <ul class="chips"><li>Tests · coursework · exam</li><li>Pass / C / B / A targets</li><li>CPA Y1–Y5</li><li>Resits</li></ul>
+        </article>
+
+        <article class="card glass spot reveal">
+          <div class="card-icon">🔥</div>
+          <h3>Your year, in squares</h3>
+          <p>A heatmap on Home of tasks finished, notes written and focus time — with your streak. Move it or hide it.</p>
         </article>
 
         <article class="card glass spot reveal">
@@ -204,6 +217,11 @@
           <span class="tag tag-violet">Focus</span>
         </li>
         <li class="tl-item glass spot reveal">
+          <time>18:15</time>
+          <div><h4>Test 2 back: 14 / 20</h4><p>Data Structures is at 75.6% so far — you need 64.4% on the exam to keep the A.</p></div>
+          <span class="tag tag-cyan">Grades</span>
+        </li>
+        <li class="tl-item glass spot reveal">
           <time>21:00</time>
           <div><h4>Due tomorrow: ER diagram</h4><p>On your home screen, your board and the 14-day “coming up” strip.</p></div>
           <span class="tag tag-green">Deadline</span>
@@ -220,6 +238,15 @@
           <div class="tabs" role="tablist" aria-label="App screens">
             <button role="tab" aria-selected="true" data-shot="dashboard" data-cursor="target">
               <strong>Home</strong><span>What's next today, your bus, your deadlines and your focus week at a glance.</span>
+            </button>
+            <button role="tab" aria-selected="false" data-shot="grades" data-cursor="target">
+              <strong>Grades</strong><span>Your CPA, each year's average and how every module is going so far.</span>
+            </button>
+            <button role="tab" aria-selected="false" data-shot="module_marks" data-cursor="target">
+              <strong>Marking</strong><span>Tests, assignments and the exam with their weights. Results add up to the final mark.</span>
+            </button>
+            <button role="tab" aria-selected="false" data-shot="activity" data-cursor="target">
+              <strong>Activity</strong><span>A year of tasks, notes and focus as a heatmap, with your streak.</span>
             </button>
             <button role="tab" aria-selected="false" data-shot="schedule_day" data-cursor="target">
               <strong>Day</strong><span>A real timeline with overlapping classes side-by-side and a live “now” line.</span>
@@ -252,7 +279,7 @@
       <div class="section-head reveal">
         <p class="eyebrow">Download</p>
         <h2>Free. On the devices you already use.</h2>
-        <p class="muted">Latest release: <span data-version>v3.1</span><span data-date></span></p>
+        <p class="muted">Latest release: <span data-version>v3.3</span><span data-date></span></p>
       </div>
 
       <div class="dl-grid">
@@ -307,6 +334,14 @@
         <details class="glass reveal">
           <summary data-cursor="target">Does it work without internet?</summary>
           <p>Yes. Everything is stored on your device first and syncs when you're back online.</p>
+        </details>
+        <details class="glass reveal">
+          <summary data-cursor="target">How does it work out my CPA?</summary>
+          <p>Each module's mark is weighted by its credits, across every year you add. Ongoing modules use their average so far for the “on track for” figure. Letter grades follow the usual UoM bands (A ≥70, B 60–69, C 50–59, D 40–49), but check your programme's regulations for exact rules.</p>
+        </details>
+        <details class="glass reveal">
+          <summary data-cursor="target">Will updating keep my data?</summary>
+          <p>Yes. Install the new APK over the old one, or unzip the new Windows build in place of the old folder. Your data stays on the device and in your account.</p>
         </details>
         <details class="glass reveal">
           <summary data-cursor="target">Why does Android or Windows warn me when installing?</summary>

@@ -11,7 +11,7 @@ import 'package:uom_per_app/models/group_models.dart';
 import 'package:uom_per_app/models/module_record.dart';
 import 'package:uom_per_app/providers/record_provider.dart';
 import 'package:uom_per_app/providers/timetable_provider.dart';
-import 'package:uom_per_app/screens/activity_screen.dart';
+import 'package:uom_per_app/widgets/activity_card.dart';
 import 'package:uom_per_app/services/activity_log.dart';
 import 'package:uom_per_app/services/group_service.dart';
 import 'package:uom_per_app/services/isar_service.dart';
@@ -61,9 +61,55 @@ void main() {
       expect(ModuleRecord(name: 'X', mark: 55).effectiveMark(), 55);
     });
 
+    test('assessment parts: fill as you go → needed marks → final mark', () {
+      // 2 tests (20 each), assignment 10, exam 50.
+      final r = ModuleRecord(name: 'Databases', parts: [
+        for (final (n, w) in AssessmentPart.templates['2 tests · assignment · exam']!) AssessmentPart(name: n, weight: w),
+      ]);
+      expect(r.totalWeight, 100);
+      expect(r.averageSoFar, isNull);
+      expect(r.firstMark, isNull);
+
+      r.parts[0]
+        ..score = 15
+        ..outOf = 20; // 75% → 15 points
+      r.parts[1].score = 60; // 60% → 12 points
+      expect(r.markedWeight, 40);
+      expect(r.pointsEarned, closeTo(27, 0.001));
+      expect(r.averageSoFar, closeTo(67.5, 0.001));
+      expect(r.partsComplete, isFalse);
+      expect(r.firstMark, isNull, reason: 'not counted in the CPA until every part is in');
+      // A (70): need (70 - 27) / 60 → 71.67% on the rest.
+      expect(r.neededForTarget(70), closeTo(71.667, 0.001));
+      expect(r.neededForTarget(20), lessThan(0));
+
+      r.parts[2]
+        ..score = 8
+        ..outOf = 10; // assignment 80% → 8 points
+      r.parts[3].score = 55; // exam 55%
+      // 15 + 12 + 8 + 27.5 = 62.5
+      expect(r.partsComplete, isTrue);
+      expect(r.calculatedMark, closeTo(62.5, 0.001));
+      expect(r.effectiveMark(), closeTo(62.5, 0.001));
+      expect(r.neededForTarget(70), isNull);
+
+      // An official mark typed in wins; a resit still replaces both.
+      r.mark = 63;
+      expect(r.effectiveMark(), 63);
+      r.resitMark = 50;
+      expect(r.effectiveMark(), 50);
+    });
+
+    test('weights that miss 100 are scaled', () {
+      final r = ModuleRecord(name: 'X', parts: [AssessmentPart(name: 'A', weight: 30, score: 60), AssessmentPart(name: 'B', weight: 60, score: 90)]);
+      // (18 + 54) / 90 = 80
+      expect(r.calculatedMark, closeTo(80, 0.001));
+    });
+
     test('records survive a JSON round trip (settings sync)', () {
       final r = ModuleRecord(name: 'Databases', code: 'CS201', credits: 4, year: 2, semester: 2,
-          status: ModuleStatus.resit, mark: 35, resitMark: 58, resitDate: DateTime(2027, 1, 10), endedAt: DateTime(2026, 11, 20));
+          status: ModuleStatus.resit, mark: 35, resitMark: 58, resitDate: DateTime(2027, 1, 10), endedAt: DateTime(2026, 11, 20),
+          parts: [AssessmentPart(name: 'Test', weight: 30, score: 12, outOf: 20), AssessmentPart(name: 'Exam', weight: 70)]);
       final back = ModuleRecord.fromJson(r.toJson());
       expect(back.toJson(), r.toJson());
     });
@@ -83,6 +129,22 @@ void main() {
       await rp.setCapResit(true);
       // (72*3 + 40*6) / 9 = 50.67
       expect(rp.cpa, closeTo(50.667, 0.001));
+    });
+
+    test('CPA counts every year; ongoing modules feed the projection', () async {
+      final rp = RecordProvider();
+      await rp.load();
+      await rp.saveRecord(ModuleRecord(name: 'Y1', credits: 6, year: 1, semester: 1, status: ModuleStatus.ended, mark: 50));
+      await rp.saveRecord(ModuleRecord(name: 'Y3', credits: 6, year: 3, semester: 2, status: ModuleStatus.ended, mark: 70));
+      await rp.saveRecord(ModuleRecord(name: 'Now', credits: 6, year: 4, semester: 1, parts: [
+        AssessmentPart(name: 'Test', weight: 40, score: 90),
+        AssessmentPart(name: 'Exam', weight: 60),
+      ]));
+      expect(rp.cpa, closeTo(60, 0.001));
+      expect(rp.gradedYears, [1, 3]);
+      expect(rp.yearAverage(3), 70);
+      // (50 + 70 + 90) / 3
+      expect(rp.projectedCpa, closeTo(70, 0.001));
     });
 
     test('a module taken again later gets its own record and is not hidden', () async {
@@ -123,13 +185,15 @@ void main() {
         );
     }
 
-    test('classes of an ended module stop after its end day', () {
+    test('classes of an ended module are gone from its end day on', () {
       final t = tp();
       final today = dateOnly(DateTime.now());
       t.setEndedModules({'databases': today});
-      expect(t.getClassesForDate(today).map((s) => s.subject), containsAll(['Databases', 'Stats']));
+      expect(t.getClassesForDate(today.subtract(const Duration(days: 1))).map((s) => s.subject), containsAll(['Databases', 'Stats']));
+      expect(t.getClassesForDate(today).map((s) => s.subject), ['Stats']);
       final tomorrow = today.add(const Duration(days: 1));
       expect(t.getClassesForDate(tomorrow).map((s) => s.subject), ['Stats']);
+      expect(t.findNextClass(today)!.session.subject, 'Stats');
       expect(t.isModuleEnded('Databases'), isTrue);
     });
 

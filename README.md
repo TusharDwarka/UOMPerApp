@@ -9,11 +9,12 @@ timer and study groups — on Android and Windows, synced through one account.
 
 Grab the latest build from the [**website**](https://uomper.pages.dev/#download) or from [**Releases**](https://github.com/TusharDwarka/UOMPerApp/releases/latest):
 
-- **Android** — `UOMPer-v3.2-android.apk`. Open it on your phone and allow "install unknown apps" when asked.
-- **Windows** — `UOMPer-v3.2-windows.zip`. Unzip anywhere and run `uom_per_app.exe` (keep the other files next to it).
+- **Android** — `UOMPer-v3.3-android.apk`. Open it on your phone and allow "install unknown apps" when asked.
+- **Windows** — `UOMPer-v3.3-windows.zip`. Unzip anywhere and run `uom_per_app.exe` (keep the other files next to it).
   Windows SmartScreen may warn because the app isn't signed: *More info → Run anyway*.
 
-> v3.2 adds Grades & CPA, end-module, holiday mode, reminders and Activity.
+> v3.3 adds how each module is marked (tests, assignments, exam), the mark you need for a pass/C/B/A,
+> CPA across every year, and the Activity heatmap on Home.
 
 ## 📸 Screenshots
 
@@ -21,9 +22,13 @@ Grab the latest build from the [**website**](https://uomper.pages.dev/#download)
 |:---:|:---:|:---:|:---:|
 | ![Home](docs/screenshots/dashboard.png) | ![Day view](docs/screenshots/schedule_day.png) | ![Week grid](docs/screenshots/schedule_week.png) | ![Month calendar](docs/screenshots/schedule_month.png) |
 
-| Board | Focus |
-|:---:|:---:|
-| ![Board](docs/screenshots/board.png) | ![Focus](docs/screenshots/focus.png) |
+| Grades & CPA | How it's marked | Activity | Board |
+|:---:|:---:|:---:|:---:|
+| ![Grades and CPA](docs/screenshots/grades.png) | ![Module assessment breakdown](docs/screenshots/module_marks.png) | ![Activity heatmap on Home](docs/screenshots/activity.png) | ![Board](docs/screenshots/board.png) |
+
+| Focus |
+|:---:|
+| ![Focus](docs/screenshots/focus.png) |
 
 <sub>Rendered from the real screens with demo data: `flutter test tools/readme_screenshots_test.dart --update-goldens`.</sub>
 
@@ -51,8 +56,13 @@ Grab the latest build from the [**website**](https://uomper.pages.dev/#download)
 
 ### 🎓 Grades & modules
 - **Grade holder** per year/semester with letter grades, credits and **CPA**.
-- **CPA calculator**: try "what if" marks and see the average you need for a target CPA.
-- **End a module early** (final test done): two confirmations, confetti, and its classes leave the timetable.
+- **How each module is marked**: add its tests, assignments, class activities and final exam with their weights
+  (or pick a template like *2 tests · assignment · exam*), then fill in results as they come back. You see the average so
+  far, what you need on the rest for a pass / C / B / A, and the final mark works itself out and goes into your CPA.
+- **CPA across every year** (Y1–Y5) with per-year averages and an "on track for" CPA from results so far.
+- **CPA calculator**: unfinished modules start on their average so far; try "what if" marks, plan later semesters and
+  see the average you need for a target CPA.
+- **End a module early** (final test done): two confirmations, confetti, and its classes leave the timetable straight away.
 - **Resits**: mark a module for resit, add the resit date (goes to the Hub with reminders); the resit mark replaces the first.
 
 ### 🏖 End of semester → holiday mode
@@ -60,7 +70,8 @@ Grab the latest build from the [**website**](https://uomper.pages.dev/#download)
   notes, focus and groups keep working. **Start next semester** when you're ready.
 
 ### 🔥 Activity
-- A GitHub-style heatmap of the last year: tasks finished, notes written and focus time, with streaks.
+- A GitHub-style heatmap on Home (in the app's blue): tasks finished, notes written and focus time, with your streak.
+  Turn it on/off or move it with *Customise home*.
 
 ### 🖨 Print & export
 - Task report PDF: pick types, board columns, dates; optional month calendar pages.

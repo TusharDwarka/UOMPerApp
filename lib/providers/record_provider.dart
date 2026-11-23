@@ -33,6 +33,7 @@ class RecordProvider extends ChangeNotifier {
   DateTime? _holidaySince;
   bool _capResit = false;
   bool _loaded = false;
+  bool _seeded = false;
   Timer? _activityPush;
 
   RecordProvider([this._syncService, this.onEndedModulesChanged]) {
@@ -55,6 +56,7 @@ class RecordProvider extends ChangeNotifier {
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
+    if (_seeded) return; // widget tests: keep the seeded data
     _records = _decode(prefs.getString(_recordsKey));
     _holidayMode = prefs.getBool(_holidayKey) ?? false;
     final since = prefs.getInt(_holidaySinceKey);
@@ -294,6 +296,19 @@ class RecordProvider extends ChangeNotifier {
   double? semesterAverage(int year, int semester) => Grading.weightedAverage(
       graded.where((r) => r.year == year && r.semester == semester).map((r) => (r.credits, markOf(r)!)));
 
+  /// Average for a whole year of study (null when nothing is graded yet).
+  double? yearAverage(int year) =>
+      Grading.weightedAverage(graded.where((r) => r.year == year).map((r) => (r.credits, markOf(r)!)));
+
+  /// Years of study that have a graded module, in order.
+  List<int> get gradedYears => ({for (final r in graded) r.year}.toList()..sort());
+
+  /// CPA if every unfinished module ends on its average so far.
+  double? get projectedCpa => Grading.weightedAverage([
+        for (final r in _records)
+          if (markOf(r) != null) (r.credits, markOf(r)!) else if (r.averageSoFar != null) (r.credits, r.averageSoFar!),
+      ]);
+
   /// (year, semester) pairs that have records, newest first.
   List<(int, int)> get periods {
     final set = {for (final r in _records) (r.year, r.semester)}.toList()
@@ -304,6 +319,7 @@ class RecordProvider extends ChangeNotifier {
   /// Seeds in-memory data without SharedPreferences (widget tests only).
   @visibleForTesting
   void debugSetData({List<ModuleRecord> records = const [], bool holiday = false}) {
+    _seeded = true;
     _records = [...records];
     _holidayMode = holiday;
     _holidaySince = holiday ? dateOnly(DateTime.now()) : null;

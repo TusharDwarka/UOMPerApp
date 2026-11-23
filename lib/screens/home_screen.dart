@@ -12,7 +12,6 @@ import '../theme/app_theme.dart';
 import '../widgets/folder_picker.dart';
 import '../widgets/ui.dart';
 import 'academic_tab.dart';
-import 'activity_screen.dart';
 import 'bus_tab.dart';
 import 'dashboard_tab.dart';
 import 'focus_screen.dart';
@@ -28,8 +27,8 @@ import 'todo_board_tab.dart';
 /// [navOrderFrom]) in the pill bar plus "More".
 class AppPage {
   static const home = 0, schedule = 1, hub = 2, board = 3, bus = 4, files = 5, notes = 6, groups = 7, focus = 8, settings = 9;
-  static const grades = 10, activity = 11;
-  static const count = 12, barSlots = 5;
+  static const grades = 10;
+  static const count = 11, barSlots = 5;
 }
 
 const _navOrderKey = 'nav_order';
@@ -63,7 +62,6 @@ const _destinations = <NavDest>[
   NavDest(Icons.timer_rounded, 'Focus'),
   NavDest(Icons.settings_rounded, 'Settings'),
   NavDest(Icons.workspace_premium_rounded, 'Grades'),
-  NavDest(Icons.local_fire_department_rounded, 'Activity'),
 ];
 
 /// Lets any screen switch tabs, e.g. the dashboard's quick tiles.
@@ -105,7 +103,6 @@ class _HomeScreenState extends State<HomeScreen> {
     const FocusScreen(),
     const SettingsTab(),
     const GradesScreen(),
-    const ActivityScreen(),
   ];
 
   @override
