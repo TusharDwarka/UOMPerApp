@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>UOM Per — your semester in one app</title>
+  <meta name="description" content="Timetable, deadlines, bus times, files, focus timer and study groups for University of Mauritius students. Free on Android and Windows, synced through one account.">
+  <meta name="theme-color" content="#05060d">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="UOM Per — your semester in one app">
+  <meta property="og:description" content="Timetable, deadlines, bus times, files, focus and study groups for UoM students. Android + Windows, synced.">
+  <meta property="og:image" content="assets/icon-512.png">
+  <meta name="twitter:card" content="summary">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Background layers: moving grid, colour glow, film grain -->
+  <canvas id="grid" aria-hidden="true"></canvas>
+  <div class="glow" aria-hidden="true"><span></span><span></span><span></span></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <!-- Cursor (fine pointers only) -->
+  <div class="cursor" aria-hidden="true">
+    <div class="cursor-dot"></div>
+    <div class="cursor-frame"><i></i><i></i><i></i><i></i></div>
+  </div>
+  <canvas id="sparks" aria-hidden="true"></canvas>
+
+  <header class="nav-wrap">
+    <nav class="nav glass" aria-label="Main">
+      <a class="brand" href="#top" data-cursor="target">
+        <img src="assets/icon-64.png" width="28" height="28" alt="">
+        <span>UOM&nbsp;Per</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#day">Your day</a>
+        <a href="#screens">Screens</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <a class="btn btn-sm btn-primary" href="#download" data-cursor="target">Download</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-copy">
+        <a class="pill glass" href="#download" data-cursor="target">
+          <span class="pill-dot"></span>
+          <span class="shiny" data-version-label>v3.1 is out</span>
+          <span class="pill-sep">·</span>
+          <span class="muted">Week, month &amp; cancelled classes</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+
+        <h1 class="hero-title">
+          <span class="blur-in">Your whole semester,</span>
+          <span class="blur-in grad"><em>in one app.</em></span>
+        </h1>
+
+        <p class="hero-sub reveal">
+          Timetable, deadlines, bus times, module files, a focus timer and your cohort's group chat —
+          built for <strong>University of Mauritius</strong> students. On your phone and your PC, always in sync.
+        </p>
+
+        <div class="hero-cta reveal">
+          <a class="btn btn-primary magnet" href="#download" data-dl="android" data-cursor="target">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18a.38.38 0 0 0-.66-.38l-1.86 3.22a11.4 11.4 0 0 0-9.84 0L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>
+            Get it for Android
+          </a>
+          <a class="btn btn-ghost glass magnet" href="#download" data-dl="windows" data-cursor="target">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.1l7.4-1v7.1H3zm8.3-1.1L21 2.6v8.6h-9.7zM3 12.2h7.4v7.1L3 18.3zm8.3 0H21v8.6l-9.7-1.4z"/></svg>
+            Windows
+          </a>
+        </div>
+        <p class="hero-note reveal">Free · Works offline · <span data-version>v3.1</span></p>
+      </div>
+
+      <div class="hero-phones" aria-label="App screenshots">
+        <figure class="phone phone-l"><img src="assets/screens/schedule_week.webp" width="390" height="844" alt="Week timetable grid"></figure>
+        <figure class="phone phone-c"><img src="assets/screens/dashboard.webp" width="390" height="844" alt="Home dashboard with today's classes" fetchpriority="high"></figure>
+        <figure class="phone phone-r"><img src="assets/screens/board.webp" width="390" height="844" alt="Kanban task board"></figure>
+      </div>
+    </section>
+
+    <!-- MARQUEE -->
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-track">
+        <span>Timetable</span><b>✦</b><span>Deadlines</span><b>✦</b><span>Bus times</span><b>✦</b><span>Module files</span><b>✦</b>
+        <span>Focus timer</span><b>✦</b><span>Cohort groups</span><b>✦</b><span>Notes</span><b>✦</b><span>Printable planners</span><b>✦</b>
+        <span>Timetable</span><b>✦</b><span>Deadlines</span><b>✦</b><span>Bus times</span><b>✦</b><span>Module files</span><b>✦</b>
+        <span>Focus timer</span><b>✦</b><span>Cohort groups</span><b>✦</b><span>Notes</span><b>✦</b><span>Printable planners</span><b>✦</b>
+      </div>
+    </div>
+
+    <!-- FEATURES -->
+    <section id="features" class="section">
+      <div class="section-head reveal">
+        <p class="eyebrow">Features</p>
+        <h2>Everything a UoM semester throws at you.</h2>
+        <p class="muted">From the first lecture of Week 1 to the last deadline before exams.</p>
+      </div>
+
+      <div class="bento">
+        <article class="card glass spot reveal span-2">
+          <div class="card-icon">📅</div>
+          <h3>Snap your timetable, done.</h3>
+          <p>Import your timetable from a photo or PDF with AI. Week-aware classes, one-off sessions, and Day, Week and Month views with a live “now” line.</p>
+          <ul class="chips"><li>Photo / PDF import</li><li>Week 1–15 aware</li><li>Meet · Teams · Zoom links</li></ul>
+        </article>
+
+        <article class="card glass spot reveal">
+          <div class="card-icon">🚫</div>
+          <h3>Lecturer cancelled?</h3>
+          <p>Cross out that one class. Reminders, “next class” and the widget skip it — on every device.</p>
+        </article>
+
+        <article class="card glass spot reveal">
+          <div class="card-icon">🚌</div>
+          <h3>Never miss the bus</h3>
+          <p>Opens on the next departure with a live countdown. Share routes with friends as a code over WhatsApp.</p>
+        </article>
+
+        <article class="card glass spot reveal">
+          <div class="card-icon">✅</div>
+          <h3>Assignments board</h3>
+          <p>To Do → In Progress → Done. Priorities, filters and time spent per task. Every delete has Undo.</p>
+        </article>
+
+        <article class="card glass spot reveal">
+          <div class="card-icon">⏱️</div>
+          <h3>Focus mode</h3>
+          <p>Pomodoro with a daily goal, streaks and a weekly chart. Link a session to a task.</p>
+        </article>
+
+        <article class="card glass spot reveal span-2">
+          <div class="card-icon">👥</div>
+          <h3>Your cohort, in one place.</h3>
+          <p>Join your group by programme, year (Y1–Y5) and semester (S1/S2), or with a private code. Leaders manage a shared timetable and events, there's a group chat with announcements, and a weekly focus leaderboard to keep everyone honest.</p>
+          <ul class="chips"><li>Shared timetable</li><li>Announcements</li><li>Leaderboard</li></ul>
+        </article>
+
+        <article class="card glass spot reveal">
+          <div class="card-icon">📁</div>
+          <h3>Module files</h3>
+          <p>A folder per module plus your own sections. Built-in PDF viewer, search, move and rename.</p>
+        </article>
+
+        <article class="card glass spot reveal">
+          <div class="card-icon">🖨️</div>
+          <h3>Print &amp; export</h3>
+          <p>Task reports as PDF and printable planners: lined, dotted, grid, month and week sheets.</p>
+        </article>
+
+        <article class="card glass spot reveal">
+          <div class="card-icon">🔄</div>
+          <h3>Phone ↔ PC sync</h3>
+          <p>One account, live sync. Works offline and catches up later. Start as a guest, upgrade anytime.</p>
+        </article>
+
+        <article class="card glass spot reveal">
+          <div class="card-icon">📝</div>
+          <h3>Notes that keep up</h3>
+          <p>Colourful notes with headings, bold, bullet lists and tickable checklists. Pin the ones that matter.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- A DAY ON CAMPUS -->
+    <section id="day" class="section">
+      <div class="section-head reveal">
+        <p class="eyebrow">A day on campus</p>
+        <h2>From the first bus to the last deadline.</h2>
+      </div>
+
+      <ol class="timeline">
+        <li class="tl-item glass spot reveal">
+          <time>07:42</time>
+          <div><h4>Bus in 6 min</h4><p>Your route opens on the next departure — earlier buses fold away.</p></div>
+          <span class="tag tag-cyan">Bus</span>
+        </li>
+        <li class="tl-item glass spot reveal">
+          <time>09:00</time>
+          <div><h4>Data Structures · Week 6</h4><p>Reminder 10 min before, homework attached, one tap to join the Teams link.</p></div>
+          <span class="tag tag-blue">Class</span>
+        </li>
+        <li class="tl-item glass spot reveal is-cancelled">
+          <time>13:00</time>
+          <div><h4>Mobile Computing</h4><p>Lecturer cancelled — crossed out for you and skipped by reminders.</p></div>
+          <span class="tag tag-red">Cancelled</span>
+        </li>
+        <li class="tl-item glass spot reveal">
+          <time>16:30</time>
+          <div><h4>Focus · 4 × 25 min</h4><p>Linked to “ER diagram”. Your cohort's leaderboard just moved.</p></div>
+          <span class="tag tag-violet">Focus</span>
+        </li>
+        <li class="tl-item glass spot reveal">
+          <time>21:00</time>
+          <div><h4>Due tomorrow: ER diagram</h4><p>On your home screen, your board and the 14-day “coming up” strip.</p></div>
+          <span class="tag tag-green">Deadline</span>
+        </li>
+      </ol>
+    </section>
+
+    <!-- SCREENS -->
+    <section id="screens" class="section">
+      <div class="showcase">
+        <div class="showcase-copy reveal">
+          <p class="eyebrow">Screens</p>
+          <h2>Designed to be opened between lectures.</h2>
+          <div class="tabs" role="tablist" aria-label="App screens">
+            <button role="tab" aria-selected="true" data-shot="dashboard" data-cursor="target">
+              <strong>Home</strong><span>What's next today, your bus, your deadlines and your focus week at a glance.</span>
+            </button>
+            <button role="tab" aria-selected="false" data-shot="schedule_day" data-cursor="target">
+              <strong>Day</strong><span>A real timeline with overlapping classes side-by-side and a live “now” line.</span>
+            </button>
+            <button role="tab" aria-selected="false" data-shot="schedule_week" data-cursor="target">
+              <strong>Week</strong><span>Mon–Fri grid of the whole week, so you can plan around the gaps.</span>
+            </button>
+            <button role="tab" aria-selected="false" data-shot="schedule_month" data-cursor="target">
+              <strong>Month</strong><span>Every class and event on a calendar. Tap a day to open it.</span>
+            </button>
+            <button role="tab" aria-selected="false" data-shot="board" data-cursor="target">
+              <strong>Board</strong><span>Drag tasks between columns on PC, long-press on phone.</span>
+            </button>
+            <button role="tab" aria-selected="false" data-shot="focus" data-cursor="target">
+              <strong>Focus</strong><span>Pomodoro, daily goal and streak — with break reminders.</span>
+            </button>
+          </div>
+        </div>
+        <div class="showcase-phone reveal">
+          <div class="halo" aria-hidden="true"></div>
+          <figure class="phone phone-lg tilt">
+            <img id="shot" src="assets/screens/dashboard.webp" width="390" height="844" alt="Home screen" loading="lazy">
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- DOWNLOAD -->
+    <section id="download" class="section">
+      <div class="section-head reveal">
+        <p class="eyebrow">Download</p>
+        <h2>Free. On the devices you already use.</h2>
+        <p class="muted">Latest release: <span data-version>v3.1</span><span data-date></span></p>
+      </div>
+
+      <div class="dl-grid">
+        <article class="card glass spot dl reveal">
+          <div class="dl-top">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="#3ddc84" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18a.38.38 0 0 0-.66-.38l-1.86 3.22a11.4 11.4 0 0 0-9.84 0L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>
+            <div><h3>Android</h3><p class="muted mono" data-size="android">APK</p></div>
+          </div>
+          <ol class="steps">
+            <li>Download the APK on your phone.</li>
+            <li>Open it and allow <em>“Install unknown apps”</em> when asked.</li>
+            <li>Sign in — or start as a guest.</li>
+          </ol>
+          <a class="btn btn-primary btn-block" data-asset="android" href="https://github.com/TusharDwarka/UOMPerApp/releases/latest" data-cursor="target">Download APK</a>
+        </article>
+
+        <article class="card glass spot dl reveal">
+          <div class="dl-top">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="#4cc2ff" aria-hidden="true"><path d="M3 5.1l7.4-1v7.1H3zm8.3-1.1L21 2.6v8.6h-9.7zM3 12.2h7.4v7.1L3 18.3zm8.3 0H21v8.6l-9.7-1.4z"/></svg>
+            <div><h3>Windows</h3><p class="muted mono" data-size="windows">ZIP</p></div>
+          </div>
+          <ol class="steps">
+            <li>Download and unzip anywhere.</li>
+            <li>Run <code>uom_per_app.exe</code> — keep the other files next to it.</li>
+            <li>SmartScreen warning? <em>More info → Run anyway</em> (the app isn't signed yet).</li>
+          </ol>
+          <a class="btn btn-ghost glass btn-block" data-asset="windows" href="https://github.com/TusharDwarka/UOMPerApp/releases/latest" data-cursor="target">Download for Windows</a>
+        </article>
+      </div>
+      <p class="center muted small reveal">iPhone and Mac aren't available yet. <a class="link" href="https://github.com/TusharDwarka/UOMPerApp/releases" data-cursor="target">All releases →</a></p>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq" class="section narrow">
+      <div class="section-head reveal">
+        <p class="eyebrow">FAQ</p>
+        <h2>Questions, answered.</h2>
+      </div>
+      <div class="faq">
+        <details class="glass reveal">
+          <summary data-cursor="target">Is this the official University of Mauritius app?</summary>
+          <p>No. UOM Per is an independent student-made app. It isn't affiliated with or endorsed by the University of Mauritius.</p>
+        </details>
+        <details class="glass reveal">
+          <summary data-cursor="target">Does it cost anything?</summary>
+          <p>No — it's free to download and use on Android and Windows.</p>
+        </details>
+        <details class="glass reveal">
+          <summary data-cursor="target">Do I need an account?</summary>
+          <p>You can start as a guest. Create an email account later — without losing anything — to sync between your phone and PC and to join groups.</p>
+        </details>
+        <details class="glass reveal">
+          <summary data-cursor="target">Does it work without internet?</summary>
+          <p>Yes. Everything is stored on your device first and syncs when you're back online.</p>
+        </details>
+        <details class="glass reveal">
+          <summary data-cursor="target">Why does Android or Windows warn me when installing?</summary>
+          <p>The app is distributed directly instead of through the Play Store or Microsoft Store, and the Windows build isn't code-signed yet. Allow “Install unknown apps” on Android, or choose <em>More info → Run anyway</em> on Windows.</p>
+        </details>
+        <details class="glass reveal">
+          <summary data-cursor="target">What about iPhone?</summary>
+          <p>Not yet. Android and Windows are supported today.</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- FINAL CTA -->
+    <section class="section">
+      <div class="cta glass spot reveal">
+        <img src="assets/icon-192.png" width="72" height="72" alt="" loading="lazy">
+        <h2>Make this semester the organised one.</h2>
+        <div class="hero-cta">
+          <a class="btn btn-primary magnet" href="#download" data-cursor="target">Download free</a>
+          <a class="btn btn-ghost glass magnet" href="https://github.com/TusharDwarka/UOMPerApp" data-cursor="target">View on GitHub</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-row">
+      <a class="brand" href="#top" data-cursor="target"><img src="assets/icon-32.png" width="22" height="22" alt=""><span>UOM Per</span></a>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="#features">Features</a>
+        <a href="#download">Download</a>
+        <a href="https://github.com/TusharDwarka/UOMPerApp">GitHub</a>
+        <a href="https://github.com/TusharDwarka/UOMPerApp/releases">Releases</a>
+      </nav>
+    </div>
+    <p class="small muted">An independent student project. Not affiliated with or endorsed by the University of Mauritius.</p>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>
