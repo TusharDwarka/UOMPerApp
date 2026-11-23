@@ -3,9 +3,11 @@
 A companion app for University of Mauritius students — timetable, deadlines, bus times, files, focus
 timer and study groups — on Android and Windows, synced through one account.
 
+🌐 **Website: [uomper.pages.dev](https://uomper.pages.dev)**
+
 ## ⬇️ Download
 
-Grab the latest build from [**Releases**](https://github.com/TusharDwarka/UOMPerApp/releases/latest):
+Grab the latest build from the [**website**](https://uomper.pages.dev/#download) or from [**Releases**](https://github.com/TusharDwarka/UOMPerApp/releases/latest):
 
 - **Android** — `UOMPer-v3.1-android.apk`. Open it on your phone and allow "install unknown apps" when asked.
 - **Windows** — `UOMPer-v3.1-windows.zip`. Unzip anywhere and run `uom_per_app.exe` (keep the other files next to it).
@@ -97,3 +99,15 @@ flutter test                # logic + layout/overflow tests
 
 ## 🛠 Tech stack
 Flutter · Provider · Isar (local DB) · Firebase Auth + Cloud Firestore (sync & groups) · Gemini (timetable import)
+
+## 🌐 Website
+
+The landing page is in [`website/`](website/): static HTML/CSS/JS with no build step. It's hosted on Cloudflare Pages
+at [uomper.pages.dev](https://uomper.pages.dev). Download buttons pick up the newest GitHub release automatically,
+so publishing a release doesn't need a redeploy. To publish changes to the site itself:
+
+```bash
+npx wrangler@4 pages deploy website --project-name uomper --branch Year2Improvement
+```
+
+Pushing to GitHub does **not** redeploy the site.
