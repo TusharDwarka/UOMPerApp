@@ -85,5 +85,6 @@ Future<void> startNextSemester(BuildContext context) async {
   if (ok != true) return;
   await records.setHolidayMode(false);
   await timetable.setStudyPeriod(year: year, semester: semester);
-  await timetable.resetForNewSetup();
+  // Same programme next semester: keep its name for setup.
+  await timetable.resetForNewSetup(keepCourse: true);
 }

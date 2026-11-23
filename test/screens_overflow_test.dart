@@ -483,11 +483,15 @@ void main() {
   for (final dark in [false, true]) {
     testWidgets('onboarding steps fit on a 320px phone (${dark ? 'dark' : 'light'})', (tester) async {
       _phone(tester, const Size(320, 640));
-      await tester.pumpWidget(MaterialApp(
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        themeMode: dark ? ThemeMode.dark : ThemeMode.light,
-        home: const OnboardingScreen(),
+      final isar = FakeIsarService();
+      await tester.pumpWidget(ChangeNotifierProvider(
+        create: (_) => TimetableProvider(isar, SyncService(isar)),
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+          home: const OnboardingScreen(),
+        ),
       ));
       await tester.enterText(find.byType(TextField), longModule);
       await tester.ensureVisible(find.text('Continue'));

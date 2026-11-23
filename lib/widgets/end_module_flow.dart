@@ -190,8 +190,8 @@ class _ConfirmDialogState extends State<_ConfirmDialog> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
               decoration: InputDecoration(
-                labelText: 'Final mark % (optional)',
-                helperText: 'Add it later in Grades if results aren\'t out',
+                labelText: 'Mark % (optional)',
+                helperText: 'Or add it later in Grades',
                 errorText: _error,
                 prefixIcon: const Icon(Icons.percent_rounded),
               ),
@@ -233,7 +233,7 @@ class _ResitDialogState extends State<_ResitDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('"${widget.moduleName}" is marked as a resit in Grades. Your resit mark replaces the first one in your CPA.',
+          Text('"${widget.moduleName}" will show as a resit in Grades. Your resit mark replaces the first one in your CPA.',
               style: TextStyle(color: p.textSecondary, height: 1.35)),
           const SizedBox(height: 14),
           SoftCard(

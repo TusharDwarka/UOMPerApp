@@ -58,6 +58,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     _semesterStartController.text = '${_semesterStart.year}-${_semesterStart.month.toString().padLeft(2, '0')}-${_semesterStart.day.toString().padLeft(2, '0')}';
     _semesterEnd = _semesterStart.add(const Duration(days: 105)); // 15 weeks
     _semesterEndController.text = '${_semesterEnd!.year}-${_semesterEnd!.month.toString().padLeft(2, '0')}-${_semesterEnd!.day.toString().padLeft(2, '0')}';
+    // Starting a new semester keeps the programme name.
+    _courseNameController.text = context.read<TimetableProvider>().courseName;
   }
 
   @override

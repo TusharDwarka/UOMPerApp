@@ -252,14 +252,15 @@ class TimetableProvider extends ChangeNotifier {
     await loadSessions();
   }
 
-  /// Reset everything for a fresh setup (re-onboarding)
-  Future<void> resetForNewSetup() async {
+  /// Reset everything for a fresh setup (re-onboarding). [keepCourse]
+  /// keeps the programme name (next semester of the same course).
+  Future<void> resetForNewSetup({bool keepCourse = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('courseName');
+    if (!keepCourse) await prefs.remove('courseName');
     await prefs.remove('hasCompletedSetup');
     await prefs.remove('semesterStartMs');
     await prefs.remove('semesterEndMs');
-    _courseName = '';
+    if (!keepCourse) _courseName = '';
     _hasCompletedSetup = false;
     _semesterStart = DateTime.now();
     _semesterEnd = null;
@@ -271,7 +272,7 @@ class TimetableProvider extends ChangeNotifier {
     });
     await _syncService.pushDeleteMany(SyncService.sessionsCol, removed.map((s) => s.syncId));
     await _syncService.pushSettings({
-      'courseName': '',
+      'courseName': _courseName,
       'hasCompletedSetup': false,
       'semesterStartMs': _semesterStart.millisecondsSinceEpoch,
       'semesterEndMs': null,
@@ -513,7 +514,7 @@ class TimetableProvider extends ChangeNotifier {
   /// timetable that happens to reuse its name.
   bool _endedBy(ClassSession s, DateTime date) {
     final end = _endedModules[s.subject.trim().toLowerCase()];
-    return end != null && dateOnly(date).isAfter(end) && !end.isBefore(dateOnly(_semesterStart));
+    return end != null && dateOnly(date).isAfter(end) && end.isAfter(dateOnly(_semesterStart));
   }
 
   List<ClassSession> _sessionsFor(List<ClassSession> source, DateTime date, {bool includeCancelled = false}) {
