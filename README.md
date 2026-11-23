@@ -9,11 +9,11 @@ timer and study groups — on Android and Windows, synced through one account.
 
 Grab the latest build from the [**website**](https://uomper.pages.dev/#download) or from [**Releases**](https://github.com/TusharDwarka/UOMPerApp/releases/latest):
 
-- **Android** — `UOMPer-v3.1-android.apk`. Open it on your phone and allow "install unknown apps" when asked.
-- **Windows** — `UOMPer-v3.1-windows.zip`. Unzip anywhere and run `uom_per_app.exe` (keep the other files next to it).
+- **Android** — `UOMPer-v3.2-android.apk`. Open it on your phone and allow "install unknown apps" when asked.
+- **Windows** — `UOMPer-v3.2-windows.zip`. Unzip anywhere and run `uom_per_app.exe` (keep the other files next to it).
   Windows SmartScreen may warn because the app isn't signed: *More info → Run anyway*.
 
-> v3.1 is a preview with patches — more updates are coming.
+> v3.2 adds Grades & CPA, end-module, holiday mode, reminders and Activity.
 
 ## 📸 Screenshots
 
