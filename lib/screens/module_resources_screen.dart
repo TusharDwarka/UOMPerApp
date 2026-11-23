@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 
 import '../models/module_resource.dart';
 import '../providers/resource_provider.dart';
-import '../providers/timetable_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/folder_picker.dart';
 import '../widgets/ui.dart';
 import 'resources_tab.dart' show fileIcon, fileIconColor, confirmDeleteFolder;
 import 'pdf_viewer_screen.dart';
@@ -241,69 +241,19 @@ class _FileRow extends StatelessWidget {
 
   Future<void> _move(BuildContext context) async {
     final prov = context.read<ResourceProvider>();
-    final folders = {
-      ...prov.moduleNames,
-      ...context.read<TimetableProvider>().userSessions.map((s) => s.subject),
-      ...prov.customFolders,
-    }.toList()
-      ..sort();
-    var targetFolder = folder;
-    var targetSection = file.category;
-
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) {
-          final sections = prov.sectionsFor(targetFolder);
-          if (!sections.contains(targetSection)) targetSection = sections.first;
-          return SheetScaffold(
-            title: 'Move file',
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      const Text('Folder', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(width: 12),
-                      Flexible(
-                        child: ChoicePill<String>(
-                          title: 'Move to folder',
-                          value: targetFolder,
-                          options: folders.contains(targetFolder) ? folders : [targetFolder, ...folders],
-                          labelOf: (f) => f,
-                          iconOf: (_) => Icons.folder_rounded,
-                          onChanged: (v) => setSheet(() => targetFolder = v),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final s in sections)
-                        ChoiceChip(label: Text(s), selected: targetSection == s, onSelected: (_) => setSheet(() => targetSection = s)),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  InkPillButton(label: 'Move', expand: true, onPressed: () => Navigator.pop(ctx, true)),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+    final picked = await pickFolderAndSection(
+      context,
+      title: 'Move file',
+      fileName: file.fileName,
+      initialFolder: folder,
+      initialSection: file.category,
+      action: 'Move',
     );
-    if (ok == true) {
-      await prov.moveResource(file.id, targetFolder, targetSection);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Moved to $targetFolder / $targetSection')));
-      }
+    if (picked == null) return;
+    final (targetFolder, targetSection) = picked;
+    await prov.moveResource(file.id, targetFolder, targetSection);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Moved to $targetFolder / $targetSection')));
     }
   }
 

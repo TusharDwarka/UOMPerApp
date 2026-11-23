@@ -15,6 +15,9 @@ import 'print_center_screen.dart';
 
 Color taskColor(AcademicTask t) => t.colorValue != null ? Color(t.colorValue!) : AppColors.forType(t.type);
 
+/// Colour as shown on calendars: green once the item is done.
+Color taskDisplayColor(AcademicTask t) => t.isCompleted ? AppColors.done : taskColor(t);
+
 class AcademicTab extends StatefulWidget {
   const AcademicTab({super.key});
 
@@ -215,13 +218,16 @@ class _AcademicTabState extends State<AcademicTab> {
         children: [
           for (final e in shown)
             Builder(builder: (context) {
-              final c = taskColor(e);
+              final c = taskDisplayColor(e);
               if (!e.isSpanning) {
+                // Done: a green bar with a tick instead of the type colour.
                 return Container(
                   width: 24,
-                  height: 6,
+                  height: e.isCompleted ? 9 : 6,
                   margin: const EdgeInsets.only(top: 2),
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(4)),
+                  child: e.isCompleted ? const Icon(Icons.check_rounded, size: 8, color: Colors.white) : null,
                 );
               }
               final isStart = isSameDate(day, e.startDate!);
@@ -285,7 +291,7 @@ class _AcademicTabState extends State<AcademicTab> {
   }
 
   Widget _eventRow(Palette p, AcademicTask t, TimetableProvider timetable) {
-    final c = taskColor(t);
+    final c = taskDisplayColor(t);
     String when;
     if (t.isSpanning) {
       final total = dateOnly(t.dueDate).difference(dateOnly(t.startDate!)).inDays + 1;
@@ -317,6 +323,10 @@ class _AcademicTabState extends State<AcademicTab> {
                       Row(
                         children: [
                           TagPill(t.type, color: c),
+                          if (t.isCompleted) ...[
+                            const SizedBox(width: 6),
+                            const TagPill('Done', color: AppColors.done, icon: Icons.check_rounded),
+                          ],
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(when, maxLines: 1, overflow: TextOverflow.ellipsis,

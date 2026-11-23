@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/theme_provider.dart';
+import '../providers/record_provider.dart';
 import '../providers/timetable_provider.dart';
 import '../services/auth_service.dart';
 import '../services/group_service.dart';
@@ -14,6 +15,8 @@ import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/end_semester_dialog.dart';
 import '../widgets/ui.dart';
+import 'end_semester_celebration_screen.dart';
+import 'home_screen.dart';
 import 'login_screen.dart';
 
 class SettingsTab extends StatefulWidget {
@@ -359,6 +362,13 @@ class _SettingsTabState extends State<SettingsTab> {
                       ),
                     ),
                     ListTile(
+                      leading: _icon(Icons.workspace_premium_rounded, AppColors.accent),
+                      title: const Text('Grades & modules', style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: const Text('Marks, CPA calculator, end a module, resits'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => HomeNavigation.of(context, AppPage.grades),
+                    ),
+                    ListTile(
                       leading: _icon(Icons.auto_delete_outlined, AppColors.accent),
                       title: const Text('Clear finished tasks', style: TextStyle(fontWeight: FontWeight.w600)),
                       subtitle: const Text('Removes items from Done automatically'),
@@ -442,14 +452,30 @@ class _SettingsTabState extends State<SettingsTab> {
                   ),
                 ]),
 
-                _group(p, 'Danger zone', titleColor: Colors.redAccent, [
-                  ListTile(
-                    leading: _icon(Icons.warning_rounded, Colors.red),
-                    title: const Text('End semester', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.redAccent)),
-                    subtitle: const Text('Archive modules and start fresh'),
-                    onTap: () => showDialog(context: context, builder: (_) => const EndSemesterDialog()),
-                  ),
-                ]),
+                if (context.watch<RecordProvider>().holidayMode)
+                  _group(p, 'Semester', [
+                    ListTile(
+                      leading: _icon(Icons.beach_access_rounded, Colors.teal),
+                      title: const Text('Holiday mode is on', style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: const Text('Classes are paused; everything else works as usual'),
+                    ),
+                    ListTile(
+                      leading: _icon(Icons.school_rounded, AppColors.accent),
+                      title: const Text('Start next semester', style: TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: const Text('Set up your new timetable'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => startNextSemester(context),
+                    ),
+                  ])
+                else
+                  _group(p, 'Danger zone', titleColor: Colors.redAccent, [
+                    ListTile(
+                      leading: _icon(Icons.warning_rounded, Colors.red),
+                      title: const Text('End semester', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.redAccent)),
+                      subtitle: const Text('Save modules to Grades and switch to holiday mode'),
+                      onTap: () => showDialog(context: context, builder: (_) => const EndSemesterDialog()),
+                    ),
+                  ]),
               ],
             );
           },

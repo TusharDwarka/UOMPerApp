@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:isar_community/isar.dart';
@@ -7,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/class_session.dart';
 import '../models/academic_task.dart';
 import '../models/attendance_record.dart';
+import '../services/activity_log.dart';
 import '../services/isar_service.dart';
 import '../services/widget_service.dart';
 import '../services/notification_service.dart';
@@ -341,6 +343,7 @@ class TimetableProvider extends ChangeNotifier {
     _isSwapped = prefs.getBool('isSwapped') ?? false;
 
     _tasks = await isar.academicTasks.where().sortByDueDateDesc().findAll();
+    _doneIds = {for (final t in _tasks) if (t.isCompleted) t.id};
     _attendanceRecords = await isar.attendanceRecords.where().findAll();
 
     notifyListeners();
@@ -358,7 +361,11 @@ class TimetableProvider extends ChangeNotifier {
       for (final t in _tasks)
         if (!t.isCompleted) (title: t.title, type: t.type, due: t.dueDate)
     ]);
+    NotificationService().scheduleTaskReminders(_tasks);
   }
+
+  /// Tasks that were already done at the last load, to spot new completions.
+  Set<int> _doneIds = {};
 
   Future<void> resetAttendance() async {
     final isar = await isarService.db;
@@ -482,9 +489,37 @@ class TimetableProvider extends ChangeNotifier {
     await addSession(s);
   }
 
+  // ───────────── Ended modules ─────────────
+
+  /// Lower-cased module name → the day it ended (see RecordProvider).
+  Map<String, DateTime> _endedModules = {};
+
+  /// Modules that finished before the semester (final test done, etc.).
+  /// Their classes stop showing after the end day, everywhere.
+  void setEndedModules(Map<String, DateTime> ended) {
+    if (mapEquals(ended, _endedModules)) return;
+    _endedModules = Map.unmodifiable(ended);
+    notifyListeners();
+    if (_userSessions.isNotEmpty) {
+      WidgetService.updateWidget(this);
+      rescheduleReminders();
+    }
+  }
+
+  bool isModuleEnded(String subject) => _endedModules.containsKey(subject.trim().toLowerCase());
+
+  /// True once [s]'s module has ended. Only an end inside the current
+  /// semester counts, so a module ended last semester never hides a new
+  /// timetable that happens to reuse its name.
+  bool _endedBy(ClassSession s, DateTime date) {
+    final end = _endedModules[s.subject.trim().toLowerCase()];
+    return end != null && dateOnly(date).isAfter(end) && !end.isBefore(dateOnly(_semesterStart));
+  }
+
   List<ClassSession> _sessionsFor(List<ClassSession> source, DateTime date, {bool includeCancelled = false}) {
     final dayName = DateFormat('EEEE').format(date);
     return source.where((s) {
+      if (_endedBy(s, date)) return false;
       if (!includeCancelled && isCancelled(s, date)) return false;
       // One-off classes match on their date even if `day` disagrees.
       if (s.specificDate != null) return isSameDay(date, s.specificDate!);
@@ -527,7 +562,9 @@ class TimetableProvider extends ChangeNotifier {
     final today = dateOnly(DateTime.now());
     while (!iterator.isAfter(today)) {
       final dayName = DateFormat('EEEE').format(iterator);
-      final active = sessions.any((s) => s.specificDate != null
+      final active = sessions.any((s) => _endedBy(s, iterator)
+          ? false
+          : s.specificDate != null
           ? isSameDay(iterator, s.specificDate!)
           : s.day == dayName && _shouldShowSession(s, iterator));
       if (active) dates.add(iterator);
@@ -597,6 +634,12 @@ class TimetableProvider extends ChangeNotifier {
       task.isCompleted = true;
     } else if (status != null) {
       task.isCompleted = false;
+    }
+    // Feeds the Activity heatmap (the Done column is cleared after a while).
+    final restored = task.id == Isar.autoIncrement && task.syncId != null; // Undo of a delete
+    if (task.isCompleted && !restored && !_doneIds.contains(task.id)) {
+      _doneIds.add(task.id);
+      unawaited(ActivityLog.instance.bump(ActivityLog.tasks));
     }
     SyncService.stamp(task);
     final isar = await isarService.db;

@@ -49,6 +49,10 @@ class AcademicTask {
   /// 0 = low, 1 = normal, 2 = high.
   int? priority;
 
+  /// Reminders, as minutes before [dueDate] (or before [startDate] for a
+  /// multi-day event), e.g. [4320] = 3 days before. Null/empty = none.
+  List<int>? remindBefore;
+
   /// Stable cross-device id (Firestore document id).
   @Index()
   String? syncId;
@@ -108,8 +112,18 @@ class AcademicTask {
         'meetingLink': meetingLink,
         'status': status,
         'priority': priority,
+        'remindBefore': remindBefore,
         'updatedAt': updatedAt?.toIso8601String(),
       };
+
+  /// When reminders count back from: the start of a multi-day event,
+  /// otherwise the due time.
+  @ignore
+  DateTime get reminderAnchor {
+    final s = startDate;
+    if (s == null || !isSpanning) return dueDate;
+    return DateTime(s.year, s.month, s.day, 9);
+  }
 
   factory AcademicTask.fromJson(Map<String, dynamic> json) {
     return AcademicTask(
@@ -125,6 +139,9 @@ class AcademicTask {
       status: json['status'],
       priority: json['priority'],
     )
+      ..remindBefore = json['remindBefore'] is List
+          ? [for (final m in json['remindBefore'] as List) if (m is num) m.toInt()]
+          : null
       ..syncId = json['syncId']
       ..updatedAt = json['updatedAt'] != null ? DateTime.tryParse(json['updatedAt']) : null;
   }

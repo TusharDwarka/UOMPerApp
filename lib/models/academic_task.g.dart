@@ -47,38 +47,43 @@ const AcademicTaskSchema = CollectionSchema(
       name: r'priority',
       type: IsarType.long,
     ),
-    r'startDate': PropertySchema(
+    r'remindBefore': PropertySchema(
       id: 6,
+      name: r'remindBefore',
+      type: IsarType.longList,
+    ),
+    r'startDate': PropertySchema(
+      id: 7,
       name: r'startDate',
       type: IsarType.dateTime,
     ),
     r'status': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'status',
       type: IsarType.string,
     ),
     r'subject': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'subject',
       type: IsarType.string,
     ),
     r'syncId': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'syncId',
       type: IsarType.string,
     ),
     r'title': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'title',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'type',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -125,6 +130,12 @@ int _academicTaskEstimateSize(
     }
   }
   {
+    final value = object.remindBefore;
+    if (value != null) {
+      bytesCount += 3 + value.length * 8;
+    }
+  }
+  {
     final value = object.status;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -154,13 +165,14 @@ void _academicTaskSerialize(
   writer.writeBool(offsets[3], object.isCompleted);
   writer.writeString(offsets[4], object.meetingLink);
   writer.writeLong(offsets[5], object.priority);
-  writer.writeDateTime(offsets[6], object.startDate);
-  writer.writeString(offsets[7], object.status);
-  writer.writeString(offsets[8], object.subject);
-  writer.writeString(offsets[9], object.syncId);
-  writer.writeString(offsets[10], object.title);
-  writer.writeString(offsets[11], object.type);
-  writer.writeDateTime(offsets[12], object.updatedAt);
+  writer.writeLongList(offsets[6], object.remindBefore);
+  writer.writeDateTime(offsets[7], object.startDate);
+  writer.writeString(offsets[8], object.status);
+  writer.writeString(offsets[9], object.subject);
+  writer.writeString(offsets[10], object.syncId);
+  writer.writeString(offsets[11], object.title);
+  writer.writeString(offsets[12], object.type);
+  writer.writeDateTime(offsets[13], object.updatedAt);
 }
 
 AcademicTask _academicTaskDeserialize(
@@ -176,15 +188,16 @@ AcademicTask _academicTaskDeserialize(
     isCompleted: reader.readBoolOrNull(offsets[3]) ?? false,
     meetingLink: reader.readStringOrNull(offsets[4]),
     priority: reader.readLongOrNull(offsets[5]),
-    startDate: reader.readDateTimeOrNull(offsets[6]),
-    status: reader.readStringOrNull(offsets[7]),
-    subject: reader.readStringOrNull(offsets[8]) ?? 'General',
-    title: reader.readStringOrNull(offsets[10]) ?? '',
-    type: reader.readStringOrNull(offsets[11]) ?? 'Assignment',
+    startDate: reader.readDateTimeOrNull(offsets[7]),
+    status: reader.readStringOrNull(offsets[8]),
+    subject: reader.readStringOrNull(offsets[9]) ?? 'General',
+    title: reader.readStringOrNull(offsets[11]) ?? '',
+    type: reader.readStringOrNull(offsets[12]) ?? 'Assignment',
   );
   object.id = id;
-  object.syncId = reader.readStringOrNull(offsets[9]);
-  object.updatedAt = reader.readDateTimeOrNull(offsets[12]);
+  object.remindBefore = reader.readLongList(offsets[6]);
+  object.syncId = reader.readStringOrNull(offsets[10]);
+  object.updatedAt = reader.readDateTimeOrNull(offsets[13]);
   return object;
 }
 
@@ -208,18 +221,20 @@ P _academicTaskDeserializeProp<P>(
     case 5:
       return (reader.readLongOrNull(offset)) as P;
     case 6:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readLongList(offset)) as P;
     case 7:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 8:
-      return (reader.readStringOrNull(offset) ?? 'General') as P;
-    case 9:
       return (reader.readStringOrNull(offset)) as P;
+    case 9:
+      return (reader.readStringOrNull(offset) ?? 'General') as P;
     case 10:
-      return (reader.readStringOrNull(offset) ?? '') as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 11:
-      return (reader.readStringOrNull(offset) ?? 'Assignment') as P;
+      return (reader.readStringOrNull(offset) ?? '') as P;
     case 12:
+      return (reader.readStringOrNull(offset) ?? 'Assignment') as P;
+    case 13:
       return (reader.readDateTimeOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -940,6 +955,169 @@ extension AcademicTaskQueryFilter
         upper: upper,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<AcademicTask, AcademicTask, QAfterFilterCondition>
+      remindBeforeIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'remindBefore',
+      ));
+    });
+  }
+
+  QueryBuilder<AcademicTask, AcademicTask, QAfterFilterCondition>
+      remindBeforeIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'remindBefore',
+      ));
+    });
+  }
+
+  QueryBuilder<AcademicTask, AcademicTask, QAfterFilterCondition>
+      remindBeforeElementEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'remindBefore',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<AcademicTask, AcademicTask, QAfterFilterCondition>
+      remindBeforeElementGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'remindBefore',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<AcademicTask, AcademicTask, QAfterFilterCondition>
+      remindBeforeElementLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'remindBefore',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<AcademicTask, AcademicTask, QAfterFilterCondition>
+      remindBeforeElementBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'remindBefore',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<AcademicTask, AcademicTask, QAfterFilterCondition>
+      remindBeforeLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'remindBefore',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<AcademicTask, AcademicTask, QAfterFilterCondition>
+      remindBeforeIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'remindBefore',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<AcademicTask, AcademicTask, QAfterFilterCondition>
+      remindBeforeIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'remindBefore',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<AcademicTask, AcademicTask, QAfterFilterCondition>
+      remindBeforeLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'remindBefore',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<AcademicTask, AcademicTask, QAfterFilterCondition>
+      remindBeforeLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'remindBefore',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<AcademicTask, AcademicTask, QAfterFilterCondition>
+      remindBeforeLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'remindBefore',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
     });
   }
 
@@ -2186,6 +2364,12 @@ extension AcademicTaskQueryWhereDistinct
     });
   }
 
+  QueryBuilder<AcademicTask, AcademicTask, QDistinct> distinctByRemindBefore() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'remindBefore');
+    });
+  }
+
   QueryBuilder<AcademicTask, AcademicTask, QDistinct> distinctByStartDate() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'startDate');
@@ -2275,6 +2459,13 @@ extension AcademicTaskQueryProperty
   QueryBuilder<AcademicTask, int?, QQueryOperations> priorityProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'priority');
+    });
+  }
+
+  QueryBuilder<AcademicTask, List<int>?, QQueryOperations>
+      remindBeforeProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'remindBefore');
     });
   }
 

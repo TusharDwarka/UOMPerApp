@@ -38,13 +38,29 @@ Grab the latest build from the [**website**](https://uomper.pages.dev/#download)
   the widget, on all your devices. Undo from the same sheet.
 
 ### 🗓 Academic Hub
-- Calendar with **per-event colours** and **multi-day (spanning) events** drawn as continuous bars.
+- Calendar with **per-event colours** and **multi-day (spanning) events** drawn as continuous bars; finished items turn **green with a tick**.
+- **Remind me**: 1 hour / 1–3 days / 1 week before, or any custom time — several per item.
+- **Share** an item as a message (WhatsApp…) or post it straight to a study group's calendar.
+- Every new task asks **which module it's for** (or *Personal*).
 - Day agenda (classes + events), 14-day "coming up" strip.
 
 ### ✅ Board (Kanban)
 - To Do → In Progress → Done. Drag between columns (PC) or long-press onto a column tab (phone).
 - No accidental swipe-to-delete; every delete asks first and offers **Undo**.
 - Priority, filters, time spent per task (from Focus), finished items auto-clear after 7/14/30 days.
+
+### 🎓 Grades & modules
+- **Grade holder** per year/semester with letter grades, credits and **CPA**.
+- **CPA calculator**: try "what if" marks and see the average you need for a target CPA.
+- **End a module early** (final test done): two confirmations, confetti, and its classes leave the timetable.
+- **Resits**: mark a module for resit, add the resit date (goes to the Hub with reminders); the resit mark replaces the first.
+
+### 🏖 End of semester → holiday mode
+- Ending the semester saves your modules to Grades and switches to **holiday mode**: no classes, but calendar, board,
+  notes, focus and groups keep working. **Start next semester** when you're ready.
+
+### 🔥 Activity
+- A GitHub-style heatmap of the last year: tasks finished, notes written and focus time, with streaks.
 
 ### 🖨 Print & export
 - Task report PDF: pick types, board columns, dates; optional month calendar pages.
@@ -58,6 +74,7 @@ Grab the latest build from the [**website**](https://uomper.pages.dev/#download)
 
 ### 📁 Files
 - Module folders + your own folders, with **custom sections** (add / rename / delete). Move, rename, search.
+- Saving a shared file, sorting the inbox or moving a file uses one sheet with **folder and section dropdowns** (deleted folders stay hidden).
 
 ### 📝 Notes
 - Colourful notes with headings, **bold**, bullet lists and tickable checklists; pinning.
@@ -70,6 +87,8 @@ Grab the latest build from the [**website**](https://uomper.pages.dev/#download)
 - Join your cohort (public list by programme, year Y1–Y5 and semester S1/S2, or private join code).
 - Shared timetable & events managed by **leaders**, group chat with announcements, live "next class" countdown,
   per-member "remind me X min before", and a weekly **focus leaderboard**.
+- Shared events carry a **suggested reminder** (e.g. 3 days before); each member can keep it, turn it off or pick their own,
+  and gets a heads-up when a new event is posted.
 
 ### 🔐 Accounts & sync
 - Email/password sign-in (or guest, upgradable later without losing data).

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -337,6 +338,7 @@ class GroupService {
 
   StreamSubscription? _userSub;
   final List<StreamSubscription> _announcementSubs = [];
+  final Map<String, Timer> _eventDebounce = {};
 
   void startAnnouncementWatcher() {
     stopAnnouncementWatcher();
@@ -355,6 +357,12 @@ class GroupService {
             .limit(5)
             .snapshots()
             .listen((ms) => _onMessages(gid, ms), onError: (_) {}));
+        // Shared events: reminders even if the group page is never opened,
+        // and a heads-up when someone posts a new one.
+        _announcementSubs.add(events(gid).listen((es) {
+          _eventDebounce[gid]?.cancel();
+          _eventDebounce[gid] = Timer(const Duration(seconds: 3), () => _onEvents(gid, es));
+        }, onError: (_) {}));
       }
     }, onError: (_) {});
   }
@@ -362,10 +370,40 @@ class GroupService {
   void stopAnnouncementWatcher() {
     _userSub?.cancel();
     _userSub = null;
+    for (final t in _eventDebounce.values) {
+      t.cancel();
+    }
+    _eventDebounce.clear();
     for (final s in _announcementSubs) {
       s.cancel();
     }
     _announcementSubs.clear();
+  }
+
+  Future<void> _onEvents(String gid, List<GroupEvent> es) async {
+    String groupName = 'Your group';
+    try {
+      groupName = ((await _group(gid).get()).data()?['name'] as String?) ?? groupName;
+    } catch (_) {}
+    await scheduleEventReminders(gid, groupName, es);
+
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'events_seen_$gid';
+    final seen = prefs.getStringList(key);
+    await prefs.setStringList(key, es.map((e) => e.id).toList());
+    if (seen == null) return; // first run: don't announce old events
+    final now = DateTime.now();
+    final own = await eventReminders(gid);
+    final classMinutes = await reminderMinutesFor(gid);
+    for (final e in es.where((e) => !seen.contains(e.id) && (e.end ?? e.start).isAfter(now))) {
+      final leads = leadsFor(e, own, classMinutes);
+      await NotificationService().showNow(
+        key: 'newevent|$gid|${e.id}',
+        title: '📅 $groupName: ${e.title}',
+        body: '${e.type} • ${DateFormat('EEE d MMM, HH:mm').format(e.start)} — '
+            '${leads.isEmpty ? 'open the group to set a reminder' : 'reminder ${leads.map(NotificationService.describeLead).join(' & ')} before'}',
+      );
+    }
   }
 
   Future<void> _onMessages(String gid, QuerySnapshot<Map<String, dynamic>> ms) async {
@@ -411,17 +449,53 @@ class GroupService {
     final prefs = await SharedPreferences.getInstance();
     if (minutes == null) {
       await prefs.remove(_remindKey(gid));
-      await cancelGroupReminders(gid);
+      await _cancelKeys('${_remindKey(gid)}_keys');
     } else {
       await prefs.setInt(_remindKey(gid), minutes);
     }
   }
 
+  // ───────────── Per-event reminders (each member chooses) ─────────────
+
+  static String _eventRemindKey(String gid) => 'group_event_remind_$gid';
+
+  /// This member's own reminders per event id (minutes before; empty = off).
+  /// Events not in the map use the poster's suggestion.
+  Future<Map<String, List<int>>> eventReminders(String gid) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_eventRemindKey(gid));
+    if (raw == null) return {};
+    try {
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      return m.map((k, v) => MapEntry(k, [for (final x in v as List) (x as num).toInt()]));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// [minutes] null = follow the group's suggestion again.
+  Future<void> setEventReminder(String gid, String eventId, List<int>? minutes) async {
+    final all = await eventReminders(gid);
+    minutes == null ? all.remove(eventId) : all[eventId] = minutes;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_eventRemindKey(gid), jsonEncode(all));
+  }
+
+  /// Lead times for one event: the member's choice, else the poster's
+  /// suggestion, else the member's class reminder (the old behaviour).
+  static List<int> leadsFor(GroupEvent e, Map<String, List<int>> own, int? classMinutes) =>
+      own[e.id] ?? e.remindBefore ?? (classMinutes == null ? const [] : [classMinutes]);
+
   /// Schedules local notifications for the next 7 days of shared classes and
   /// upcoming shared events. Each member chooses their own lead time.
   Future<void> scheduleGroupReminders(String gid, String groupName, List<GroupSession> sessions, List<GroupEvent> events) async {
+    await _scheduleClassReminders(gid, groupName, sessions);
+    await scheduleEventReminders(gid, groupName, events);
+  }
+
+  Future<void> _scheduleClassReminders(String gid, String groupName, List<GroupSession> sessions) async {
     final minutes = await reminderMinutesFor(gid);
-    await cancelGroupReminders(gid);
+    await _cancelKeys('${_remindKey(gid)}_keys');
     if (minutes == null) return;
 
     final prefs = await SharedPreferences.getInstance();
@@ -442,25 +516,46 @@ class GroupService {
         keys.add(key);
       }
     }
-    for (final e in events.where((e) => e.start.isAfter(now) && e.start.difference(now).inDays < 14)) {
-      final key = 'g|$gid|event|${e.id}';
-      await NotificationService().scheduleOneOff(
-        key: key,
-        title: '$groupName: ${e.title}',
-        body: '${e.type} • ${DateFormat('EEE d MMM, HH:mm').format(e.start)}',
-        at: e.start.subtract(Duration(minutes: minutes)),
-      );
-      keys.add(key);
-    }
     await prefs.setStringList('${_remindKey(gid)}_keys', keys);
   }
 
-  Future<void> cancelGroupReminders(String gid) async {
+  /// Shared events in the next 60 days, at each member's chosen lead times.
+  Future<void> scheduleEventReminders(String gid, String groupName, List<GroupEvent> events) async {
+    final classMinutes = await reminderMinutesFor(gid);
+    final own = await eventReminders(gid);
+    await _cancelKeys('${_remindKey(gid)}_event_keys');
+
     final prefs = await SharedPreferences.getInstance();
-    for (final k in prefs.getStringList('${_remindKey(gid)}_keys') ?? const <String>[]) {
+    final keys = <String>[];
+    final now = DateTime.now();
+    for (final e in events.where((e) => e.start.isAfter(now) && e.start.difference(now).inDays < 60)) {
+      for (final m in leadsFor(e, own, classMinutes).toSet()) {
+        final at = e.start.subtract(Duration(minutes: m));
+        if (at.isBefore(now)) continue;
+        final key = 'g|$gid|event|${e.id}|$m';
+        await NotificationService().scheduleOneOff(
+          key: key,
+          title: m == 0 ? '$groupName: ${e.title}' : '$groupName: ${e.title} in ${NotificationService.describeLead(m)}',
+          body: '${e.type} • ${DateFormat('EEE d MMM, HH:mm').format(e.start)}${e.room.isNotEmpty ? ' • ${e.room}' : ''}',
+          at: at,
+        );
+        keys.add(key);
+      }
+    }
+    await prefs.setStringList('${_remindKey(gid)}_event_keys', keys);
+  }
+
+  Future<void> _cancelKeys(String listKey) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final k in prefs.getStringList(listKey) ?? const <String>[]) {
       await NotificationService().cancelOneOff(k);
     }
-    await prefs.remove('${_remindKey(gid)}_keys');
+    await prefs.remove(listKey);
+  }
+
+  Future<void> cancelGroupReminders(String gid) async {
+    await _cancelKeys('${_remindKey(gid)}_keys');
+    await _cancelKeys('${_remindKey(gid)}_event_keys');
   }
 
   static String describeCountdown(DateTime start, DateTime now) {

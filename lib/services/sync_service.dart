@@ -13,6 +13,7 @@ import '../models/academic_task.dart';
 import '../models/attendance_record.dart';
 import '../models/class_session.dart';
 import '../models/note.dart';
+import '../providers/record_provider.dart';
 import '../utils/ids.dart';
 import 'isar_service.dart';
 
@@ -245,6 +246,7 @@ class SyncService {
       for (final k in const [
         'courseName', 'hasCompletedSetup', 'semesterStartMs', 'semesterEndMs',
         busPrefsKey, busUpdatedKey, 'isSwapped', 'resource_sections', 'custom_folders', _settingsUpdatedKey,
+        ...RecordProvider.prefsKeys,
       ]) {
         await prefs.remove(k);
       }
@@ -270,6 +272,7 @@ class SyncService {
         'prefs': {
           for (final k in const [
             'courseName', 'hasCompletedSetup', 'semesterStartMs', 'semesterEndMs', busPrefsKey, 'resource_sections', 'custom_folders',
+            ...RecordProvider.prefsKeys,
           ])
             if (prefs.get(k) != null) k: prefs.get(k),
         },

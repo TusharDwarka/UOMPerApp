@@ -6,6 +6,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import '../models/academic_task.dart';
 import '../models/class_session.dart';
 import '../utils/ids.dart';
 
@@ -255,6 +256,56 @@ class NotificationService {
           '$list${upcoming.length > 4 ? '…' : ''}';
     }
     await scheduleOneOff(key: _summaryKey, title: 'Your week ahead 🗓', body: body, at: sunday);
+  }
+
+  // ───────────── Deadline / event reminders ─────────────
+
+  static const _prefsTaskKeys = 'task_reminder_keys';
+
+  /// "3 days", "1 hour", "30 min" for a lead time in minutes.
+  static String describeLead(int minutes) {
+    if (minutes == 0) return 'At the time';
+    String unit(int n, String u) => '$n $u${n == 1 ? '' : 's'}';
+    if (minutes % 10080 == 0) return unit(minutes ~/ 10080, 'week');
+    if (minutes % 1440 == 0) return unit(minutes ~/ 1440, 'day');
+    if (minutes % 60 == 0) return unit(minutes ~/ 60, 'hour');
+    return '$minutes min';
+  }
+
+  /// Re-schedules every reminder the user set on their tasks and events
+  /// (Hub / Board "Remind me"). Old ones are cancelled first, so edits and
+  /// deletes never leave a stale notification behind.
+  Future<void> scheduleTaskReminders(List<AcademicTask> tasks) async {
+    if (!_isInitialized) return;
+    final prefs = await SharedPreferences.getInstance();
+    for (final k in prefs.getStringList(_prefsTaskKeys) ?? const <String>[]) {
+      await cancelOneOff(k);
+    }
+    final now = DateTime.now();
+    final horizon = now.add(const Duration(days: 45));
+    final keys = <String>[];
+    for (final t in tasks) {
+      final leads = t.remindBefore;
+      if (keys.length >= 120) break; // stay well under Android's alarm limit
+      if (t.isCompleted || leads == null || leads.isEmpty) continue;
+      final anchor = t.reminderAnchor;
+      for (final m in leads.toSet()) {
+        final at = anchor.subtract(Duration(minutes: m));
+        if (at.isBefore(now) || at.isAfter(horizon)) continue;
+        final key = 'task|${t.syncId ?? t.id}|$m';
+        final when = t.isSpanning
+            ? 'Starts ${DateFormat('EEE d MMM').format(anchor)}'
+            : 'Due ${DateFormat('EEE d MMM, HH:mm').format(t.dueDate)}';
+        await scheduleOneOff(
+          key: key,
+          title: m == 0 ? '${t.type}: ${t.title}' : '${t.type} in ${describeLead(m)}: ${t.title}',
+          body: '$when${t.subject != 'General' ? ' · ${t.subject}' : ''}',
+          at: at,
+        );
+        keys.add(key);
+      }
+    }
+    await prefs.setStringList(_prefsTaskKeys, keys);
   }
 
   // ───────────── Group "class coming up" nudges (local only) ─────────────

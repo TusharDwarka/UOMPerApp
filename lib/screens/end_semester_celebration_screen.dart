@@ -1,122 +1,89 @@
 import 'package:flutter/material.dart';
-import 'package:confetti/confetti.dart';
 import 'package:provider/provider.dart';
+
+import '../providers/record_provider.dart';
 import '../providers/timetable_provider.dart';
+import '../utils/time_utils.dart';
+import '../widgets/ui.dart';
+import 'celebration_screen.dart';
 
-class EndSemesterCelebrationScreen extends StatefulWidget {
-  const EndSemesterCelebrationScreen({super.key});
-
-  @override
-  State<EndSemesterCelebrationScreen> createState() => _EndSemesterCelebrationScreenState();
+/// Ends the semester: confetti, modules archived to Grades, and the app
+/// switches to holiday mode (calendar, board, notes, focus keep working).
+/// The timetable is only cleared when the student starts the next semester.
+Future<void> finishSemester(BuildContext context) async {
+  final timetable = context.read<TimetableProvider>();
+  final records = context.read<RecordProvider>();
+  await CelebrationScreen.show(
+    context,
+    emoji: '🎉',
+    title: 'Semester complete!',
+    message: 'Well done. Your modules are saved in Grades and the app is now in holiday mode — '
+        'your calendar, board, notes and focus timer keep working.',
+    footer: 'Start the next semester from Home or Settings whenever you\'re ready.',
+    work: () async {
+      await records.endSemester(timetable.scheduleSubjects, year: timetable.studyYear, semester: timetable.semester);
+      // Classes stop showing from tomorrow.
+      final today = dateOnly(DateTime.now());
+      final end = timetable.semesterEnd;
+      if (end == null || end.isAfter(today)) {
+        await timetable.setSemesterDates(timetable.semesterStart, today);
+        await timetable.loadSessions();
+      }
+    },
+  );
 }
 
-class _EndSemesterCelebrationScreenState extends State<EndSemesterCelebrationScreen> {
-  late ConfettiController _confettiController;
+/// Leaves holiday mode: suggests the next year/semester, clears the old
+/// timetable and opens onboarding to import the new one. Grades, tasks,
+/// notes and files are kept.
+Future<void> startNextSemester(BuildContext context) async {
+  final timetable = context.read<TimetableProvider>();
+  final records = context.read<RecordProvider>();
+  var year = timetable.semester == 2 ? (timetable.studyYear + 1).clamp(1, 5) : timetable.studyYear;
+  var semester = timetable.semester == 2 ? 1 : 2;
 
-  @override
-  void initState() {
-    super.initState();
-    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
-    
-    // Play confetti immediately
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _confettiController.play();
-    });
-
-    // Reset app state and transition after a few seconds
-    _transitionToOnboarding();
-  }
-
-  Future<void> _transitionToOnboarding() async {
-    // Wait for the user to enjoy the confetti
-    await Future.delayed(const Duration(seconds: 4));
-    
-    if (!mounted) return;
-    
-    // Reset the backend
-    final provider = Provider.of<TimetableProvider>(context, listen: false);
-    await provider.resetForNewSetup();
-
-    if (!mounted) return;
-    
-    // Back to the root: SignedInGate now shows onboarding because setup
-    // was reset.
-    Navigator.of(context).popUntil((route) => route.isFirst);
-  }
-
-  @override
-  void dispose() {
-    _confettiController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0A0F) : const Color(0xFFF8F9FE),
-      body: Stack(
-        children: [
-          // Center message
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.celebration_rounded, color: Colors.green, size: 80),
-                  ),
-                  const SizedBox(height: 32),
-                  Text(
-                    "Congratulations!",
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    "You've successfully finished this semester. Your modules and grades have been archived.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      height: 1.5,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  const CircularProgressIndicator(color: Colors.green),
-                  const SizedBox(height: 16),
-                  Text("Preparing for the next semester...", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                ],
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setD) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        title: const Text('Start next semester?', style: TextStyle(fontWeight: FontWeight.w700)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Holiday mode ends and you\'ll set up the new timetable. Last semester\'s classes are cleared; '
+                'your grades, tasks, notes and files stay.'),
+            const SizedBox(height: 16),
+            Row(children: [
+              const Expanded(child: Text('New period', style: TextStyle(fontWeight: FontWeight.w600))),
+              ChoicePill<int>(
+                title: 'Year of study',
+                value: year,
+                options: const [1, 2, 3, 4, 5],
+                labelOf: (y) => 'Y$y',
+                onChanged: (y) => setD(() => year = y),
               ),
-            ),
-          ),
-          
-          // Confetti emitter at the top center
-          Align(
-            alignment: Alignment.topCenter,
-            child: ConfettiWidget(
-              confettiController: _confettiController,
-              blastDirection: 3.14159 / 2, // Straight down
-              maxBlastForce: 5,
-              minBlastForce: 2,
-              emissionFrequency: 0.05,
-              numberOfParticles: 50,
-              gravity: 0.2,
-              colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
-            ),
-          ),
+              const SizedBox(width: 6),
+              ChoicePill<int>(
+                title: 'Semester',
+                value: semester,
+                options: const [1, 2],
+                labelOf: (s) => 'S$s',
+                onChanged: (s) => setD(() => semester = s),
+              ),
+            ]),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Not yet')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Start')),
         ],
       ),
-    );
-  }
+    ),
+  );
+  if (ok != true) return;
+  await records.setHolidayMode(false);
+  await timetable.setStudyPeriod(year: year, semester: semester);
+  await timetable.resetForNewSetup();
 }

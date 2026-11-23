@@ -8,13 +8,15 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/resource_provider.dart';
-import '../providers/timetable_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/folder_picker.dart';
 import '../widgets/ui.dart';
 import 'academic_tab.dart';
+import 'activity_screen.dart';
 import 'bus_tab.dart';
 import 'dashboard_tab.dart';
 import 'focus_screen.dart';
+import 'grades_screen.dart';
 import 'notes_tab.dart';
 import 'groups_screen.dart';
 import 'resources_tab.dart';
@@ -26,7 +28,8 @@ import 'todo_board_tab.dart';
 /// [navOrderFrom]) in the pill bar plus "More".
 class AppPage {
   static const home = 0, schedule = 1, hub = 2, board = 3, bus = 4, files = 5, notes = 6, groups = 7, focus = 8, settings = 9;
-  static const count = 10, barSlots = 5;
+  static const grades = 10, activity = 11;
+  static const count = 12, barSlots = 5;
 }
 
 const _navOrderKey = 'nav_order';
@@ -59,6 +62,8 @@ const _destinations = <NavDest>[
   NavDest(Icons.groups_rounded, 'Groups'),
   NavDest(Icons.timer_rounded, 'Focus'),
   NavDest(Icons.settings_rounded, 'Settings'),
+  NavDest(Icons.workspace_premium_rounded, 'Grades'),
+  NavDest(Icons.local_fire_department_rounded, 'Activity'),
 ];
 
 /// Lets any screen switch tabs, e.g. the dashboard's quick tiles.
@@ -99,6 +104,8 @@ class _HomeScreenState extends State<HomeScreen> {
     const GroupsScreen(),
     const FocusScreen(),
     const SettingsTab(),
+    const GradesScreen(),
+    const ActivityScreen(),
   ];
 
   @override
@@ -151,97 +158,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _fileName(String path) => path.split(RegExp(r'[\\/]')).last;
 
-  void _showSortDialog(SharedMediaFile file) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        final timetable = Provider.of<TimetableProvider>(context, listen: false);
-        final resourceProv = Provider.of<ResourceProvider>(context, listen: false);
-        final modules = {...timetable.userSessions.map((s) => s.subject), ...resourceProv.customFolders}.toList()..sort();
-
-        return SheetScaffold(
-          title: 'Save shared file',
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(_fileName(file.path), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey)),
-                const SizedBox(height: 18),
-                const Text("Which folder is this for?", style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ...modules.map((m) => ActionChip(
-                          label: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 180),
-                              child: Text(m, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _showCategoryDialog(file, m, resourceProv);
-                          },
-                        )),
-                    ActionChip(
-                      label: const Text("Unsorted (later)", style: TextStyle(color: Colors.redAccent)),
-                      backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        resourceProv.addResource(
-                          sourceFilePath: file.path,
-                          fileName: _fileName(file.path),
-                          moduleName: 'Unsorted',
-                          category: 'Unsorted',
-                          sourceApp: 'whatsapp',
-                        );
-                        ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text("Saved to Inbox")));
-                      },
-                    )
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+  /// A file shared into the app (e.g. from WhatsApp): pick folder + section.
+  Future<void> _showSortDialog(SharedMediaFile file) async {
+    final resourceProv = context.read<ResourceProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final picked = await pickFolderAndSection(
+      context,
+      title: 'Save shared file',
+      fileName: _fileName(file.path),
+      allowUnsorted: true,
     );
-  }
-
-  void _showCategoryDialog(SharedMediaFile file, String moduleName, ResourceProvider resourceProv) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        final sections = resourceProv.sectionsFor(moduleName);
-        return SheetScaffold(
-          title: moduleName,
-          child: ListView(
-            shrinkWrap: true,
-            children: sections
-                .map((c) => ListTile(
-                      title: Text(c),
-                      leading: const Icon(Icons.folder_open_rounded),
-                      onTap: () {
-                        Navigator.pop(context);
-                        resourceProv.addResource(
-                          sourceFilePath: file.path,
-                          fileName: _fileName(file.path),
-                          moduleName: moduleName,
-                          category: c,
-                          sourceApp: 'whatsapp',
-                        );
-                        ScaffoldMessenger.of(this.context)
-                            .showSnackBar(SnackBar(content: Text("Saved to $moduleName / $c")));
-                      },
-                    ))
-                .toList(),
-          ),
-        );
-      },
+    if (picked == null) return;
+    final (folder, section) = picked;
+    await resourceProv.addResource(
+      sourceFilePath: file.path,
+      fileName: _fileName(file.path),
+      moduleName: folder,
+      category: section,
+      sourceApp: 'whatsapp',
     );
+    messenger.showSnackBar(SnackBar(content: Text(folder == unsortedFolder ? 'Saved to Inbox' : 'Saved to $folder / $section')));
   }
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);

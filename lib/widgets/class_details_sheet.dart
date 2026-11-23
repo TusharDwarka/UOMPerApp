@@ -10,6 +10,7 @@ import '../utils/meeting_links.dart';
 import '../utils/time_utils.dart';
 import 'add_edit_class_sheet.dart';
 import 'add_edit_task_sheet.dart';
+import 'end_module_flow.dart';
 import 'ui.dart';
 
 /// Stable pastel/strong colour pair for a module name.
@@ -214,6 +215,16 @@ class _ClassDetails extends StatelessWidget {
               onPressed: () async {
                 Navigator.pop(context);
                 await timetable.setCancelled(session, date, !cancelled);
+              },
+            ),
+            const SizedBox(height: 4),
+            // Final test done before the semester ends: retire the module.
+            TextButton.icon(
+              icon: const Icon(Icons.flag_outlined, size: 18),
+              label: const Text('Module finished? End module'),
+              onPressed: () {
+                Navigator.pop(context);
+                startEndModuleFlow(hostContext, session.subject);
               },
             ),
           ],

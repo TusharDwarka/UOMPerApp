@@ -471,8 +471,8 @@ class _TaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final t = task;
-    final color = t.colorValue != null ? Color(t.colorValue!) : AppColors.forType(t.type);
     final done = t.effectiveStatus == TaskStatus.done;
+    final color = done ? AppColors.done : (t.colorValue != null ? Color(t.colorValue!) : AppColors.forType(t.type));
 
     var room = '';
     if (t.description.contains('\n---ROOM---\n')) room = t.description.split('\n---ROOM---\n')[1];
@@ -527,6 +527,7 @@ class _TaskCard extends StatelessWidget {
                         style: TextStyle(fontSize: 12, color: p.textSecondary, fontWeight: FontWeight.w600)),
                   ),
                   if (urgency != null) Flexible(child: TagPill(urgency, color: urgencyColor)),
+                  if (done) const Flexible(child: TagPill('Done', color: AppColors.done, icon: Icons.check_rounded)),
                   SizedBox(
                     width: 36,
                     height: 32,

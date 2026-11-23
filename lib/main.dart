@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'firebase_options.dart';
+import 'services/activity_log.dart';
 import 'services/isar_service.dart';
 import 'services/sync_service.dart';
 import 'services/notification_service.dart';
@@ -18,6 +19,7 @@ import 'providers/theme_provider.dart';
 import 'providers/note_provider.dart';
 import 'providers/resource_provider.dart';
 import 'providers/focus_provider.dart';
+import 'providers/record_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/login_screen.dart';
@@ -44,6 +46,12 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ResourceProvider(isarService, syncService)),
         ChangeNotifierProvider(create: (_) => FocusProvider()..load()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider<ActivityLog>.value(value: ActivityLog.instance),
+        // Not lazy: it tells the timetable which modules have ended.
+        ChangeNotifierProvider(
+          lazy: false,
+          create: (ctx) => RecordProvider(syncService, ctx.read<TimetableProvider>().setEndedModules),
+        ),
       ],
       child: const UOMPerApp(),
     ),
@@ -128,6 +136,7 @@ class _SignedInGateState extends State<SignedInGate> {
     final notes = context.read<NoteProvider>();
     final resources = context.read<ResourceProvider>();
     final groups = context.read<GroupService>();
+    final records = context.read<RecordProvider>();
 
     // Wait for SharedPreferences-backed setup state.
     while (!timetable.isSetupLoaded) {
@@ -142,19 +151,24 @@ class _SignedInGateState extends State<SignedInGate> {
       if (remote == null) return;
       await timetable.applyCloudSettings(remote);
       await resources.applyCloudSettings(remote);
+      await records.applyCloudSettings(remote);
     });
 
     final wiped = await _sync.prepareForUser(widget.user.uid);
-    if (wiped) await timetable.loadSetupState();
+    if (wiped) {
+      await timetable.loadSetupState();
+      await records.load();
+    }
 
     Future<void> pullSettings() async {
       final remote = await _sync.fetchSettingsIfNewer();
       if (remote != null && remote['hasCompletedSetup'] == true) {
         await timetable.applyCloudSettings(remote);
         await resources.applyCloudSettings(remote);
+        await records.applyCloudSettings(remote);
       } else if (timetable.hasCompletedSetup) {
         // First sign-in from a device that already had data: seed the cloud.
-        await _sync.pushSettings({...timetable.settingsSnapshot(), ...resources.settingsSnapshot()});
+        await _sync.pushSettings({...timetable.settingsSnapshot(), ...resources.settingsSnapshot(), ...records.settingsSnapshot()});
       }
     }
 

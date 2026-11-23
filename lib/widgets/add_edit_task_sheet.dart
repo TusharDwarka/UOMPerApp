@@ -6,7 +6,9 @@ import '../providers/timetable_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/meeting_links.dart';
 import '../utils/time_utils.dart';
+import 'reminder_picker.dart';
 import 'scroll_time_picker.dart';
+import 'share_event.dart';
 import 'ui.dart';
 
 /// Selectable types. "Other" lets the user name their own (stored as the
@@ -97,6 +99,10 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
   int _priority = 1;
   String? _error;
 
+  /// The user has to tap which module this is for (or "Personal").
+  late bool _moduleChosen;
+  late List<int> _remind;
+
   @override
   void initState() {
     super.initState();
@@ -115,6 +121,9 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
     _color = t?.colorValue;
     _status = t?.effectiveStatus ?? widget.initialStatus ?? TaskStatus.todo;
     _priority = t?.priority ?? 1;
+    _moduleChosen = t != null || (widget.initialModule?.isNotEmpty ?? false);
+    // New items default to a reminder the day before; editable below.
+    _remind = [...t?.remindBefore ?? (t == null ? const [1440] : const <int>[])];
 
     var note = '';
     var room = '';
@@ -157,6 +166,10 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
       setState(() => _error = 'Give it a title');
       return;
     }
+    if (!_moduleChosen && _subject.text.trim().isEmpty) {
+      setState(() => _error = 'Tap the module this is for (or "Personal")');
+      return;
+    }
     final link = _link.text.trim();
     if (link.isNotEmpty && !MeetingLinks.isValid(link)) {
       setState(() => _error = 'That meeting link doesn\'t look right');
@@ -185,6 +198,7 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
       ..meetingLink = MeetingLinks.normalize(link)
       ..status = _status
       ..priority = _priority
+      ..remindBefore = _remind.isEmpty ? null : _remind
       ..isCompleted = _status == TaskStatus.done;
 
     Navigator.pop(context);
@@ -195,7 +209,14 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final isEditing = widget.taskToEdit != null;
-    final subjects = context.read<TimetableProvider>().scheduleSubjects;
+    final timetable = context.read<TimetableProvider>();
+    final allSubjects = timetable.scheduleSubjects;
+    // Ended modules drop out of the chips (still reachable by typing).
+    final subjects = [
+      for (final m in allSubjects)
+        if (!timetable.isModuleEnded(m) || _subject.text.trim().toLowerCase() == m.toLowerCase()) m
+    ];
+    final personal = _moduleChosen && _subject.text.trim().isEmpty;
     final showRoom = _type == 'Exam' || _type == 'Test' || _type == 'Other' || _room.text.isNotEmpty;
 
     return Padding(
@@ -222,6 +243,12 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
                         child: Text(isEditing ? 'Edit' : (_type == 'Other' ? 'New item' : 'New ${_type.toLowerCase()}'),
                             style: TextStyle(fontSize: 26, fontWeight: FontWeight.w300, letterSpacing: -0.8, color: p.textPrimary)),
                       ),
+                      if (isEditing)
+                        IconButton(
+                          tooltip: 'Share',
+                          icon: const Icon(Icons.ios_share_rounded),
+                          onPressed: () => shareTask(context, widget.taskToEdit!),
+                        ),
                       if (isEditing)
                         IconButton(
                           tooltip: 'Delete',
@@ -286,8 +313,15 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
                     ),
                   ],
                   const SizedBox(height: 14),
-                  _label('Module'),
-                  if (subjects.isNotEmpty) ...[
+                  _label('Module · required'),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2, bottom: 8),
+                    child: Text('Which module is this for?',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: !_moduleChosen && _subject.text.trim().isEmpty && _error != null ? Colors.redAccent : p.textSecondary)),
+                  ),
+                  ...[
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -303,8 +337,24 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
                               color: _subject.text.trim().toLowerCase() == m.toLowerCase() ? p.onInk : p.textPrimary,
                               fontWeight: FontWeight.w600,
                             ),
-                            onSelected: (sel) => setState(() => _subject.text = sel ? m : ''),
+                            onSelected: (sel) => setState(() {
+                              _subject.text = sel ? m : '';
+                              _moduleChosen = sel;
+                            }),
                           ),
+                        ChoiceChip(
+                          avatar: Icon(Icons.person_outline_rounded, size: 16, color: personal ? p.onInk : p.textSecondary),
+                          label: const Text('Personal / other'),
+                          selected: personal,
+                          showCheckmark: false,
+                          selectedColor: p.ink,
+                          backgroundColor: p.surfaceAlt,
+                          labelStyle: TextStyle(color: personal ? p.onInk : p.textPrimary, fontWeight: FontWeight.w600),
+                          onSelected: (sel) => setState(() {
+                            _subject.text = '';
+                            _moduleChosen = sel;
+                          }),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -320,7 +370,7 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
                       controller: controller,
                       focusNode: focus,
                       textCapitalization: TextCapitalization.words,
-                      onChanged: (_) => setState(() {}),
+                      onChanged: (v) => setState(() => _moduleChosen = v.trim().isNotEmpty),
                       decoration: InputDecoration(
                         labelText: subjects.isEmpty ? 'Module / subject' : 'Or type another subject',
                         prefixIcon: const Icon(Icons.menu_book_rounded),
@@ -401,6 +451,14 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 18),
+                  _label('Remind me'),
+                  ReminderPicker(selected: _remind, onChanged: (v) => setState(() => _remind = v)),
+                  if (_multiDay)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6, left: 2),
+                      child: Text('Counted from the first day', style: TextStyle(fontSize: 11, color: p.textMuted)),
+                    ),
                   const SizedBox(height: 18),
                   _label('Colour on calendar'),
                   SizedBox(

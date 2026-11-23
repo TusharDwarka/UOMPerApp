@@ -15,6 +15,7 @@ import 'package:uom_per_app/models/academic_task.dart';
 import 'package:uom_per_app/models/class_session.dart';
 import 'package:uom_per_app/providers/focus_provider.dart';
 import 'package:uom_per_app/providers/note_provider.dart';
+import 'package:uom_per_app/providers/record_provider.dart';
 import 'package:uom_per_app/providers/resource_provider.dart';
 import 'package:uom_per_app/providers/timetable_provider.dart';
 import 'package:uom_per_app/screens/dashboard_tab.dart';
@@ -129,6 +130,7 @@ void main() {
           ChangeNotifierProvider(create: (_) => NoteProvider(isar, sync)),
           ChangeNotifierProvider(create: (_) => ResourceProvider(isar, sync)),
           ChangeNotifierProvider.value(value: focus),
+          ChangeNotifierProvider(create: (ctx) => RecordProvider(null, ctx.read<TimetableProvider>().setEndedModules)),
         ],
         child: MaterialApp(
           debugShowCheckedModeBanner: false,

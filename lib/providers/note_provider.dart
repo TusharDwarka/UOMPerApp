@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:isar_community/isar.dart';
 import '../models/note.dart';
+import '../services/activity_log.dart';
 import '../services/isar_service.dart';
 import '../services/sync_service.dart';
 
@@ -37,6 +38,8 @@ class NoteProvider extends ChangeNotifier {
   Future<void> addNote(Note note) => updateNote(note);
 
   Future<void> updateNote(Note note) async {
+    // A brand-new note (not an Undo of a delete) counts on the Activity graph.
+    if (note.id == Isar.autoIncrement && note.syncId == null) unawaited(ActivityLog.instance.bump(ActivityLog.notes));
     SyncService.stamp(note);
     final isar = await _isarService.db;
     await isar.writeTxn(() => isar.notes.put(note));

@@ -29,21 +29,11 @@ class _EndSemesterDialogState extends State<EndSemesterDialog> {
   }
 
   void _onConfirm() {
-    if (_canConfirm) {
-      // Pop the dialog and push the celebration screen
-      Navigator.of(context).pop();
-      // Push on top of the app (don't remove the root route: it holds the
-      // auth listener and sync).
-      Navigator.of(context).push(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const EndSemesterCelebrationScreen(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-          transitionDuration: const Duration(milliseconds: 500),
-        ),
-      );
-    }
+    if (!_canConfirm) return;
+    // The dialog's context dies with the dialog: keep the page's context.
+    final host = Navigator.of(context).context;
+    Navigator.of(context).pop();
+    finishSemester(host);
   }
 
   @override
@@ -73,7 +63,7 @@ class _EndSemesterDialogState extends State<EndSemesterDialog> {
           ),
           const SizedBox(height: 16),
           Text(
-            "Are you sure you want to end your semester? This will archive your current modules and grades. This action cannot be easily undone.",
+            "Your modules and marks are saved to Grades and the app switches to holiday mode: classes stop, but your calendar, board, notes and focus keep working. Start the next semester whenever you're ready.",
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[400] : Colors.grey[600], height: 1.5),
           ),

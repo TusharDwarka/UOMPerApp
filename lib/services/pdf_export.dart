@@ -35,7 +35,8 @@ String pdfSafe(String input) {
   return mapped.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\n\r\t]'), '');
 }
 
-PdfColor _taskColor(AcademicTask t) => PdfColor.fromInt(t.colorValue ?? AppColors.forType(t.type).toARGB32());
+PdfColor _taskColor(AcademicTask t) =>
+    PdfColor.fromInt(t.isCompleted ? AppColors.done.toARGB32() : (t.colorValue ?? AppColors.forType(t.type).toARGB32()));
 
 class TaskReportOptions {
   final String title;

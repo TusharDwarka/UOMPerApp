@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/academic_task.dart';
 import '../models/class_session.dart';
 import '../providers/focus_provider.dart';
+import '../providers/record_provider.dart';
 import '../providers/resource_provider.dart';
 import '../providers/timetable_provider.dart';
 import '../services/bus_repository.dart';
@@ -27,6 +28,7 @@ import '../widgets/end_semester_dialog.dart';
 import '../widgets/ui.dart';
 import '../widgets/weekly_chart.dart';
 import 'academic_tab.dart' show taskColor;
+import 'end_semester_celebration_screen.dart';
 import 'home_screen.dart';
 
 class DashboardTab extends StatefulWidget {
@@ -288,6 +290,7 @@ class _DashboardTabState extends State<DashboardTab> {
     final p = Palette.of(context);
     final timetable = context.watch<TimetableProvider>();
     final resources = context.watch<ResourceProvider>();
+    final holiday = context.select<RecordProvider, bool>((r) => r.holidayMode);
     // Read (not watch): the focus timer notifies every second; the 30 s
     // ticker is enough to keep the weekly chart fresh.
     final focus = context.read<FocusProvider>();
@@ -322,7 +325,7 @@ class _DashboardTabState extends State<DashboardTab> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Welcome back,', style: TextStyle(color: p.textSecondary, fontSize: 14)),
+                            Text(holiday ? 'Enjoy your break,' : 'Welcome back,', style: TextStyle(color: p.textSecondary, fontSize: 14)),
                             Text(_firstName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -352,7 +355,7 @@ class _DashboardTabState extends State<DashboardTab> {
                   _buildDateHeader(p, timetable, now, todayClasses, remainingToday),
                   const SizedBox(height: 20),
 
-                  if (timetable.semesterEnd != null && now.isAfter(timetable.semesterEnd!)) ...[
+                  if (!holiday && timetable.semesterEnd != null && now.isAfter(timetable.semesterEnd!)) ...[
                     _banner(
                       p,
                       icon: Icons.celebration_rounded,
@@ -377,7 +380,10 @@ class _DashboardTabState extends State<DashboardTab> {
 
                   for (final id in _order)
                     if (_enabled.contains(id)) ...switch (id) {
-                      'next' => [_buildHero(p, timetable, next, now, todayClasses), const SizedBox(height: 14)],
+                      'next' => [
+                          holiday ? _holidayCard(p) : _buildHero(p, timetable, next, now, todayClasses),
+                          const SizedBox(height: 14),
+                        ],
                       'cards' => [
                           IntrinsicHeight(
                             child: Row(
@@ -603,7 +609,15 @@ class _DashboardTabState extends State<DashboardTab> {
           const SizedBox(height: 18),
           Row(
             children: [
-              if (s.meetingLink != null) JoinMeetingButton(url: s.meetingLink!),
+              // Shrinks on narrow phones instead of pushing the + off-screen.
+              if (s.meetingLink != null)
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: JoinMeetingButton(url: s.meetingLink!),
+                  ),
+                ),
               const Spacer(),
               Tooltip(
                 message: 'Add homework',
@@ -614,6 +628,58 @@ class _DashboardTabState extends State<DashboardTab> {
                   onPressed: () => showTaskSheet(context, initialType: 'Homework', initialModule: s.subject),
                 ),
               ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Holiday mode (semester ended): no classes, but the rest of the app is
+  /// here for planning the break.
+  Widget _holidayCard(Palette p) {
+    final records = context.read<RecordProvider>();
+    final since = records.holidaySince;
+    final day = since == null ? null : dateOnly(DateTime.now()).difference(since).inDays + 1;
+    final bg = p.isDark ? const Color(0xFF14302B) : const Color(0xFFDDF6EE);
+    final ink = p.isDark ? const Color(0xFFBDF0E0) : const Color(0xFF0B4F3F);
+    return SoftCard(
+      radius: 36,
+      color: bg,
+      padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(border: Border.all(color: ink, width: 1.2), borderRadius: BorderRadius.circular(40)),
+                  child: Text(day == null ? 'Holiday mode' : 'Holiday · day $day',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: ink, fontWeight: FontWeight.w600, fontSize: 12)),
+                ),
+              ),
+              const Spacer(),
+              const Text('🏖', style: TextStyle(fontSize: 30)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text("Semester's over", style: TextStyle(fontSize: 34, height: 1.08, fontWeight: FontWeight.w300, letterSpacing: -1.2, color: ink)),
+          const SizedBox(height: 6),
+          Text('Plan trips, side projects or revision — the calendar, board and notes are all yours.',
+              style: TextStyle(color: ink.withValues(alpha: 0.75), fontWeight: FontWeight.w500)),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _cosyChip(Icons.calendar_month_outlined, 'Plan something', ink, () => HomeNavigation.of(context, AppPage.hub)),
+              _cosyChip(Icons.workspace_premium_outlined, 'Grades', ink, () => HomeNavigation.of(context, AppPage.grades)),
+              _cosyChip(Icons.sticky_note_2_outlined, 'Notes', ink, () => HomeNavigation.of(context, AppPage.notes)),
+              _cosyChip(Icons.school_outlined, 'Start next semester', ink, () => startNextSemester(context)),
             ],
           ),
         ],
@@ -683,7 +749,10 @@ class _DashboardTabState extends State<DashboardTab> {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(icon, size: 16, color: ink),
             const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: ink, fontWeight: FontWeight.w600, fontSize: 13)),
+            Flexible(
+              child: Text(label,
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: ink, fontWeight: FontWeight.w600, fontSize: 13)),
+            ),
           ]),
         ),
       ),

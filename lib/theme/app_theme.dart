@@ -10,6 +10,9 @@ class AppColors {
   static const accentDark = Color(0xFF5B7CFA);
   static const accentSoft = Color(0xFFE3EBFF);
   static const success = Color(0xFF00C853);
+
+  /// Finished tasks/events turn this green on calendars and the board.
+  static const done = Color(0xFF00B84A);
   static const danger = Color(0xFFFF3D00);
 
   // Surfaces

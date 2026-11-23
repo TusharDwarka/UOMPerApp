@@ -17,6 +17,11 @@ import 'package:uom_per_app/screens/onboarding_screen.dart';
 import 'package:uom_per_app/services/bus_repository.dart';
 import 'package:uom_per_app/services/group_service.dart';
 import 'package:uom_per_app/providers/focus_provider.dart';
+import 'package:uom_per_app/models/module_record.dart';
+import 'package:uom_per_app/providers/record_provider.dart';
+import 'package:uom_per_app/screens/activity_screen.dart';
+import 'package:uom_per_app/screens/grades_screen.dart';
+import 'package:uom_per_app/services/activity_log.dart';
 import 'package:uom_per_app/providers/note_provider.dart';
 import 'package:uom_per_app/providers/resource_provider.dart';
 import 'package:uom_per_app/providers/timetable_provider.dart';
@@ -133,7 +138,17 @@ TimetableProvider seededTimetable(SyncService sync, IsarService isar) {
     );
 }
 
-Future<void> pumpScreen(WidgetTester tester, Widget screen, {required Size size, required bool dark}) async {
+/// Grades with a mix of states: graded, resit, ongoing, an earlier semester.
+List<ModuleRecord> seededRecords() => [
+      ModuleRecord(name: 'Databases', credits: 3, year: 2, semester: 1, status: ModuleStatus.ended, mark: 72),
+      ModuleRecord(name: longModule, code: 'STAT 2201', credits: 6, year: 2, semester: 1, status: ModuleStatus.resit,
+          mark: 35, resitDate: DateTime.now().add(const Duration(days: 20))),
+      ModuleRecord(name: 'Mobile Computing', credits: 4, year: 2, semester: 1),
+      ModuleRecord(name: 'Programming I', credits: 3, year: 1, semester: 2, status: ModuleStatus.ended, mark: 58.5),
+      ModuleRecord(name: 'Maths for Computing', credits: 3, year: 1, semester: 2, status: ModuleStatus.ended, mark: 44, resitMark: 61),
+    ];
+
+Future<void> pumpScreen(WidgetTester tester, Widget screen, {required Size size, required bool dark, bool holiday = false}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -153,6 +168,11 @@ Future<void> pumpScreen(WidgetTester tester, Widget screen, {required Size size,
         ChangeNotifierProvider(create: (_) => NoteProvider(isar, sync)),
         ChangeNotifierProvider(create: (_) => ResourceProvider(isar, sync)),
         ChangeNotifierProvider.value(value: focus),
+        ChangeNotifierProvider<ActivityLog>.value(value: ActivityLog.instance),
+        ChangeNotifierProvider(
+          create: (ctx) => RecordProvider(sync, ctx.read<TimetableProvider>().setEndedModules)
+            ..debugSetData(records: seededRecords(), holiday: holiday),
+        ),
       ],
       child: MaterialApp(
         theme: AppTheme.light(),
@@ -188,6 +208,9 @@ void main() {
     'Print planners': () => const PrintCenterScreen(initialTab: 1),
     'Focus': () => const FocusScreen(),
     'Onboarding': () => const OnboardingScreen(),
+    'Grades': () => const GradesScreen(),
+    'CPA calculator': () => const Scaffold(body: CpaCalculator()),
+    'Activity': () => const ActivityScreen(),
   };
   const sizes = {
     'small phone 320x640': Size(320, 640),
@@ -206,6 +229,12 @@ void main() {
         });
       }
     }
+  }
+
+  for (final size in sizes.entries) {
+    testWidgets('Dashboard in holiday mode renders on ${size.key}', (tester) async {
+      await pumpScreen(tester, const DashboardTab(), size: size.value, dark: false, holiday: true);
+    });
   }
 
   testWidgets('Schedule grid has real width and shows class blocks', (tester) async {

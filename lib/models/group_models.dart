@@ -179,6 +179,10 @@ class GroupEvent {
   final String? createdByName;
   final String? notes;
 
+  /// Reminder the poster suggests, in minutes before [start] (e.g. 4320 =
+  /// 3 days). Each member can still pick their own.
+  final List<int>? remindBefore;
+
   const GroupEvent({
     required this.id,
     required this.title,
@@ -190,6 +194,7 @@ class GroupEvent {
     this.colorValue,
     this.createdByName,
     this.notes,
+    this.remindBefore,
   });
 
   factory GroupEvent.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -205,6 +210,7 @@ class GroupEvent {
       colorValue: (d['colorValue'] as num?)?.toInt(),
       createdByName: d['createdByName'],
       notes: d['notes'],
+      remindBefore: d['remindBefore'] is List ? [for (final m in d['remindBefore'] as List) if (m is num) m.toInt()] : null,
     );
   }
 
@@ -218,6 +224,7 @@ class GroupEvent {
         'colorValue': colorValue,
         'createdByName': createdByName,
         'notes': notes,
+        'remindBefore': remindBefore,
       };
 }
 

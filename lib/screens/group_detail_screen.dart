@@ -12,9 +12,11 @@ import '../models/group_models.dart';
 import '../providers/focus_provider.dart';
 import '../providers/timetable_provider.dart';
 import '../services/group_service.dart';
+import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/meeting_links.dart';
 import '../utils/time_utils.dart';
+import '../widgets/reminder_picker.dart';
 import '../widgets/scroll_time_picker.dart';
 import '../widgets/ui.dart';
 import 'groups_screen.dart' show MemberAvatar;
@@ -100,6 +102,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     _service.reminderMinutesFor(_gid).then((m) {
       if (mounted) setState(() => _reminderMinutes = m);
     });
+    _service.eventReminders(_gid).then((m) {
+      if (mounted) setState(() => _eventRemind = m);
+    });
     _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
     });
@@ -149,7 +154,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => SheetScaffold(
-        title: 'Remind me before group classes',
+        title: 'Remind me before shared classes',
         child: ListView(
           shrinkWrap: true,
           children: [
@@ -658,7 +663,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     return !d.isBefore(start) && !d.isAfter(end);
   }
 
-  Color _eventColor(GroupEvent e) => e.colorValue != null ? Color(e.colorValue!) : AppColors.forType(e.type);
+  /// Green once I've marked the event done.
+  Color _eventColor(GroupEvent e) => (_done[e.id]?.containsKey(_service.uid) ?? false)
+      ? AppColors.done
+      : (e.colorValue != null ? Color(e.colorValue!) : AppColors.forType(e.type));
 
   Widget _calCircle(DateTime day, Color? bg, Color fg, {Color? border}) => Align(
         alignment: Alignment.topCenter,
@@ -727,7 +735,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                     Container(
                       width: 8,
                       decoration: BoxDecoration(
-                        color: e.colorValue != null ? Color(e.colorValue!) : AppColors.forType(e.type),
+                        color: _eventColor(e),
                         borderRadius: const BorderRadius.horizontal(left: Radius.circular(24)),
                       ),
                     ),
@@ -738,7 +746,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(children: [
-                              TagPill(e.type, color: e.colorValue != null ? Color(e.colorValue!) : AppColors.forType(e.type)),
+                              TagPill(e.type, color: _eventColor(e)),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -766,16 +774,98 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                         ),
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Add to my calendar',
-                      icon: const Icon(Icons.event_available_rounded),
-                      onPressed: () => _addEventToMine(e),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Add to my calendar',
+                          icon: const Icon(Icons.event_available_rounded),
+                          onPressed: () => _addEventToMine(e),
+                        ),
+                        IconButton(
+                          tooltip: 'My reminder for this',
+                          icon: Icon(_eventRemind.containsKey(e.id) && _eventRemind[e.id]!.isEmpty
+                              ? Icons.notifications_off_outlined
+                              : Icons.notifications_active_outlined),
+                          onPressed: () => _pickEventReminder(e),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ),
           );
+  }
+
+  /// This member's own reminder for one shared event (overrides the
+  /// poster's suggestion; empty = off).
+  Map<String, List<int>> _eventRemind = {};
+
+  Future<void> _pickEventReminder(GroupEvent e) async {
+    final suggested = e.remindBefore ?? const <int>[];
+    final mine = _eventRemind[e.id];
+    String describe(List<int> l) => l.isEmpty ? 'Off' : l.map((m) => '${NotificationService.describeLead(m)} before').join(', ');
+    final picked = await showModalBottomSheet<List<int>?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        var custom = [...mine ?? suggested];
+        return StatefulBuilder(
+          builder: (ctx, setSheet) => SheetScaffold(
+            title: 'Remind me',
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(e.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Text(DateFormat('EEE d MMM, HH:mm').format(e.start)),
+                  const SizedBox(height: 14),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.campaign_outlined),
+                    title: const Text("Use the group's suggestion"),
+                    subtitle: Text(describe(suggested)),
+                    trailing: mine == null ? const Icon(Icons.check_rounded) : null,
+                    onTap: () => Navigator.pop(ctx, const [-1]),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.notifications_off_outlined),
+                    title: const Text('No reminder for me'),
+                    trailing: mine != null && mine.isEmpty ? const Icon(Icons.check_rounded) : null,
+                    onTap: () => Navigator.pop(ctx, const <int>[]),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Or choose your own', style: TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  ReminderPicker(selected: custom, onChanged: (v) => setSheet(() => custom = v)),
+                  const SizedBox(height: 16),
+                  InkPillButton(
+                    label: 'Save my reminder',
+                    expand: true,
+                    onPressed: custom.isEmpty ? null : () => Navigator.pop(ctx, custom),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    if (picked == null) return;
+    final value = picked.length == 1 && picked.first == -1 ? null : picked;
+    await _service.setEventReminder(_gid, e.id, value);
+    final all = await _service.eventReminders(_gid);
+    if (!mounted) return;
+    setState(() => _eventRemind = all);
+    _scheduleReminders();
+    final shown = value ?? suggested;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(shown.isEmpty ? 'No reminder for "${e.title}"' : 'Reminder: ${describe(shown)}')));
   }
 
   Future<void> _editEvent([GroupEvent? existing]) async {
@@ -1215,6 +1305,8 @@ class _GroupEventSheetState extends State<_GroupEventSheet> {
   late DateTime _start = widget.existing?.start ?? DateTime.now().add(const Duration(days: 1));
   late DateTime? _endDate = widget.existing?.end;
   late int? _color = widget.existing?.colorValue;
+  // Suggested to every member; new events default to 1 day before.
+  late List<int> _remind = [...widget.existing?.remindBefore ?? (widget.existing == null ? const [1440] : const <int>[])];
   String? _error;
 
   @override
@@ -1343,6 +1435,13 @@ class _GroupEventSheetState extends State<_GroupEventSheet> {
                 ],
               ),
             ),
+            const SizedBox(height: 14),
+            Text('Remind members', style: TextStyle(fontWeight: FontWeight.w700, color: p.textPrimary)),
+            Padding(
+              padding: const EdgeInsets.only(top: 2, bottom: 8),
+              child: Text('Everyone gets these unless they choose their own', style: TextStyle(fontSize: 12, color: p.textSecondary)),
+            ),
+            ReminderPicker(selected: _remind, onChanged: (v) => setState(() => _remind = v)),
             if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.redAccent))),
             const SizedBox(height: 18),
             InkPillButton(
@@ -1365,6 +1464,7 @@ class _GroupEventSheetState extends State<_GroupEventSheet> {
                     meetingLink: MeetingLinks.normalize(_link.text),
                     colorValue: _color,
                     notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+                    remindBefore: _remind.isEmpty ? null : _remind,
                   ),
                 );
               },

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:open_filex/open_filex.dart';
 import '../providers/resource_provider.dart';
-import '../providers/timetable_provider.dart';
 import '../models/module_resource.dart';
+import '../widgets/folder_picker.dart';
+import '../widgets/ui.dart';
 import 'pdf_viewer_screen.dart';
 
 class UnsortedInboxScreen extends StatelessWidget {
@@ -105,14 +106,24 @@ class UnsortedInboxScreen extends StatelessWidget {
                   leading: Icon(_getFileIcon(file.fileName), color: _getFileIconColor(file.fileName), size: 32),
                   title: Text(file.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
                   subtitle: Text("Added ${file.addedAt.day}/${file.addedAt.month}/${file.addedAt.year}", style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                  trailing: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2962FF),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: () => _showSortDialog(context, file, provider),
-                    child: const Text("Sort"),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Delete',
+                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                        onPressed: () => _delete(context, file, provider),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2962FF),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () => _sort(context, file, provider),
+                        child: const Text("Sort"),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -123,99 +134,18 @@ class UnsortedInboxScreen extends StatelessWidget {
     );
   }
 
-  void _showSortDialog(BuildContext context, ModuleResource file, ResourceProvider resourceProv) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final timetable = Provider.of<TimetableProvider>(context, listen: false);
-        final modules = {...timetable.userSessions.map((s) => s.subject), ...resourceProv.customFolders}.toList();
-        modules.sort();
-
-        return Container(
-          decoration: BoxDecoration(
-            color: Theme.of(sheetContext).scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24, left: 24, right: 24, top: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Sort to Module", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: modules.map((m) => ActionChip(
-                  label: Container(constraints: const BoxConstraints(maxWidth: 150), child: Text(m, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  onPressed: () {
-                    Navigator.pop(sheetContext);
-                    _showCategoryDialog(context, file, m, resourceProv);
-                  },
-                )).toList(),
-              ),
-              const SizedBox(height: 24),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text("Delete File", style: TextStyle(color: Colors.red)),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  final ok = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Delete file?'),
-                      content: Text('Delete "${file.fileName}"?'),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
-                      ],
-                    ),
-                  );
-                  if (ok == true) resourceProv.deleteResource(file.id);
-                },
-              )
-            ],
-          ),
-        );
-      }
-    );
+  Future<void> _sort(BuildContext context, ModuleResource file, ResourceProvider resourceProv) async {
+    final picked = await pickFolderAndSection(context, title: 'Sort file', fileName: file.fileName, action: 'Move');
+    if (picked == null || !context.mounted) return;
+    final (folder, section) = picked;
+    await resourceProv.moveResource(file.id, folder, section);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Moved to $folder / $section")));
+    }
   }
 
-  void _showCategoryDialog(BuildContext context, ModuleResource file, String moduleName, ResourceProvider resourceProv) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final categories = resourceProv.sectionsFor(moduleName);
-        return Container(
-          decoration: BoxDecoration(
-            color: Theme.of(sheetContext).scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("Category for $moduleName", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              Flexible(child: ListView(shrinkWrap: true, children: categories.map((c) => ListTile(
-                title: Text(c),
-                leading: const Icon(Icons.folder_open),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  resourceProv.moveResource(file.id, moduleName, c);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Moved to $moduleName / $c")));
-                },
-              )).toList())),
-            ],
-          ),
-        );
-      }
-    );
+  Future<void> _delete(BuildContext context, ModuleResource file, ResourceProvider resourceProv) async {
+    final ok = await confirmDestructive(context, title: 'Delete file?', message: 'Delete "${file.fileName}"?');
+    if (ok) await resourceProv.deleteResource(file.id);
   }
 }
