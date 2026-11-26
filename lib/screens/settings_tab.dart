@@ -197,10 +197,7 @@ class _SettingsTabState extends State<SettingsTab> {
             final guest = user?.isAnonymous ?? true;
             final name = (user?.displayName?.isNotEmpty ?? false) ? user!.displayName! : (guest ? 'Guest' : (user?.email ?? 'Student'));
 
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
-              children: [
-                const ScreenHeader(title: 'Settings', eyebrow: 'UOMPerApp 2.0', padding: EdgeInsets.fromLTRB(0, 12, 0, 8)),
+            final left = <Widget>[
                 // ── Profile ──
                 SoftCard(
                   radius: 32,
@@ -333,7 +330,8 @@ class _SettingsTabState extends State<SettingsTab> {
                     ),
                   ]),
                 ),
-
+            ];
+            final right = <Widget>[
                 Consumer<TimetableProvider>(
                   builder: (context, tp, _) => _group(p, 'Academic', [
                     ListTile(
@@ -476,8 +474,30 @@ class _SettingsTabState extends State<SettingsTab> {
                       onTap: () => showDialog(context: context, builder: (_) => const EndSemesterDialog()),
                     ),
                   ]),
-              ],
-            );
+            ];
+            const header = ScreenHeader(title: 'Settings', eyebrow: 'UOMPerApp 2.0', padding: EdgeInsets.fromLTRB(0, 12, 0, 8));
+            return LayoutBuilder(builder: (context, c) {
+              // PC: two columns of settings instead of one long scroll.
+              if (wideDesktop(c)) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(children: [
+                    header,
+                    Expanded(
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Expanded(child: ListView(padding: const EdgeInsets.only(bottom: 24), children: left)),
+                        const SizedBox(width: 20),
+                        Expanded(child: ListView(padding: const EdgeInsets.only(bottom: 24), children: right)),
+                      ]),
+                    ),
+                  ]),
+                );
+              }
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+                children: [header, ...left, ...right],
+              );
+            });
           },
         ),
       ),

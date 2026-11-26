@@ -12,10 +12,16 @@ import '../widgets/ui.dart';
 
 String fmtMark(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 
+/// One decimal, dropping a trailing ".0" (75.63 → "75.6", 68.0 → "68").
+String _fmt1(double v) => fmtMark(double.parse(v.toStringAsFixed(1)));
+
+String _credits(double c) => '${fmtMark(c)} ${c == 1 ? 'credit' : 'credits'}';
+
 double? _parse(String v) => double.tryParse(v.trim().replaceAll(',', '.'));
 
 final _numFormatters = [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))];
 const _numKb = TextInputType.numberWithOptions(decimal: true);
+const _tabular = [FontFeature.tabularFigures()];
 
 /// Grade bands offered as targets ("what do I need for a B?").
 const _targets = [(40.0, 'Pass'), (50.0, 'C'), (60.0, 'B'), (70.0, 'A')];
@@ -38,35 +44,54 @@ class _GradesScreenState extends State<GradesScreen> {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
+    final header = ScreenHeader(
+      title: 'Grades',
+      eyebrow: 'Modules, marks & CPA',
+      actions: [
+        CircleIconButton(
+          icon: Icons.add_rounded,
+          filled: true,
+          tooltip: 'Add a module',
+          onPressed: () => editModuleRecord(context),
+        ),
+      ],
+    );
     return Scaffold(
       backgroundColor: p.canvas,
       body: SafeArea(
-        child: Column(
-          children: [
-            ScreenHeader(
-              title: 'Grades',
-              eyebrow: 'Modules, marks & CPA',
-              actions: [
-                CircleIconButton(
-                  icon: Icons.add_rounded,
-                  filled: true,
-                  tooltip: 'Add a module',
-                  onPressed: () => editModuleRecord(context),
+        child: LayoutBuilder(builder: (context, c) {
+          // PC: grades and the CPA calculator side by side, no tab switching.
+          if (wideDesktop(c)) {
+            return Column(children: [
+              header,
+              const Expanded(
+                child: SplitPanes(
+                  padding: EdgeInsets.fromLTRB(0, 4, 20, 16),
+                  main: _GradeList(),
+                  side: CpaCalculator(),
+                  sideTitle: 'CPA calculator',
+                  mainFlex: 5,
+                  sideFlex: 4,
                 ),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 6, 20, 10),
-              child: PillSegmented<bool>(
-                values: const [false, true],
-                selected: _calculator,
-                labelOf: (v) => v ? 'CPA calculator' : 'My grades',
-                onChanged: (v) => setState(() => _calculator = v),
               ),
-            ),
-            Expanded(child: _calculator ? const CpaCalculator() : const _GradeList()),
-          ],
-        ),
+            ]);
+          }
+          return Column(
+            children: [
+              header,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 6, 20, 10),
+                child: PillSegmented<bool>(
+                  values: const [false, true],
+                  selected: _calculator,
+                  labelOf: (v) => v ? 'CPA calculator' : 'My grades',
+                  onChanged: (v) => setState(() => _calculator = v),
+                ),
+              ),
+              Expanded(child: _calculator ? const CpaCalculator() : const _GradeList()),
+            ],
+          );
+        }),
       ),
     );
   }
@@ -110,63 +135,113 @@ class _GradeList extends StatelessWidget {
           modules: records.graded.length,
           // Only worth showing when ongoing results move it.
           projected: projected != null && (cpa == null || (projected - cpa).abs() >= 0.005) ? projected : null,
+          years: years.length > 1 ? [for (final y in years) (y, records.yearAverage(y)!)] : const [],
         ),
-        if (years.length > 1) ...[
-          const SizedBox(height: 10),
-          _YearStrip(items: [for (final y in years) (y, records.yearAverage(y)!)]),
-        ],
-        const SizedBox(height: 18),
+        const SizedBox(height: 22),
         SectionLabel('Y$year · Semester $sem', trailing: _avgText(p, records.semesterAverage(year, sem))),
         if (rows.isEmpty)
-          SoftCard(
-            child: Text('No modules yet. Add one with + or import your timetable.', style: TextStyle(color: p.textSecondary)),
-          ),
-        for (final (r, saved) in rows) _ModuleTile(record: r, saved: saved),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+            child: Text('No modules yet', style: TextStyle(color: p.textSecondary)),
+          )
+        else
+          _Group(children: [for (final (r, saved) in rows) _ModuleTile(record: r, saved: saved)]),
         for (final (y, s) in earlier) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
           SectionLabel('Y$y · Semester $s', trailing: _avgText(p, records.semesterAverage(y, s))),
-          for (final r in records.records.where((r) => r.year == y && r.semester == s && !r.isActive))
-            _ModuleTile(record: r, saved: true),
+          _Group(children: [
+            for (final r in records.records.where((r) => r.year == y && r.semester == s && !r.isActive))
+              _ModuleTile(record: r, saved: true),
+          ]),
         ],
-        const SizedBox(height: 16),
-        Text('Tap a module to add how it\'s marked (tests, assignments, exam) and fill in results as they come back — '
-            'the final mark and your CPA work themselves out.\n'
-            'Grades: A ≥70 · B 60–69 · C 50–59 · D 40–49 · F <40. CPA = credit-weighted average of every module, all years. '
-            'Check your programme\'s regulations for exact rules.',
-            style: TextStyle(fontSize: 11, color: p.textMuted, height: 1.4)),
+        const SizedBox(height: 22),
+        const _GradeScale(),
       ],
     );
   }
 
-  Widget? _avgText(Palette p, double? avg) =>
-      avg == null ? null : Text('avg ${fmtMark(avg)}', style: TextStyle(color: p.textSecondary, fontWeight: FontWeight.w600));
+  Widget? _avgText(Palette p, double? avg) => avg == null
+      ? null
+      : Text('${fmtMark(avg)} avg', style: TextStyle(color: p.textSecondary, fontWeight: FontWeight.w600, fontFeatures: _tabular));
 }
 
-/// Average per year of study: "Y1 58.2 · Y2 64".
-class _YearStrip extends StatelessWidget {
-  final List<(int, double)> items;
-  const _YearStrip({required this.items});
+/// Rows in one card, split by hairlines.
+class _Group extends StatelessWidget {
+  final List<Widget> children;
+  const _Group({required this.children});
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(children: [
-        for (final (y, avg) in items)
-          Container(
-            margin: const EdgeInsets.only(right: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(color: p.surface, borderRadius: BorderRadius.circular(40), boxShadow: p.softShadow),
-            child: Text.rich(
+    return SoftCard(
+      radius: 24,
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(isDesktopPlatform ? 16 : 24),
+        child: Column(children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) Divider(height: 1, thickness: 1, indent: 16, endIndent: 16, color: p.border),
+            children[i],
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+/// "A 70+  B 60+  C 50+  D 40+  F <40" — the bands at a glance.
+class _GradeScale extends StatelessWidget {
+  const _GradeScale();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    const bands = [('A', '70+'), ('B', '60+'), ('C', '50+'), ('D', '40+'), ('F', '<40')];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 6,
+        children: [
+          for (final (l, range) in bands)
+            Text.rich(
               TextSpan(children: [
-                TextSpan(text: 'Year $y  ', style: TextStyle(color: p.textSecondary, fontWeight: FontWeight.w600)),
-                TextSpan(text: avg.toStringAsFixed(1), style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w800)),
+                TextSpan(text: '$l ', style: TextStyle(fontWeight: FontWeight.w700, color: p.textSecondary)),
+                TextSpan(text: range),
               ]),
-              style: const TextStyle(fontSize: 13),
+              style: TextStyle(fontSize: 12, color: p.textMuted, fontFeatures: _tabular),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Average per year of study, in columns: "Year 1 / 62.2".
+class _YearAverages extends StatelessWidget {
+  final List<(int, double)> items;
+  final Color labelColor;
+  final Color valueColor;
+  const _YearAverages({required this.items, required this.labelColor, required this.valueColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 28,
+      runSpacing: 10,
+      children: [
+        for (final (y, avg) in items)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Year $y', style: TextStyle(fontSize: 12, color: labelColor)),
+              const SizedBox(height: 2),
+              Text(avg.toStringAsFixed(1),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: valueColor, fontFeatures: _tabular)),
+            ],
           ),
-      ]),
+      ],
     );
   }
 }
@@ -178,66 +253,56 @@ class _CpaCard extends StatelessWidget {
 
   /// CPA if ongoing modules end on their average so far.
   final double? projected;
-  const _CpaCard({required this.cpa, required this.credits, required this.modules, this.projected});
+
+  /// Average per year, shown when there's more than one.
+  final List<(int, double)> years;
+  const _CpaCard({required this.cpa, required this.credits, required this.modules, this.projected, this.years = const []});
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final c = cpa;
+    final soft = p.onInk.withValues(alpha: 0.6);
     return SoftCard(
-      radius: 32,
+      radius: 28,
       color: p.ink,
       padding: const EdgeInsets.fromLTRB(22, 18, 22, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('CPA', style: TextStyle(color: p.onInk.withValues(alpha: 0.7), fontWeight: FontWeight.w700, letterSpacing: 1.2, fontSize: 12)),
-                    Text(c == null ? '—' : fmtMark(double.parse(c.toStringAsFixed(2))),
-                        style: TextStyle(color: p.onInk, fontSize: 56, height: 1.05, fontWeight: FontWeight.w300, letterSpacing: -2)),
-                    Text(
-                      c == null ? 'Add marks to see your CPA' : Grading.degreeBand(c),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: p.onInk, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
+          Row(children: [
+            Text('CPA', style: TextStyle(color: soft, fontWeight: FontWeight.w600, letterSpacing: 1, fontSize: 12)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                modules == 0 ? '' : '${_credits(credits)} · $modules ${modules == 1 ? 'module' : 'modules'}',
+                textAlign: TextAlign.end,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: soft, fontSize: 12, fontFeatures: _tabular),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(fmtMark(credits), style: TextStyle(color: p.onInk, fontSize: 24, fontWeight: FontWeight.w600)),
-                  Text('credits', style: TextStyle(color: p.onInk.withValues(alpha: 0.7), fontSize: 12)),
-                  const SizedBox(height: 6),
-                  Text('$modules', style: TextStyle(color: p.onInk, fontSize: 24, fontWeight: FontWeight.w600)),
-                  Text(modules == 1 ? 'module' : 'modules', style: TextStyle(color: p.onInk.withValues(alpha: 0.7), fontSize: 12)),
-                ],
-              ),
-            ],
+            ),
+          ]),
+          const SizedBox(height: 4),
+          Text(c == null ? '—' : fmtMark(double.parse(c.toStringAsFixed(2))),
+              style: TextStyle(
+                  color: p.onInk, fontSize: 52, height: 1.05, fontWeight: FontWeight.w300, letterSpacing: -1.5, fontFeatures: _tabular)),
+          const SizedBox(height: 2),
+          Text(
+            c == null ? 'Add a mark to see it' : Grading.degreeBand(c),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: p.onInk, fontWeight: FontWeight.w500),
           ),
           if (projected != null) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(color: p.onInk.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(40)),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.trending_up_rounded, size: 16, color: p.onInk),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text('On track for ${projected!.toStringAsFixed(2)} with results so far',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: p.onInk, fontSize: 12, fontWeight: FontWeight.w600)),
-                ),
-              ]),
-            ),
+            const SizedBox(height: 4),
+            Text('Projected ${projected!.toStringAsFixed(2)}', style: TextStyle(color: soft, fontSize: 13, fontFeatures: _tabular)),
+          ],
+          if (years.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Divider(height: 1, thickness: 1, color: p.onInk.withValues(alpha: 0.12)),
+            const SizedBox(height: 14),
+            _YearAverages(items: years, labelColor: soft, valueColor: p.onInk),
           ],
         ],
       ),
@@ -260,64 +325,42 @@ class _ModuleTile extends StatelessWidget {
     final mark = saved ? records.markOf(r) : null;
     // Ongoing with some results in: show how it's going.
     final soFar = mark == null && saved ? r.averageSoFar : null;
-    final statusColor = switch (r.status) {
-      ModuleStatus.ended => p.textSecondary,
-      ModuleStatus.resit => Colors.orange,
-      _ => p.accent,
-    };
+
+    final resit = r.status == ModuleStatus.resit;
     final sub = [
       if (r.code.isNotEmpty) r.code,
-      '${fmtMark(r.credits)} cr',
-      if (soFar != null) '${fmtMark(r.markedWeight)}% marked',
-      if (r.status == ModuleStatus.resit && r.resitDate != null) 'resit ${DateFormat('d MMM').format(r.resitDate!)}',
-      if (r.resitMark != null && r.firstMark != null) 'first attempt ${fmtMark(r.firstMark!)}',
+      _credits(r.credits),
+      if (resit) r.resitDate == null ? 'Resit' : 'Resit ${DateFormat('d MMM').format(r.resitDate!)}',
+      if (r.status == ModuleStatus.ended && mark == null) 'Ended',
+      if (r.resitMark != null && r.firstMark != null) 'was ${fmtMark(r.firstMark!)}',
     ].join(' · ');
 
-    final shown = mark ?? soFar;
-    final circleColor = mark != null ? _passColor(p, mark) : (soFar != null ? p.accent : p.textMuted);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: SoftCard(
-        radius: 24,
-        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-        onTap: () => editModuleRecord(context, record: r, saved: saved),
+    return InkWell(
+      onTap: () => editModuleRecord(context, record: r, saved: saved),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
         child: Row(
           children: [
-            Container(
-              width: 46,
-              height: 46,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: shown == null ? p.surfaceAlt : circleColor.withValues(alpha: 0.14),
-                shape: BoxShape.circle,
-              ),
-              child: Text(shown == null ? '–' : Grading.letter(shown),
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: circleColor)),
-            ),
-            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(r.name, maxLines: 2, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
-                  const SizedBox(height: 4),
-                  Row(children: [
-                    Flexible(flex: 2, child: TagPill(ModuleStatus.label(r.status), color: statusColor)),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      flex: 3,
-                      child: Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: p.textSecondary)),
-                    ),
-                  ]),
+                  Text(r.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary, height: 1.25)),
+                  const SizedBox(height: 3),
+                  Text(sub,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, color: resit ? Colors.orange : p.textSecondary)),
                   if (soFar != null && r.totalWeight > 0) ...[
                     const SizedBox(height: 8),
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(3),
                       child: LinearProgressIndicator(
                         value: (r.markedWeight / r.totalWeight).clamp(0.0, 1.0),
-                        minHeight: 5,
+                        minHeight: 3,
                         backgroundColor: p.surfaceAlt,
                         color: p.accent,
                       ),
@@ -326,31 +369,29 @@ class _ModuleTile extends StatelessWidget {
                 ],
               ),
             ),
-            if (mark != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Text('${fmtMark(mark)}%', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: p.textPrimary)),
-              )
-            else if (soFar != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('${fmtMark(double.parse(soFar.toStringAsFixed(1)))}%',
-                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: p.accent)),
-                    Text('so far', style: TextStyle(fontSize: 11, color: p.textSecondary)),
-                  ],
-                ),
-              )
-            else if (r.isActive)
-              TextButton(
-                onPressed: () => startEndModuleFlow(context, r.name),
-                child: const Text('End'),
-              ),
+            const SizedBox(width: 16),
+            _markColumn(p, mark, soFar),
           ],
         ),
       ),
+    );
+  }
+
+  /// Right-aligned number with its letter (or "so far") underneath.
+  Widget _markColumn(Palette p, double? mark, double? soFar) {
+    final shown = mark ?? soFar;
+    if (shown == null) return Text('—', style: TextStyle(fontSize: 18, color: p.textMuted));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(mark != null ? fmtMark(mark) : _fmt1(soFar!),
+            style: TextStyle(
+                fontSize: 19, fontWeight: FontWeight.w600, color: mark != null ? p.textPrimary : p.accent, fontFeatures: _tabular)),
+        if (mark != null)
+          Text(Grading.letter(mark), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _passColor(p, mark)))
+        else
+          Text('so far', style: TextStyle(fontSize: 12, color: p.textSecondary)),
+      ],
     );
   }
 }
@@ -360,7 +401,7 @@ Future<void> editModuleRecord(BuildContext context, {ModuleRecord? record, bool 
   final timetable = context.read<TimetableProvider>();
   final records = context.read<RecordProvider>();
   final initial = record?.copy() ?? ModuleRecord(name: '', year: timetable.studyYear, semester: timetable.semester);
-  final result = await showModalBottomSheet<Object>(
+  final result = await showAppSheet<Object>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
@@ -386,7 +427,7 @@ Future<void> editModuleRecord(BuildContext context, {ModuleRecord? record, bool 
     final date = result.resitDate;
     if (result.status == ModuleStatus.resit && date != null && date != record?.resitDate && !date.isBefore(DateTime.now())) {
       await addResitExam(timetable, result.name, date);
-      messenger.showSnackBar(SnackBar(content: Text('Resit on ${DateFormat('EEE d MMM').format(date)} added to your Hub with reminders')));
+      messenger.showSnackBar(SnackBar(content: Text('Resit on ${DateFormat('EEE d MMM').format(date)} added to your Hub')));
     }
   }
 }
@@ -421,20 +462,20 @@ class _ModuleSheetState extends State<_ModuleSheet> {
     final name = _name.text.trim();
     if (name.isEmpty) return setState(() => _error = 'Give the module a name');
     final credits = _parse(_credits.text);
-    if (credits == null || credits <= 0 || credits > 60) return setState(() => _error = 'Credits must be a number above 0');
+    if (credits == null || credits <= 0 || credits > 60) return setState(() => _error = 'Credits must be above 0');
     double? mark, resit;
     if (_mark.text.trim().isNotEmpty) {
       mark = _parse(_mark.text);
-      if (mark == null || mark < 0 || mark > 100) return setState(() => _error = 'Mark must be between 0 and 100');
+      if (mark == null || mark < 0 || mark > 100) return setState(() => _error = 'Mark must be 0–100');
     }
     if (_resit.text.trim().isNotEmpty) {
       resit = _parse(_resit.text);
-      if (resit == null || resit < 0 || resit > 100) return setState(() => _error = 'Resit mark must be between 0 and 100');
+      if (resit == null || resit < 0 || resit > 100) return setState(() => _error = 'Resit mark must be 0–100');
     }
     for (final x in r.parts) {
-      if (x.weight <= 0 || x.weight > 100) return setState(() => _error = 'Each part needs a weight between 1 and 100%');
+      if (x.weight <= 0 || x.weight > 100) return setState(() => _error = 'Each weight must be 1–100%');
       if (x.score != null && x.score! > x.outOf) {
-        return setState(() => _error = '"${x.name}": ${fmtMark(x.score!)} is more than ${fmtMark(x.outOf)}');
+        return setState(() => _error = '${x.name}: ${fmtMark(x.score!)} is more than ${fmtMark(x.outOf)}');
       }
     }
     for (var i = 0; i < r.parts.length; i++) {
@@ -454,6 +495,7 @@ class _ModuleSheetState extends State<_ModuleSheet> {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final hasParts = r.parts.isNotEmpty;
+    final typed = _parse(_mark.text);
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.92),
       child: SheetScaffold(
@@ -465,12 +507,14 @@ class _ModuleSheetState extends State<_ModuleSheet> {
               icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
               onPressed: () async {
                 final ok = await confirmDestructive(context,
-                    title: 'Remove "${r.name}"?', message: 'Its mark is removed from your grades and CPA.', action: 'Remove');
+                    title: 'Remove "${r.name}"?', message: 'Its mark leaves your grades and CPA.', action: 'Remove');
                 if (ok && context.mounted) Navigator.pop(context, 'delete');
               },
             ),
         ],
         child: SingleChildScrollView(
+          // Room for the first field's floating label.
+          padding: const EdgeInsets.only(top: 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
@@ -479,12 +523,12 @@ class _ModuleSheetState extends State<_ModuleSheet> {
                 controller: _name,
                 autofocus: r.name.isEmpty,
                 textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(labelText: 'Module name', prefixIcon: Icon(Icons.menu_book_rounded)),
+                decoration: const InputDecoration(labelText: 'Module name'),
               ),
               const SizedBox(height: 10),
               Row(children: [
                 Expanded(
-                  child: TextField(controller: _code, decoration: const InputDecoration(labelText: 'Code (optional)')),
+                  child: TextField(controller: _code, decoration: const InputDecoration(labelText: 'Code')),
                 ),
                 const SizedBox(width: 10),
                 SizedBox(
@@ -524,9 +568,9 @@ class _ModuleSheetState extends State<_ModuleSheet> {
                 labelOf: ModuleStatus.label,
                 onChanged: (s) => setState(() => r.status = s),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 22),
               _AssessmentEditor(record: r, onChanged: () => setState(() {})),
-              const SizedBox(height: 14),
+              const SizedBox(height: 18),
               TextField(
                 controller: _mark,
                 keyboardType: _numKb,
@@ -534,13 +578,11 @@ class _ModuleSheetState extends State<_ModuleSheet> {
                 onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
                   labelText: hasParts
-                      ? 'Official final mark % (optional)'
+                      ? 'Official mark (optional)'
                       : r.status == ModuleStatus.resit
-                          ? 'First attempt mark %'
-                          : 'Final mark %',
-                  helperText: hasParts ? 'Leave empty to use the mark worked out above' : null,
-                  prefixIcon: const Icon(Icons.percent_rounded),
-                  suffixText: _parse(_mark.text) == null ? null : Grading.letter(_parse(_mark.text)!),
+                          ? 'First attempt mark'
+                          : 'Final mark',
+                  suffixText: typed == null ? '%' : '%  ${Grading.letter(typed)}',
                 ),
               ),
               if (r.status == ModuleStatus.resit || _resit.text.isNotEmpty) ...[
@@ -549,10 +591,7 @@ class _ModuleSheetState extends State<_ModuleSheet> {
                   controller: _resit,
                   keyboardType: _numKb,
                   inputFormatters: _numFormatters,
-                  decoration: const InputDecoration(
-                    labelText: 'Resit mark % (replaces the first)',
-                    prefixIcon: Icon(Icons.replay_rounded),
-                  ),
+                  decoration: const InputDecoration(labelText: 'Resit mark', suffixText: '%'),
                 ),
                 const SizedBox(height: 10),
                 SoftCard(
@@ -570,10 +609,10 @@ class _ModuleSheetState extends State<_ModuleSheet> {
                     if (d != null) setState(() => r.resitDate = d);
                   },
                   child: Row(children: [
-                    Icon(Icons.event_rounded, color: p.textSecondary),
+                    Icon(Icons.event_rounded, size: 20, color: p.textSecondary),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(r.resitDate == null ? 'Resit date' : 'Resit ${DateFormat('EEE d MMM yyyy').format(r.resitDate!)}',
+                      child: Text(r.resitDate == null ? 'Resit date' : DateFormat('EEE d MMM yyyy').format(r.resitDate!),
                           style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
                     ),
                   ]),
@@ -588,18 +627,16 @@ class _ModuleSheetState extends State<_ModuleSheet> {
               InkPillButton(label: 'Save', icon: Icons.check_rounded, expand: true, onPressed: _save),
               if (!widget.isNew && r.isActive) ...[
                 const SizedBox(height: 8),
-                TextButton.icon(
+                TextButton(
                   onPressed: () => Navigator.pop(context, 'end'),
-                  icon: const Icon(Icons.flag_outlined),
-                  label: const Text('Finished early? End module'),
+                  child: const Text('End module'),
                 ),
               ],
               if (!widget.isNew && r.isEnded) ...[
                 const SizedBox(height: 8),
-                TextButton.icon(
+                TextButton(
                   onPressed: () => Navigator.pop(context, 'reopen'),
-                  icon: const Icon(Icons.undo_rounded),
-                  label: const Text('Put back on timetable'),
+                  child: const Text('Put back on timetable'),
                 ),
               ],
             ],
@@ -644,37 +681,40 @@ class _AssessmentEditor extends StatelessWidget {
       children: [
         Row(children: [
           Expanded(
-            child: Text('How it\'s marked', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: p.textPrimary)),
+            child: Text('How it\'s marked', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: p.textPrimary)),
           ),
           if (parts.isNotEmpty)
-            Text('${fmtMark(total)} / 100%',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: weightOk ? p.textSecondary : Colors.orange)),
+            Text('${fmtMark(total)}%',
+                style: TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 13, color: weightOk ? p.textMuted : Colors.orange, fontFeatures: _tabular)),
         ]),
-        const SizedBox(height: 4),
-        Text(
-          parts.isEmpty
-              ? 'Optional. Add the tests, assignments and exam with their weights, then fill in results as you get them.'
-              : 'Fill in a result when it comes back. Leave the rest empty.',
-          style: TextStyle(fontSize: 12, color: p.textSecondary, height: 1.35),
-        ),
         const SizedBox(height: 10),
         if (parts.isEmpty)
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final t in AssessmentPart.templates.entries)
-                ActionChip(
-                  avatar: Icon(Icons.auto_awesome_mosaic_outlined, size: 16, color: p.accent),
-                  label: Text(t.key),
-                  onPressed: () => _useTemplate(t.value),
-                ),
+              for (final t in AssessmentPart.templates.entries) ActionChip(label: Text(t.key), onPressed: () => _useTemplate(t.value)),
             ],
+          )
+        else
+          Container(
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: p.border)),
+            child: Column(children: [
+              for (var i = 0; i < parts.length; i++) ...[
+                if (i > 0) Divider(height: 1, thickness: 1, color: p.border),
+                _PartRow(
+                  key: ValueKey(parts[i].id),
+                  part: parts[i],
+                  onChanged: onChanged,
+                  onRemove: () {
+                    parts.removeAt(i);
+                    onChanged();
+                  },
+                ),
+              ],
+            ]),
           ),
-        for (var i = 0; i < parts.length; i++) _PartCard(key: ValueKey(parts[i].id), part: parts[i], onChanged: onChanged, onRemove: () {
-          parts.removeAt(i);
-          onChanged();
-        }),
         Align(
           alignment: Alignment.centerLeft,
           child: PopupMenuButton<String>(
@@ -682,16 +722,11 @@ class _AssessmentEditor extends StatelessWidget {
             onSelected: _add,
             itemBuilder: (_) => [for (final k in AssessmentPart.kinds) PopupMenuItem(value: k, child: Text(k))],
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(Icons.add_rounded, size: 18, color: p.accent),
                 const SizedBox(width: 6),
-                Flexible(
-                  child: Text(parts.isEmpty ? 'Or add parts one by one' : 'Add a part',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontWeight: FontWeight.w700, color: p.accent)),
-                ),
+                Text(parts.isEmpty ? 'Custom' : 'Add part', style: TextStyle(fontWeight: FontWeight.w600, color: p.accent)),
               ]),
             ),
           ),
@@ -702,17 +737,18 @@ class _AssessmentEditor extends StatelessWidget {
   }
 }
 
-class _PartCard extends StatelessWidget {
+/// One assessment: name and weight on top, score / out of and the result below.
+class _PartRow extends StatelessWidget {
   final AssessmentPart part;
   final VoidCallback onChanged;
   final VoidCallback onRemove;
-  const _PartCard({super.key, required this.part, required this.onChanged, required this.onRemove});
+  const _PartRow({super.key, required this.part, required this.onChanged, required this.onRemove});
 
-  InputDecoration _dense(String label, {String? suffix}) => InputDecoration(
-        labelText: label,
+  InputDecoration _box({String? hint, String? suffix}) => InputDecoration(
+        hintText: hint,
         suffixText: suffix,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       );
 
   @override
@@ -720,13 +756,9 @@ class _PartCard extends StatelessWidget {
     final p = Palette.of(context);
     final x = part;
     final pct = x.percent;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(12, 10, 2, 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: pct == null ? p.border : p.accent.withValues(alpha: 0.45)),
-      ),
+    final numStyle = TextStyle(fontFeatures: _tabular, color: p.textPrimary);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 4, 12),
       child: Column(
         children: [
           Row(children: [
@@ -734,19 +766,29 @@ class _PartCard extends StatelessWidget {
               child: TextFormField(
                 initialValue: x.name,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: _dense('Name'),
+                style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary),
+                decoration: const InputDecoration(
+                  hintText: 'Name',
+                  isDense: true,
+                  filled: false,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 8),
+                ),
                 onChanged: (v) => x.name = v,
               ),
             ),
             const SizedBox(width: 8),
             SizedBox(
-              width: 74,
+              width: 72,
               child: TextFormField(
                 initialValue: fmtMark(x.weight),
                 keyboardType: _numKb,
                 inputFormatters: _numFormatters,
-                textAlign: TextAlign.center,
-                decoration: _dense('Weight', suffix: '%'),
+                textAlign: TextAlign.end,
+                style: numStyle,
+                decoration: _box(suffix: '%'),
                 onChanged: (v) {
                   x.weight = _parse(v) ?? 0;
                   onChanged();
@@ -756,20 +798,21 @@ class _PartCard extends StatelessWidget {
             IconButton(
               tooltip: 'Remove',
               visualDensity: VisualDensity.compact,
-              icon: Icon(Icons.close_rounded, size: 18, color: p.textSecondary),
+              icon: Icon(Icons.close_rounded, size: 18, color: p.textMuted),
               onPressed: onRemove,
             ),
           ]),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Row(children: [
             SizedBox(
-              width: 72,
+              width: 68,
               child: TextFormField(
                 initialValue: x.score == null ? '' : fmtMark(x.score!),
                 keyboardType: _numKb,
                 inputFormatters: _numFormatters,
                 textAlign: TextAlign.center,
-                decoration: _dense('Got'),
+                style: numStyle,
+                decoration: _box(hint: 'Score'),
                 onChanged: (v) {
                   x.score = _parse(v);
                   onChanged();
@@ -778,16 +821,17 @@ class _PartCard extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Text('/', style: TextStyle(fontSize: 18, color: p.textSecondary)),
+              child: Text('/', style: TextStyle(fontSize: 16, color: p.textMuted)),
             ),
             SizedBox(
-              width: 72,
+              width: 68,
               child: TextFormField(
                 initialValue: fmtMark(x.outOf),
                 keyboardType: _numKb,
                 inputFormatters: _numFormatters,
                 textAlign: TextAlign.center,
-                decoration: _dense('Out of'),
+                style: numStyle,
+                decoration: _box(),
                 onChanged: (v) {
                   x.outOf = _parse(v) ?? 100;
                   onChanged();
@@ -797,20 +841,20 @@ class _PartCard extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: Text(
-                  pct == null ? 'Not marked yet' : '${fmtMark(double.parse(pct.toStringAsFixed(1)))}%\n'
-                      '${fmtMark(double.parse(x.points.toStringAsFixed(1)))} of ${fmtMark(x.weight)} pts',
-                  textAlign: TextAlign.end,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.3,
-                    fontWeight: pct == null ? FontWeight.w400 : FontWeight.w700,
-                    color: pct == null ? p.textMuted : p.textPrimary,
-                  ),
-                ),
+                padding: const EdgeInsets.only(right: 12),
+                child: pct == null
+                    ? Text('—', textAlign: TextAlign.end, style: TextStyle(color: p.textMuted))
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('${_fmt1(pct)}%',
+                              maxLines: 1, style: TextStyle(fontWeight: FontWeight.w700, color: p.textPrimary, fontFeatures: _tabular)),
+                          Text('+${_fmt1(x.points)} pts',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 11.5, color: p.textSecondary, fontFeatures: _tabular)),
+                        ],
+                      ),
               ),
             ),
           ]),
@@ -820,8 +864,8 @@ class _PartCard extends StatelessWidget {
   }
 }
 
-/// Where the module stands: average so far, the worked-out final mark, and
-/// what's needed on the rest for each grade.
+/// Where the module stands: the mark so far (or final), and what's needed
+/// on the rest for each grade.
 class _BreakdownSummary extends StatelessWidget {
   final ModuleRecord record;
   const _BreakdownSummary({required this.record});
@@ -834,75 +878,69 @@ class _BreakdownSummary extends StatelessWidget {
     final calc = r.calculatedMark;
     final total = r.totalWeight;
     final weightOk = (total - 100).abs() < 0.01;
+    final big = TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: p.textPrimary, fontFeatures: _tabular);
+    final small = TextStyle(fontSize: 13, color: p.textSecondary);
 
-    String headline;
+    final Widget headline;
     if (calc != null) {
-      headline = 'Final mark: ${fmtMark(double.parse(calc.toStringAsFixed(1)))}% (${Grading.letter(calc)})';
+      headline = Text.rich(TextSpan(children: [
+        TextSpan(text: 'Final mark: ${_fmt1(calc)}%', style: big),
+        TextSpan(text: '  ${Grading.letter(calc)}', style: big.copyWith(color: _passColor(p, calc))),
+      ]));
     } else if (avg != null) {
-      headline = '${fmtMark(double.parse(avg.toStringAsFixed(1)))}% so far on ${fmtMark(r.markedWeight)}% of the module';
+      headline = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text.rich(TextSpan(children: [
+          TextSpan(text: '${_fmt1(avg)}%', style: big),
+          TextSpan(text: '  so far', style: small),
+        ])),
+        const SizedBox(height: 2),
+        Text('${fmtMark(r.markedWeight)}% of the module marked', style: small),
+      ]);
     } else {
-      headline = 'No results yet';
+      headline = Text('No results yet', style: small);
     }
 
     return Container(
-      margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(color: p.accentSoft, borderRadius: BorderRadius.circular(20)),
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(color: p.surfaceAlt, borderRadius: BorderRadius.circular(18)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(headline, style: TextStyle(fontWeight: FontWeight.w800, color: p.textPrimary)),
-          const SizedBox(height: 4),
-          Text(
-            calc != null
-                ? 'Worked out from every part${weightOk ? '' : ' (weights scaled to 100%)'}. It counts in your CPA.'
-                : avg != null
-                    ? '${fmtMark(double.parse(r.pointsEarned.toStringAsFixed(1)))} points banked — on track for a ${Grading.letter(avg)}. '
-                        'Average needed on what\'s left:'
-                    : 'Add results as they come back to see what you need on the rest.',
-            style: TextStyle(fontSize: 12, color: p.textSecondary, height: 1.35),
-          ),
+          headline,
           if (!weightOk)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text('Weights add up to ${fmtMark(total)}% — usually they make 100%.',
+              child: Text('Weights add up to ${fmtMark(total)}%',
                   style: const TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w600)),
             ),
-          if (calc == null) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final (t, label) in _targets) _needChip(p, label, r.neededForTarget(t)),
-              ],
-            ),
+          if (calc == null && avg != null) ...[
+            const SizedBox(height: 14),
+            Text('Needed on the rest', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: p.textMuted)),
+            const SizedBox(height: 6),
+            Row(children: [for (final (t, label) in _targets) Expanded(child: _need(p, label, r.neededForTarget(t)))]),
           ],
         ],
       ),
     );
   }
 
-  Widget _needChip(Palette p, String label, double? need) {
-    final String text;
-    final Color c;
-    if (need == null) {
-      text = label;
-      c = p.textSecondary;
-    } else if (need <= 0) {
-      text = '$label  ✓ secured';
-      c = _passColor(p, 100);
-    } else if (need > 100) {
-      text = '$label  out of reach';
-      c = p.textMuted;
-    } else {
-      text = '$label  ${need.ceil()}%';
-      c = p.textPrimary;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: p.surface, borderRadius: BorderRadius.circular(40)),
-      child: Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c)),
+  Widget _need(Palette p, String label, double? need) {
+    final (String text, Color c) = switch (need) {
+      null => ('—', p.textMuted),
+      <= 0 => ('✓', _passColor(p, 100)),
+      > 100 => ('—', p.textMuted),
+      _ => ('${need.ceil()}%', p.textPrimary),
+    };
+    return Tooltip(
+      message: need != null && need > 100 ? 'Out of reach' : '',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 12, color: p.textSecondary)),
+          Text(text, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c, fontFeatures: _tabular)),
+        ],
+      ),
     );
   }
 }
@@ -916,7 +954,7 @@ class _WhatIf {
   int year;
   int semester;
 
-  /// Where the pre-filled mark came from, e.g. "on track · 40% marked".
+  /// Where the pre-filled mark came from, e.g. "40% marked".
   final String? hint;
   _WhatIf(this.name, this.credits, this.mark, {required this.year, required this.semester, this.hint});
 }
@@ -948,7 +986,7 @@ class _CpaCalculatorState extends State<CpaCalculator> {
           r.averageSoFar == null ? null : double.parse(r.averageSoFar!.toStringAsFixed(1)),
           year: r.year,
           semester: r.semester,
-          hint: r.averageSoFar == null ? null : 'on track · ${fmtMark(r.markedWeight)}% marked',
+          hint: r.averageSoFar == null ? null : 'So far · ${fmtMark(r.markedWeight)}% marked',
         ),
       for (final s in timetable.scheduleSubjects)
         if (!names.contains(ModuleRecord.keyFor(s)) && records.recordFor(s) == null)
@@ -974,7 +1012,10 @@ class _CpaCalculatorState extends State<CpaCalculator> {
     final rows = _rows!;
 
     final graded = [for (final r in records.graded) (r.credits, records.markOf(r)!)];
-    final planned = [for (final w in rows) if (w.mark != null) (w.credits, w.mark!)];
+    final planned = [
+      for (final w in rows)
+        if (w.mark != null) (w.credits, w.mark!)
+    ];
     final current = records.cpa;
     final projected = Grading.weightedAverage([...graded, ...planned]);
     final doneCredits = records.gradedCredits;
@@ -999,37 +1040,61 @@ class _CpaCalculatorState extends State<CpaCalculator> {
     final years = byYear.keys.toList()..sort();
 
     // Rows grouped by year/semester, in order.
-    final periods = {for (final w in rows) (w.year, w.semester)}.toList()
-      ..sort((a, b) => (a.$1 * 10 + a.$2).compareTo(b.$1 * 10 + b.$2));
+    final periods = {for (final w in rows) (w.year, w.semester)}.toList()..sort((a, b) => (a.$1 * 10 + a.$2).compareTo(b.$1 * 10 + b.$2));
+
+    final String verdict;
+    if (needed == null) {
+      verdict = 'Leave a mark blank to see what you need.';
+    } else if (needed > 100) {
+      verdict = 'Out of reach — needs ${needed.toStringAsFixed(1)}% average';
+    } else if (needed <= 0) {
+      verdict = 'Already reached';
+    } else {
+      verdict = '${needed.toStringAsFixed(1)}% average needed on ${_credits(remaining)}';
+    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 40),
       children: [
         Row(children: [
-          Expanded(child: _stat(p, 'Now', current)),
+          Expanded(child: _stat(p, 'Current', current)),
           const SizedBox(width: 10),
-          Expanded(child: _stat(p, 'With these marks', projected, highlight: true)),
+          Expanded(child: _stat(p, 'Projected', projected, highlight: true)),
         ]),
         if (years.length > 1) ...[
-          const SizedBox(height: 10),
-          _YearStrip(items: [for (final y in years) (y, Grading.weightedAverage(byYear[y]!)!)]),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: _YearAverages(
+              items: [for (final y in years) (y, Grading.weightedAverage(byYear[y]!)!)],
+              labelColor: p.textSecondary,
+              valueColor: p.textPrimary,
+            ),
+          ),
         ],
         const SizedBox(height: 16),
         SoftCard(
           radius: 24,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
-                Text('Target CPA', style: TextStyle(fontWeight: FontWeight.w700, color: p.textPrimary)),
+                Text('Target', style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text('${_target.round()} · ${Grading.degreeBand(_target)}',
-                      textAlign: TextAlign.end,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: p.textSecondary, fontWeight: FontWeight.w600)),
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                          text: '${_target.round()}',
+                          style: TextStyle(fontWeight: FontWeight.w700, color: p.textPrimary, fontFeatures: _tabular)),
+                      TextSpan(text: '  ${Grading.degreeBand(_target)}'),
+                    ]),
+                    textAlign: TextAlign.end,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: p.textSecondary),
+                  ),
                 ),
               ]),
               Slider(
@@ -1040,71 +1105,72 @@ class _CpaCalculatorState extends State<CpaCalculator> {
                 label: '${_target.round()}',
                 onChanged: (v) => setState(() => _target = v),
               ),
-              Text(
-                needed == null
-                    ? 'Leave some modules blank below to see what you need on them.'
-                    : needed > 100
-                        ? 'Out of reach on the blank modules (would need ${needed.toStringAsFixed(1)}%).'
-                        : needed <= 0
-                            ? 'Already there — any mark on the blank modules keeps you above ${_target.round()}.'
-                            : 'You need an average of ${needed.toStringAsFixed(1)}% on the ${fmtMark(remaining)} credits left blank.',
-                style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w600, height: 1.35),
-              ),
+              Text(verdict, style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w600, height: 1.35)),
             ],
           ),
         ),
         const SizedBox(height: 18),
-        const SectionLabel('What if…'),
+        const SectionLabel('What if'),
         if (rows.isEmpty)
-          Text('All your modules have marks. Add a module below to plan ahead.', style: TextStyle(color: p.textSecondary)),
-        for (final (y, s) in periods) ...[
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-            child: Text('Year $y · Semester $s',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: p.textSecondary, letterSpacing: 0.2)),
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+            child: Text('Every module has a mark. Add one to plan ahead.', style: TextStyle(color: p.textSecondary)),
           ),
-          for (final w in rows.where((w) => w.year == y && w.semester == s)) _row(p, rows, w),
+        for (final (y, s) in periods) ...[
+          // Period name, with the column headings over the inputs.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 0, 8),
+            child: DefaultTextStyle.merge(
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: p.textSecondary),
+              child: Row(children: [
+                Expanded(child: Text('Year $y · Semester $s', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                const SizedBox(width: 64, child: Text('Credits', textAlign: TextAlign.center)),
+                const SizedBox(width: 8),
+                const SizedBox(width: 64, child: Text('Mark', textAlign: TextAlign.center)),
+                const SizedBox(width: 44),
+              ]),
+            ),
+          ),
+          _Group(children: [for (final w in rows.where((w) => w.year == y && w.semester == s)) _row(p, rows, w)]),
+          const SizedBox(height: 12),
         ],
-        const SizedBox(height: 4),
         Wrap(
-          spacing: 8,
-          runSpacing: 4,
+          spacing: 4,
+          runSpacing: 0,
           children: [
             TextButton.icon(
-              onPressed: () => setState(() => rows.add(
-                  _WhatIf('Module ${rows.length + 1}', 3, null, year: timetable.studyYear, semester: timetable.semester))),
+              onPressed: () => setState(
+                  () => rows.add(_WhatIf('Module ${rows.length + 1}', 3, null, year: timetable.studyYear, semester: timetable.semester))),
               icon: const Icon(Icons.add_rounded, size: 18),
-              label: const Text('Module this semester'),
+              label: const Text('Add module'),
             ),
             TextButton.icon(
               onPressed: () {
                 final (y, s) = _nextPeriod(records, timetable);
                 setState(() => rows.add(_WhatIf('Module ${rows.length + 1}', 3, null, year: y, semester: s)));
               },
-              icon: const Icon(Icons.event_repeat_rounded, size: 18),
-              label: const Text('Plan a later semester'),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Next semester'),
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
         SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Cap passed resits at 40', style: TextStyle(fontWeight: FontWeight.w600)),
-          subtitle: const Text('Turn on if your programme limits a resit to the pass mark'),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          title: Text('Cap passed resits at 40', style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
           value: records.capResit,
           onChanged: records.setCapResit,
         ),
-        Text('Saved marks (${records.graded.length} modules, ${fmtMark(doneCredits)} credits, every year) always count. '
-            'Unfinished modules start on their average so far. Marks typed here are not saved — '
-            'fill in results under My grades.',
-            style: TextStyle(fontSize: 11, color: p.textMuted, height: 1.4)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text('Marks typed here aren\'t saved.', style: TextStyle(fontSize: 12, color: p.textMuted)),
+        ),
       ],
     );
   }
 
   Widget _stat(Palette p, String label, double? v, {bool highlight = false}) => SoftCard(
         radius: 24,
-        color: highlight ? p.accent : null,
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1112,13 +1178,13 @@ class _CpaCalculatorState extends State<CpaCalculator> {
             Text(label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: highlight ? Colors.white70 : p.textSecondary)),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: p.textSecondary)),
+            const SizedBox(height: 2),
             Text(v == null ? '—' : v.toStringAsFixed(2),
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w300, color: highlight ? Colors.white : p.textPrimary)),
+                style: TextStyle(
+                    fontSize: 28, fontWeight: FontWeight.w400, color: highlight ? p.accent : p.textPrimary, fontFeatures: _tabular)),
             Text(v == null ? ' ' : Grading.degreeBand(v),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: highlight ? Colors.white : p.textSecondary)),
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: p.textSecondary)),
           ],
         ),
       );
@@ -1126,54 +1192,62 @@ class _CpaCalculatorState extends State<CpaCalculator> {
   Widget _row(Palette p, List<_WhatIf> rows, _WhatIf w) {
     return Padding(
       key: ObjectKey(w),
-      padding: const EdgeInsets.only(bottom: 8),
-      child: SoftCard(
-        radius: 20,
-        padding: const EdgeInsets.fromLTRB(14, 6, 4, 6),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(w.name, maxLines: 2, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
-                  if (w.hint != null)
-                    Text(w.hint!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: p.accent)),
-                ],
-              ),
+      padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(w.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary, height: 1.25)),
+                if (w.hint != null)
+                  Text(w.hint!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: p.textSecondary)),
+              ],
             ),
-            SizedBox(
-              width: 54,
+          ),
+          const SizedBox(width: 8),
+          Semantics(
+            label: 'Credits',
+            child: SizedBox(
+              width: 64,
               child: TextFormField(
                 initialValue: fmtMark(w.credits),
                 textAlign: TextAlign.center,
                 keyboardType: _numKb,
                 inputFormatters: _numFormatters,
-                decoration: const InputDecoration(labelText: 'cr', isDense: true),
+                style: const TextStyle(fontFeatures: _tabular),
+                decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 10)),
                 onChanged: (v) => setState(() => w.credits = _parse(v) ?? 0),
               ),
             ),
-            const SizedBox(width: 8),
-            SizedBox(
+          ),
+          const SizedBox(width: 8),
+          Semantics(
+            label: 'Mark',
+            child: SizedBox(
               width: 64,
               child: TextFormField(
                 initialValue: w.mark == null ? '' : fmtMark(w.mark!),
                 textAlign: TextAlign.center,
                 keyboardType: _numKb,
                 inputFormatters: _numFormatters,
-                decoration: const InputDecoration(labelText: '%', isDense: true),
+                style: const TextStyle(fontFeatures: _tabular),
+                decoration:
+                    const InputDecoration(hintText: '—', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 10)),
                 onChanged: (v) => setState(() => w.mark = _parse(v)?.clamp(0, 100).toDouble()),
               ),
             ),
-            IconButton(
-              tooltip: 'Remove row',
-              visualDensity: VisualDensity.compact,
-              icon: Icon(Icons.close_rounded, size: 18, color: p.textSecondary),
-              onPressed: () => setState(() => rows.remove(w)),
-            ),
-          ],
-        ),
+          ),
+          IconButton(
+            tooltip: 'Remove',
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.close_rounded, size: 18, color: p.textMuted),
+            onPressed: () => setState(() => rows.remove(w)),
+          ),
+        ],
       ),
     );
   }

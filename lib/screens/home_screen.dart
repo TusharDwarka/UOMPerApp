@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/resource_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/desktop_shell.dart';
 import '../widgets/folder_picker.dart';
 import '../widgets/ui.dart';
 import 'academic_tab.dart';
@@ -183,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showMoreSheet() {
     final p = Palette.of(context);
-    showModalBottomSheet(
+    showAppSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -234,7 +235,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Drag pages into the top five to put them in the bar; the rest live
   /// under More.
   void _editBar() {
-    showModalBottomSheet(
+    showAppSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -325,6 +326,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final slot = bar.indexOf(_selectedIndex);
 
     final body = IndexedStack(index: _selectedIndex, children: _pages);
+
+    // PC (Windows/macOS/Linux) gets the sidebar layout. Android/iOS never
+    // reach this branch, so the phone UI below is unchanged.
+    if (isDesktopPlatform && MediaQuery.of(context).size.width >= 720) {
+      return HomeNavigation(
+        goTo: _onItemTapped,
+        child: Scaffold(
+          backgroundColor: p.canvas,
+          resizeToAvoidBottomInset: false,
+          body: DesktopShell(selected: _selectedIndex, onSelect: _onItemTapped, body: body),
+        ),
+      );
+    }
 
     return HomeNavigation(
       goTo: _onItemTapped,

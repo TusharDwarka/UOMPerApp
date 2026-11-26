@@ -149,7 +149,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   // ───────────── Actions ─────────────
 
   Future<void> _pickReminder() async {
-    final choice = await showModalBottomSheet<int>(
+    final choice = await showAppSheet<int>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -524,7 +524,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   }
 
   Future<void> _editSession([GroupSession? existing]) async {
-    final result = await showModalBottomSheet<Object>(
+    final result = await showAppSheet<Object>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -806,7 +806,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     final suggested = e.remindBefore ?? const <int>[];
     final mine = _eventRemind[e.id];
     String describe(List<int> l) => l.isEmpty ? 'Off' : l.map((m) => '${NotificationService.describeLead(m)} before').join(', ');
-    final picked = await showModalBottomSheet<List<int>?>(
+    final picked = await showAppSheet<List<int>?>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -869,7 +869,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   }
 
   Future<void> _editEvent([GroupEvent? existing]) async {
-    final result = await showModalBottomSheet<Object>(
+    final result = await showAppSheet<Object>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

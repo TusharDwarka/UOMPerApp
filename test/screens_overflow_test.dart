@@ -264,11 +264,13 @@ void main() {
         ));
         await tester.pump();
         await tester.scrollUntilVisible(find.text('Mobile Computing'), 150, scrollable: find.byType(Scrollable).first);
+        await tester.ensureVisible(find.text('Mobile Computing'));
+        await tester.pumpAndSettle();
         expect(find.text('so far'), findsOneWidget); // ongoing module with results
         await tester.tap(find.text('Mobile Computing'));
         await tester.pumpAndSettle();
         expect(find.text("How it's marked"), findsOneWidget);
-        expect(find.textContaining('so far on 40% of the module'), findsOneWidget);
+        expect(find.textContaining('40% of the module marked'), findsOneWidget);
         await tester.scrollUntilVisible(find.text('Final exam'), 200, scrollable: find.byType(Scrollable).last);
         await tester.pumpAndSettle();
         // Fill the exam in: the module gets its final mark.
@@ -283,8 +285,8 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('CPA calculator'));
         await tester.pumpAndSettle();
-        await tester.scrollUntilVisible(find.textContaining('on track'), 150, scrollable: find.byType(Scrollable).first);
-        expect(find.textContaining('on track'), findsWidgets);
+        await tester.scrollUntilVisible(find.textContaining('% marked'), 150, scrollable: find.byType(Scrollable).first);
+        expect(find.textContaining('So far ·'), findsWidgets);
         await tester.pumpWidget(const SizedBox());
       });
     }

@@ -11,8 +11,10 @@ import '../providers/timetable_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/day_layout.dart';
 import '../utils/time_utils.dart';
+import '../widgets/add_edit_task_sheet.dart' show showTaskSheet;
 import '../widgets/class_details_sheet.dart';
 import '../widgets/ui.dart';
+import 'academic_tab.dart' show taskDisplayColor;
 
 class ScheduleTab extends StatefulWidget {
   const ScheduleTab({super.key});
@@ -27,7 +29,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
   static const double _gutter = 54;
 
   DateTime _selectedDate = dateOnly(DateTime.now());
-  int _view = 0; // 0 day, 1 week grid, 2 month calendar
+  int _view = isDesktopPlatform ? 1 : 0; // 0 day, 1 week grid, 2 month calendar
   final _scroll = ScrollController();
   Timer? _minuteTicker;
   bool _didInitialScroll = false;
@@ -96,12 +98,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
     final title = timetable.courseName.isNotEmpty ? timetable.courseName : 'Schedule';
     final preSemester = _selectedDate.isBefore(dateOnly(timetable.semesterStart));
 
-    return Scaffold(
-      backgroundColor: p.canvas,
-      body: SafeArea(
-        child: Column(
-          children: [
-            ScreenHeader(
+    final header = ScreenHeader(
               title: title,
               eyebrow: '${timetable.getWeekLabel(_selectedDate)} · ${DateFormat('MMMM yyyy').format(_selectedDate)}',
               actions: [
@@ -125,10 +122,8 @@ class _ScheduleTabState extends State<ScheduleTab> {
                   onPressed: () => editClass(context, forDate: _selectedDate),
                 ),
               ],
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: PillSegmented<int>(
+            );
+    final viewTabs = PillSegmented<int>(
                 values: const [0, 1, 2],
                 selected: _view,
                 labelOf: (v) => const ['Day', 'Week', 'Month'][v],
@@ -136,16 +131,9 @@ class _ScheduleTabState extends State<ScheduleTab> {
                   _view = v;
                   _didInitialScroll = false;
                 }),
-              ),
-            ),
-            if (_view != 2) _buildWeekStrip(p, timetable),
-            const SizedBox(height: 8),
-            Expanded(
-              child: _view == 1
-                  ? _weekGrid(p, timetable)
-                  : _view == 2
-                      ? _monthView(p, timetable)
-                      : preSemester
+              );
+
+    final Widget dayView = preSemester
                   ? const EmptyState(
                       icon: Icons.beach_access_rounded,
                       title: 'Before the semester',
@@ -184,11 +172,440 @@ class _ScheduleTabState extends State<ScheduleTab> {
                           ),
                         );
                       }),
-                    ),
+                    );
+
+    return Scaffold(
+      backgroundColor: p.canvas,
+      body: SafeArea(
+        child: LayoutBuilder(builder: (context, c) {
+          // PC: a calendar-app layout — toolbar with Today / ‹ › and the
+          // view switch, the grid filling the window, and a side panel with
+          // a mini month and the chosen day's classes and deadlines.
+          if (wideDesktop(c)) {
+            return Column(children: [
+              header,
+              _desktopToolbar(p, viewTabs),
+              const SizedBox(height: 10),
+              Expanded(
+                child: SplitPanes(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 20, 16),
+                  mainFlex: 3,
+                  sideFlex: 1,
+                  main: _view == 1 ? _weekGridDesktop(p, timetable) : (_view == 2 ? _monthView(p, timetable) : dayView),
+                  side: _sidePanel(p, timetable),
+                ),
+              ),
+            ]);
+          }
+          return Column(
+          children: [
+            header,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: PillSegmented<int>(
+                values: const [0, 1, 2],
+                selected: _view,
+                labelOf: (v) => const ['Day', 'Week', 'Month'][v],
+                onChanged: (v) => setState(() {
+                  _view = v;
+                  _didInitialScroll = false;
+                }),
+              ),
+            ),
+            if (_view != 2) _buildWeekStrip(p, timetable),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _view == 1
+                  ? _weekGrid(p, timetable)
+                  : _view == 2
+                      ? _monthView(p, timetable)
+                      : dayView,
             ),
           ],
-        ),
+        );
+        }),
       ),
+    );
+  }
+
+  // ───────────────────────── Desktop ─────────────────────────
+
+  void _step(int dir) {
+    final d = _selectedDate;
+    _select(switch (_view) {
+      0 => d.add(Duration(days: dir)),
+      1 => d.add(Duration(days: 7 * dir)),
+      _ => DateTime(d.year, d.month + dir, 1),
+    });
+  }
+
+  String _rangeLabel() {
+    final d = _selectedDate;
+    switch (_view) {
+      case 0:
+        return DateFormat('EEEE d MMMM yyyy').format(d);
+      case 1:
+        final a = _weekStart, b = _weekStart.add(const Duration(days: 6));
+        return a.month == b.month
+            ? '${a.day} – ${DateFormat('d MMMM yyyy').format(b)}'
+            : '${DateFormat('d MMM').format(a)} – ${DateFormat('d MMM yyyy').format(b)}';
+      default:
+        return DateFormat('MMMM yyyy').format(d);
+    }
+  }
+
+  Widget _desktopToolbar(Palette p, Widget viewTabs) {
+    final label = const ['day', 'week', 'month'][_view];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+      child: Row(children: [
+        OutlinedButton(onPressed: () => _select(DateTime.now()), child: const Text('Today')),
+        const SizedBox(width: 8),
+        IconButton(tooltip: 'Previous $label', icon: const Icon(Icons.chevron_left_rounded), onPressed: () => _step(-1)),
+        IconButton(tooltip: 'Next $label', icon: const Icon(Icons.chevron_right_rounded), onPressed: () => _step(1)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(_rangeLabel(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: p.textPrimary)),
+        ),
+        const SizedBox(width: 12),
+        Flexible(flex: 0, child: viewTabs),
+      ]),
+    );
+  }
+
+  /// Week grid for PC: the day header stays put while the hours scroll,
+  /// the chosen day is tinted, and wide columns show time and room.
+  Widget _weekGridDesktop(Palette p, TimetableProvider timetable) {
+    final week = List.generate(7, (i) => _weekStart.add(Duration(days: i)));
+    final perDay = {for (final d in week) d: timetable.getClassesForDate(d, includeCancelled: true)};
+    final days = week.where((d) => d.weekday <= 5 || perDay[d]!.isNotEmpty).toList();
+    final (startHour, endHour) = _hourRange([for (final d in days) ...perDay[d]!]);
+    const hh = 52.0;
+    final now = DateTime.now();
+
+    return LayoutBuilder(builder: (context, c) {
+      final colW = (c.maxWidth - _gutter - 8) / days.length;
+      final compact = colW < 130;
+      return Column(children: [
+        Row(children: [
+          const SizedBox(width: _gutter),
+          for (final d in days)
+            SizedBox(
+              width: colW,
+              child: HoverTap(
+                onTap: () => _select(d),
+                builder: (hover) {
+                  final today = isSameDate(d, now);
+                  final sel = isSameDate(d, _selectedDate);
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      color: sel ? p.accent.withValues(alpha: 0.08) : (hover ? p.textPrimary.withValues(alpha: 0.04) : null),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(children: [
+                      Text(DateFormat('EEE').format(d).toUpperCase(),
+                          style: TextStyle(
+                              fontSize: 11, letterSpacing: 0.6, fontWeight: FontWeight.w600, color: today ? p.accent : p.textMuted)),
+                      const SizedBox(height: 2),
+                      Container(
+                        width: 30,
+                        height: 30,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(color: today ? p.accent : null, shape: BoxShape.circle),
+                        child: Text('${d.day}',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w600, color: today ? Colors.white : p.textPrimary)),
+                      ),
+                    ]),
+                  );
+                },
+              ),
+            ),
+        ]),
+        const SizedBox(height: 6),
+        Container(height: 1, color: p.border),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(0, 12, 8, 24),
+            child: SizedBox(
+              width: c.maxWidth - 8,
+              height: (endHour - startHour) * hh,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  for (var i = 0; i < days.length; i++)
+                    if (isSameDate(days[i], _selectedDate))
+                      Positioned(
+                        left: _gutter + i * colW,
+                        width: colW,
+                        top: 0,
+                        bottom: 0,
+                        child: Container(color: p.accent.withValues(alpha: 0.035)),
+                      ),
+                  for (var h = startHour; h <= endHour; h++) ..._hourLine(p, h, startHour, hourHeight: hh),
+                  for (var i = 1; i < days.length; i++)
+                    Positioned(left: _gutter + i * colW, top: 0, bottom: 0, child: Container(width: 1, color: p.border)),
+                  for (var i = 0; i < days.length; i++)
+                    ..._buildBlocks(p, timetable, perDay[days[i]]!, startHour, colW,
+                        date: days[i], left: _gutter + i * colW, hourHeight: hh, compact: compact),
+                  for (var i = 0; i < days.length; i++)
+                    if (isSameDate(days[i], now))
+                      _nowLine(p, startHour, endHour, left: _gutter + i * colW, width: colW, hourHeight: hh),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ]);
+    });
+  }
+
+  /// Right-hand panel: mini month to jump around, then the chosen day.
+  /// PC month: big cells listing the day's classes; the toolbar drives
+  /// paging, and clicking a day shows it in the side panel.
+  Widget _monthViewDesktop(Palette p, TimetableProvider timetable) {
+    final now = DateTime.now();
+    Widget cell(DateTime day, double rowH, {bool selected = false}) {
+      final classes = timetable.getClassesForDate(day);
+      // As many class lines as the row has room for; the rest become "+N more".
+      final lines = ((rowH - 4 - 8 - 24) / 15).floor();
+      final shown = classes.length <= lines ? classes.length : math.max(0, lines - 1);
+      final today = isSameDate(day, now);
+      return Container(
+        constraints: const BoxConstraints.expand(),
+        margin: const EdgeInsets.all(2),
+        padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+        decoration: BoxDecoration(
+          color: selected ? p.accent.withValues(alpha: 0.08) : null,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: selected ? p.accent.withValues(alpha: 0.5) : p.border.withValues(alpha: 0.7)),
+        ),
+        child: ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.topLeft,
+            maxHeight: double.infinity,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 22,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: today ? p.accent : null, shape: BoxShape.circle),
+            child: Text('${day.day}',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: today ? Colors.white : p.textPrimary)),
+          ),
+          const SizedBox(height: 2),
+          for (final c in classes.take(shown))
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Row(children: [
+                Container(
+                    width: 6, height: 6, decoration: BoxDecoration(color: moduleColors(c.subject, p.isDark).$2, shape: BoxShape.circle)),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text('${c.startTime} ${c.subject}',
+                      maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: p.textSecondary)),
+                ),
+              ]),
+            ),
+          if (classes.length > shown)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text('+${classes.length - shown} more',
+                  style: TextStyle(fontSize: 10.5, color: p.textMuted, fontWeight: FontWeight.w600)),
+            ),
+        ]),
+          ),
+        ),
+      );
+    }
+
+    return LayoutBuilder(builder: (context, c) {
+      final rowH = ((c.maxHeight - 28) / 6).clamp(64.0, 140.0);
+      return SingleChildScrollView(
+        child: TableCalendar<ClassSession>(
+          firstDay: DateTime.utc(2020, 1, 1),
+          lastDay: DateTime.utc(2035, 12, 31),
+          focusedDay: _selectedDate,
+          startingDayOfWeek: StartingDayOfWeek.monday,
+          headerVisible: false,
+          rowHeight: rowH,
+          daysOfWeekHeight: 24,
+          sixWeekMonthsEnforced: false,
+          availableGestures: AvailableGestures.none,
+          selectedDayPredicate: (d) => isSameDate(d, _selectedDate),
+          onDaySelected: (sel, _) => _select(sel),
+          daysOfWeekStyle: DaysOfWeekStyle(
+            weekdayStyle: TextStyle(fontSize: 11.5, color: p.textMuted, fontWeight: FontWeight.w600),
+            weekendStyle: TextStyle(fontSize: 11.5, color: p.textMuted, fontWeight: FontWeight.w600),
+          ),
+          calendarStyle: const CalendarStyle(outsideDaysVisible: false, cellMargin: EdgeInsets.zero),
+          calendarBuilders: CalendarBuilders<ClassSession>(
+            defaultBuilder: (context, day, _) => cell(day, rowH),
+            todayBuilder: (context, day, _) => cell(day, rowH, selected: isSameDate(day, _selectedDate)),
+            selectedBuilder: (context, day, _) => cell(day, rowH, selected: true),
+            markerBuilder: (context, day, events) => const SizedBox.shrink(),
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _sidePanel(Palette p, TimetableProvider timetable) {
+    final classes = timetable.getClassesForDate(_selectedDate, includeCancelled: true);
+    final tasks = timetable.getTasksForDay(_selectedDate)..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    final now = DateTime.now();
+    final nowMin = now.hour * 60 + now.minute;
+    final isToday = isSameDate(_selectedDate, now);
+    final meta = TextStyle(fontSize: 12, color: p.textSecondary);
+
+    Widget row({required Color bar, required String title, required String sub, required VoidCallback onTap, bool faded = false, bool strike = false, IconData? trailing}) {
+      return HoverTap(
+        onTap: onTap,
+        builder: (hover) => Container(
+          margin: const EdgeInsets.only(bottom: 4),
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+          decoration: BoxDecoration(
+            color: hover ? p.textPrimary.withValues(alpha: 0.05) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Opacity(
+            opacity: faded ? 0.5 : 1,
+            child: Row(children: [
+              Container(width: 3, height: 32, decoration: BoxDecoration(color: bar, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: p.textPrimary,
+                          decoration: strike ? TextDecoration.lineThrough : null)),
+                  const SizedBox(height: 2),
+                  Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: meta),
+                ]),
+              ),
+              if (trailing != null) Icon(trailing, size: 16, color: p.textMuted),
+            ]),
+          ),
+        ),
+      );
+    }
+
+    // Section heading with its own small add button, aligned with the rows.
+    Widget label(String text, {required String addTip, required VoidCallback onAdd}) => Padding(
+          padding: const EdgeInsets.fromLTRB(8, 12, 2, 4),
+          child: Row(children: [
+            Expanded(
+              child: Text(text.toUpperCase(),
+                  style: TextStyle(fontSize: 11, letterSpacing: 0.8, fontWeight: FontWeight.w600, color: p.textMuted)),
+            ),
+            Tooltip(
+              message: addTip,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: onAdd,
+                child: SizedBox(width: 26, height: 26, child: Icon(Icons.add_rounded, size: 17, color: p.textSecondary)),
+              ),
+            ),
+          ]),
+        );
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 16),
+      children: [
+        // The month view already is a month: no mini calendar beside it.
+        if (_view != 2)
+        TableCalendar<ClassSession>(
+          firstDay: DateTime.utc(2020, 1, 1),
+          lastDay: DateTime.utc(2035, 12, 31),
+          focusedDay: _selectedDate,
+          startingDayOfWeek: StartingDayOfWeek.monday,
+          rowHeight: 34,
+          daysOfWeekHeight: 20,
+          availableGestures: AvailableGestures.none,
+          selectedDayPredicate: (d) => isSameDate(d, _selectedDate),
+          onDaySelected: (sel, _) => _select(sel),
+          onPageChanged: (foc) => _select(foc),
+          eventLoader: timetable.getClassesForDate,
+          headerStyle: HeaderStyle(
+            formatButtonVisible: false,
+            titleCentered: false,
+            headerPadding: const EdgeInsets.fromLTRB(8, 4, 0, 4),
+            leftChevronPadding: const EdgeInsets.all(6),
+            rightChevronPadding: const EdgeInsets.all(6),
+            leftChevronIcon: Icon(Icons.chevron_left_rounded, size: 18, color: p.textSecondary),
+            rightChevronIcon: Icon(Icons.chevron_right_rounded, size: 18, color: p.textSecondary),
+            titleTextStyle: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: p.textPrimary),
+          ),
+          daysOfWeekStyle: DaysOfWeekStyle(
+            dowTextFormatter: (d, locale) => DateFormat('E', locale).format(d).substring(0, 1),
+            weekdayStyle: TextStyle(fontSize: 11, color: p.textMuted, fontWeight: FontWeight.w600),
+            weekendStyle: TextStyle(fontSize: 11, color: p.textMuted, fontWeight: FontWeight.w600),
+          ),
+          calendarStyle: CalendarStyle(
+            outsideDaysVisible: false,
+            cellMargin: const EdgeInsets.all(3),
+            defaultTextStyle: TextStyle(fontSize: 12.5, color: p.textPrimary),
+            weekendTextStyle: TextStyle(fontSize: 12.5, color: p.textSecondary),
+            todayDecoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: p.accent)),
+            todayTextStyle: TextStyle(fontSize: 12.5, color: p.accent, fontWeight: FontWeight.w700),
+            selectedDecoration: BoxDecoration(color: p.ink, shape: BoxShape.circle),
+            selectedTextStyle: TextStyle(fontSize: 12.5, color: p.onInk, fontWeight: FontWeight.w700),
+          ),
+          calendarBuilders: CalendarBuilders<ClassSession>(
+            markerBuilder: (context, day, classes) => classes.isEmpty
+                ? null
+                : Positioned(
+                    bottom: 2,
+                    child: Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(color: p.textMuted, shape: BoxShape.circle),
+                    ),
+                  ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 14, 8, 0),
+          child: Text(isToday ? 'Today' : DateFormat('EEEE d MMMM').format(_selectedDate),
+              style: desktopSerif.copyWith(fontSize: 19, color: p.textPrimary)),
+        ),
+        label('Classes', addTip: 'Add a class on this day', onAdd: () => editClass(context, forDate: _selectedDate)),
+        if (classes.isEmpty)
+          Padding(padding: const EdgeInsets.fromLTRB(8, 0, 8, 4), child: Text('No classes', style: meta)),
+        for (final cl in classes)
+          Builder(builder: (context) {
+            final cancelled = timetable.isCancelled(cl, _selectedDate);
+            return row(
+              bar: moduleColors(cl.subject, p.isDark).$2,
+              title: cl.subject,
+              sub: cancelled ? 'Cancelled' : '${cl.startTime} – ${cl.endTime}${cl.room.isEmpty ? '' : '  ·  ${cl.room}'}',
+              strike: cancelled,
+              faded: cancelled || (isToday && nowMin >= cl.endMinutes),
+              trailing: cl.meetingLink != null ? Icons.videocam_outlined : null,
+              onTap: () => showClassDetailsSheet(context, cl, date: _selectedDate),
+            );
+          }),
+        label('Due', addTip: 'Add a deadline on this day', onAdd: () => showTaskSheet(context, initialDate: _selectedDate)),
+        if (tasks.isEmpty) Padding(padding: const EdgeInsets.fromLTRB(8, 0, 8, 4), child: Text('Nothing due', style: meta)),
+        for (final t in tasks)
+          row(
+            bar: taskDisplayColor(t),
+            title: t.title,
+            sub: '${t.type}${t.subject == 'General' ? '' : '  ·  ${t.subject}'}',
+            strike: t.isCompleted,
+            faded: t.isCompleted,
+            onTap: () => showTaskSheet(context, task: t),
+          ),
+      ],
     );
   }
 
@@ -252,7 +669,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
           final cancelled = timetable.isCancelled(s, date);
           final inProgress = !cancelled && isToday && nowMin >= b.start && nowMin < b.end;
           final done = isToday && nowMin >= b.end;
-          final radius = compact ? 10.0 : 18.0;
+          final radius = isDesktopPlatform ? 6.0 : (compact ? 10.0 : 18.0);
           final strike = cancelled ? TextDecoration.lineThrough : null;
           final textColor = p.isDark ? Colors.white : const Color(0xFF15171A);
 
@@ -398,6 +815,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
   /// Month calendar; dots show how many classes a day has. Tap a day to open it.
   Widget _monthView(Palette p, TimetableProvider timetable) {
+    if (isDesktopPlatform) return _monthViewDesktop(p, timetable);
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
       child: SoftCard(
@@ -474,12 +892,13 @@ class _ScheduleTabState extends State<ScheduleTab> {
                     child: GestureDetector(
                       onTap: () => _select(d),
                       child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
+                        duration: Duration(milliseconds: isDesktopPlatform ? 140 : 200),
                         margin: const EdgeInsets.symmetric(horizontal: 2),
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         decoration: BoxDecoration(
-                          color: isSameDate(d, _selectedDate) ? p.ink : Colors.transparent,
-                          borderRadius: BorderRadius.circular(40),
+                          color: isSameDate(d, _selectedDate) ? (isDesktopPlatform ? p.surface : p.ink) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(isDesktopPlatform ? 10 : 40),
+                          boxShadow: isDesktopPlatform && isSameDate(d, _selectedDate) ? p.softShadow : null,
                         ),
                         child: Column(
                           children: [
@@ -487,14 +906,14 @@ class _ScheduleTabState extends State<ScheduleTab> {
                                 style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
-                                    color: isSameDate(d, _selectedDate) ? p.onInk.withValues(alpha: 0.7) : p.textMuted)),
+                                    color: isSameDate(d, _selectedDate) ? (isDesktopPlatform ? p.textPrimary : p.onInk).withValues(alpha: 0.7) : p.textMuted)),
                             const SizedBox(height: 4),
                             Text('${d.day}',
                                 style: TextStyle(
                                     fontSize: 17,
                                     fontWeight: FontWeight.w600,
                                     color: isSameDate(d, _selectedDate)
-                                        ? p.onInk
+                                        ? (isDesktopPlatform ? p.textPrimary : p.onInk)
                                         : (isSameDate(d, DateTime.now()) ? p.accent : p.textPrimary))),
                             const SizedBox(height: 4),
                             Container(
@@ -504,7 +923,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
                                 shape: BoxShape.circle,
                                 color: timetable.getClassesForDate(d).isEmpty
                                     ? Colors.transparent
-                                    : (isSameDate(d, _selectedDate) ? p.onInk : p.accent),
+                                    : (isSameDate(d, _selectedDate) ? (isDesktopPlatform ? p.textPrimary : p.onInk) : p.accent),
                               ),
                             ),
                           ],

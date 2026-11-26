@@ -34,7 +34,7 @@ String shareText(AcademicTask t) {
 Future<void> shareTask(BuildContext context, AcademicTask task) async {
   final p = Palette.of(context);
   final groups = context.read<GroupService>();
-  final choice = await showModalBottomSheet<String>(
+  final choice = await showAppSheet<String>(
     context: context,
     backgroundColor: Colors.transparent,
     builder: (ctx) => SheetScaffold(

@@ -31,6 +31,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
   final _pageController = PageController();
   int _column = 0;
   _Filter _filter = _Filter.all;
+  String _query = ''; // desktop search box
   String? _hoverColumn;
 
   @override
@@ -40,6 +41,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
   }
 
   bool _matches(AcademicTask t) {
+    if (_query.isNotEmpty && !'${t.title} ${t.subject} ${t.type}'.toLowerCase().contains(_query)) return false;
     switch (_filter) {
       case _Filter.all:
         return true;
@@ -112,7 +114,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
   }
 
   void _showCardMenu(AcademicTask t) {
-    showModalBottomSheet(
+    showAppSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -208,6 +210,9 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                 ),
               ],
             ),
+            if (isDesktopPlatform)
+              _desktopToolbar(p)
+            else
             SizedBox(
               height: 44,
               child: ListView(
@@ -254,6 +259,70 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
     );
   }
 
+  static const _filterLabels = {
+    _Filter.all: 'All',
+    _Filter.exams: 'Exams & tests',
+    _Filter.assignments: 'Coursework',
+    _Filter.highPriority: 'High priority',
+  };
+
+  /// PC: compact filter tabs plus a search box, in one toolbar row.
+  Widget _desktopToolbar(Palette p) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+      child: Row(
+        children: [
+          Flexible(
+            child: PillSegmented<_Filter>(
+              values: _Filter.values,
+              selected: _filter,
+              labelOf: (f) => _filterLabels[f]!,
+              onChanged: (f) => setState(() => _filter = f),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 260,
+            child: TextField(
+              onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+              style: const TextStyle(fontSize: 13.5),
+              decoration: const InputDecoration(
+                isDense: true,
+                hintText: 'Search tasks',
+                prefixIcon: Icon(Icons.search_rounded, size: 18),
+                prefixIconConstraints: BoxConstraints(minWidth: 36, minHeight: 34),
+                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Trello-style ghost "add" row at the foot of a desktop column.
+  Widget _addRow(Palette p, String status) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: HoverTap(
+        onTap: () => showTaskSheet(context, initialStatus: status),
+        builder: (hover) => AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: hover ? p.textPrimary.withValues(alpha: 0.05) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(children: [
+            Icon(Icons.add_rounded, size: 16, color: p.textSecondary),
+            const SizedBox(width: 6),
+            Text('Add task', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: p.textSecondary)),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Widget _buildWide(Palette p, Map<String, List<AcademicTask>> columns) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
@@ -266,17 +335,29 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: _dropTarget(
                   s,
-                  Container(
-                    decoration: BoxDecoration(
-                      color: _hoverColumn == s ? p.accentSoft : p.surfaceAlt.withValues(alpha: p.isDark ? 0.5 : 0.7),
-                      borderRadius: BorderRadius.circular(28),
-                    ),
-                    padding: const EdgeInsets.all(10),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    decoration: isDesktopPlatform
+                        ? BoxDecoration(
+                            color: _hoverColumn == s ? p.accentSoft : (p.isDark ? p.surface.withValues(alpha: 0.5) : p.sidebar),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _hoverColumn == s ? p.accent.withValues(alpha: 0.5) : p.border),
+                          )
+                        : BoxDecoration(
+                            color: _hoverColumn == s ? p.accentSoft : p.surfaceAlt.withValues(alpha: p.isDark ? 0.5 : 0.7),
+                            borderRadius: BorderRadius.circular(28),
+                          ),
+                    padding: EdgeInsets.all(isDesktopPlatform ? 8 : 10),
                     child: Column(
                       children: [
                         _columnHeader(p, s, columns[s]!),
-                        const SizedBox(height: 8),
-                        Expanded(child: _cardList(columns[s]!, draggable: true)),
+                        SizedBox(height: isDesktopPlatform ? 4 : 8),
+                        if (isDesktopPlatform) ...[
+                          // Cards hug their content; "Add task" follows the last one.
+                          Flexible(child: _cardList(columns[s]!, draggable: true, shrinkWrap: true)),
+                          if (s != TaskStatus.done) _addRow(p, s),
+                        ] else
+                          Expanded(child: _cardList(columns[s]!, draggable: true)),
                       ],
                     ),
                   ),
@@ -383,7 +464,7 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(TaskStatus.label(status),
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: p.textPrimary)),
+                style: TextStyle(fontSize: isDesktopPlatform ? 14 : 17, fontWeight: FontWeight.w600, color: p.textPrimary)),
           ),
           Text('${items.length}', style: TextStyle(color: p.textMuted, fontWeight: FontWeight.w700)),
           if (status == TaskStatus.done && items.isNotEmpty)
@@ -416,7 +497,8 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
     );
   }
 
-  Widget _cardList(List<AcademicTask> items, {required bool draggable, String? emptyStatus}) {
+  Widget _cardList(List<AcademicTask> items, {required bool draggable, String? emptyStatus, bool shrinkWrap = false}) {
+    if (items.isEmpty && shrinkWrap) return const SizedBox(height: 4);
     if (items.isEmpty) {
       return Center(
         child: Padding(
@@ -433,7 +515,8 @@ class _TodoBoardTabState extends State<TodoBoardTab> {
             defaultTargetPlatform == TargetPlatform.macOS ||
             defaultTargetPlatform == TargetPlatform.linux);
     return ListView.builder(
-      padding: const EdgeInsets.only(top: 6, bottom: 24),
+      shrinkWrap: shrinkWrap,
+      padding: EdgeInsets.only(top: 6, bottom: shrinkWrap ? 2 : 24),
       itemCount: items.length,
       itemBuilder: (context, i) {
         final t = items[i];
@@ -501,6 +584,9 @@ class _TaskCard extends StatelessWidget {
         ? '${DateFormat('d MMM').format(t.startDate!)} – ${DateFormat('d MMM').format(t.dueDate)}'
         : DateFormat('EEE d MMM, HH:mm').format(t.dueDate);
 
+    if (isDesktopPlatform) {
+      return _desktop(context, p, color, done, room, urgency, urgencyColor, dateText);
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: SoftCard(
@@ -587,9 +673,10 @@ class _TaskCard extends StatelessWidget {
                       message: t.effectiveStatus == TaskStatus.todo ? 'Start' : 'Mark done',
                       child: Material(
                         color: p.ink,
-                        shape: const CircleBorder(),
+                        shape: isDesktopPlatform ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)) : const CircleBorder(),
                         child: InkWell(
-                          customBorder: const CircleBorder(),
+                          customBorder:
+                              isDesktopPlatform ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)) : const CircleBorder(),
                           onTap: onAdvance,
                           child: Padding(
                             padding: const EdgeInsets.all(7),
@@ -610,6 +697,131 @@ class _TaskCard extends StatelessWidget {
                 JoinMeetingButton(url: t.meetingLink!, dense: true),
               ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// PC card: dense and flat (Linear/Trello-like). Actions appear on hover,
+  /// right-click opens the menu.
+  Widget _desktop(BuildContext context, Palette p, Color color, bool done, String room, String? urgency, Color? urgencyColor,
+      String dateText) {
+    final t = task;
+    final meta = TextStyle(fontSize: 12, color: p.textSecondary);
+    Widget action(IconData icon, String tip, VoidCallback onPressed, {bool ink = false}) => Tooltip(
+          message: tip,
+          child: Material(
+            color: ink ? p.ink : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: onPressed,
+              child: SizedBox(width: 26, height: 26, child: Icon(icon, size: 16, color: ink ? p.onInk : p.textSecondary)),
+            ),
+          ),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onSecondaryTap: onMenu,
+        child: HoverTap(
+          onTap: onTap,
+          builder: (hover) => AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+            decoration: BoxDecoration(
+              color: p.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: hover ? p.textMuted.withValues(alpha: 0.6) : p.border),
+              boxShadow: hover && !p.isDark
+                  ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))]
+                  : null,
+            ),
+            child: Opacity(
+              opacity: done ? 0.6 : 1,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                    const SizedBox(width: 6),
+                    Text(t.type, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: color)),
+                    if (t.subject != 'General')
+                      Flexible(
+                        child: Text('  ·  ${t.subject}', maxLines: 1, overflow: TextOverflow.ellipsis, style: meta.copyWith(fontSize: 11.5)),
+                      ),
+                    const Spacer(),
+                    if ((t.priority ?? 1) >= 2) const Icon(Icons.flag_rounded, size: 14, color: Colors.redAccent),
+                    if (urgency != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: Text(urgency, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: urgencyColor)),
+                      ),
+                    if (done) const Icon(Icons.check_circle_rounded, size: 15, color: AppColors.done),
+                  ]),
+                  const SizedBox(height: 6),
+                  Text(
+                    t.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.3,
+                      fontWeight: FontWeight.w600,
+                      color: p.textPrimary,
+                      decoration: done ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 26,
+                    child: Row(children: [
+                      Icon(t.isSpanning ? Icons.date_range_rounded : Icons.schedule_rounded, size: 13, color: p.textMuted),
+                      const SizedBox(width: 4),
+                      Flexible(child: Text(dateText, maxLines: 1, overflow: TextOverflow.ellipsis, style: meta)),
+                      if (room.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Icon(Icons.location_on_outlined, size: 13, color: p.textMuted),
+                        Flexible(child: Text(room, maxLines: 1, overflow: TextOverflow.ellipsis, style: meta)),
+                      ],
+                      Builder(builder: (context) {
+                        final spent = context.select<FocusProvider, int>((f) => f.minutesForTask(t.syncId));
+                        if (spent == 0) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text('${spent >= 60 ? '${spent ~/ 60}h ${spent % 60}m' : '${spent}m'} focused', style: meta),
+                        );
+                      }),
+                      const Spacer(),
+                      IgnorePointer(
+                        ignoring: !hover,
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 120),
+                          opacity: hover ? 1 : 0,
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            if (onAdvance != null)
+                              action(
+                                t.effectiveStatus == TaskStatus.todo ? Icons.play_arrow_rounded : Icons.check_rounded,
+                                t.effectiveStatus == TaskStatus.todo ? 'Start' : 'Mark done',
+                                onAdvance!,
+                                ink: true,
+                              ),
+                            const SizedBox(width: 2),
+                            action(Icons.more_horiz_rounded, 'More (right-click)', onMenu),
+                          ]),
+                        ),
+                      ),
+                    ]),
+                  ),
+                  if (t.meetingLink != null && !done) ...[
+                    const SizedBox(height: 8),
+                    JoinMeetingButton(url: t.meetingLink!, dense: true),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),

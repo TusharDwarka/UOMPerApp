@@ -104,7 +104,7 @@ class _CustomReminderDialogState extends State<_CustomReminderDialog> {
             Expanded(
               child: DropdownButtonFormField<int>(
                 initialValue: _unit,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(isDesktopPlatform ? 12 : 18),
                 items: [for (final e in _units.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
                 onChanged: (v) => setState(() => _unit = v ?? _unit),
               ),

@@ -42,6 +42,7 @@
       </a>
       <div class="nav-links">
         <a href="#features">Features</a>
+        <a href="#windows">Windows</a>
         <a href="#day">Your day</a>
         <a href="#screens">Screens</a>
         <a href="#faq">FAQ</a>
@@ -56,7 +57,7 @@
       <div class="hero-copy">
         <a class="pill glass" href="#download" data-cursor="target">
           <span class="pill-dot"></span>
-          <span class="shiny" data-version-label>v3.3 is out</span>
+          <span class="shiny" data-version-label>v3.4 is out</span>
           <span class="pill-sep">·</span>
           <span class="muted">Marks, CPA &amp; what you need</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
@@ -82,7 +83,7 @@
             Windows
           </a>
         </div>
-        <p class="hero-note reveal">Free · Works offline · <span data-version>v3.3</span></p>
+        <p class="hero-note reveal">Free · Works offline · <span data-version>v3.4</span></p>
       </div>
 
       <div class="hero-phones" aria-label="App screenshots">
@@ -274,12 +275,91 @@
       </div>
     </section>
 
+    <!-- WINDOWS: scroll-driven laptop (pinned on large screens, stacked cards otherwise) -->
+    <section id="windows" class="lapstory" aria-labelledby="windows-title">
+      <div class="lap-sticky">
+        <div class="lap-intro">
+          <p class="eyebrow">New on Windows</p>
+          <h2 id="windows-title">Your semester, <em>on the big screen.</em></h2>
+          <p class="muted">A desktop layout built for a keyboard and mouse. Same account, same data as your phone.</p>
+          <p class="lap-hint mono" aria-hidden="true">Scroll to open <span>↓</span></p>
+        </div>
+
+        <div class="lap-cam">
+          <div class="lap">
+            <div class="lap-lid">
+              <div class="lap-cambar" aria-hidden="true"></div>
+              <div class="lap-screen">
+                <img data-shot="home-dark" src="assets/desktop/home-dark.webp" width="2880" height="1800" alt="UOM Per on Windows: Home with the next class, focus week and activity heatmap" loading="lazy">
+                <img data-shot="palette-dark" src="assets/desktop/palette-dark.webp" width="2880" height="1800" alt="Command palette opened with Ctrl K" loading="lazy">
+                <img data-shot="schedule-dark" src="assets/desktop/schedule-dark.webp" width="2880" height="1800" alt="Week timetable with the live now line and a month calendar" loading="lazy">
+                <img data-shot="grades-dark" src="assets/desktop/grades-dark.webp" width="2880" height="1800" alt="Grades page with CPA, year averages and a CPA calculator" loading="lazy">
+                <img data-shot="home" class="lap-light" src="assets/desktop/home.webp" width="2880" height="1800" alt="Home in the light theme" loading="lazy">
+                <div class="lap-spot" aria-hidden="true"></div>
+                <div class="lap-glare" aria-hidden="true"></div>
+              </div>
+            </div>
+            <div class="lap-base" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+
+        <ol class="lap-steps">
+          <li data-step="home">
+            <span class="lap-num mono">01</span>
+            <h3>Everything on one screen</h3>
+            <p>Sidebar on the left, today's classes underneath it. Home shows what's on now, your next deadline, the bus and your focus week.</p>
+          </li>
+          <li data-step="palette">
+            <span class="lap-num mono">02</span>
+            <h3>Press <kbd>Ctrl</kbd> <kbd>K</kbd>, go anywhere</h3>
+            <p>Jump to any page or run a command without touching the mouse. <kbd>Ctrl</kbd> <kbd>1</kbd>–<kbd>9</kbd> switches pages straight away.</p>
+          </li>
+          <li data-step="week">
+            <span class="lap-num mono">03</span>
+            <h3>The whole week at once</h3>
+            <p>Monday to Friday side by side, a live “now” line, and a month calendar with today's classes and deadlines next to it.</p>
+          </li>
+          <li data-step="cpa">
+            <span class="lap-num mono">04</span>
+            <h3>Your CPA, worked out</h3>
+            <p>Every module's mark weighted by credits, your average per year, and what you're on track for with the results so far.</p>
+          </li>
+          <li data-step="activity">
+            <span class="lap-num mono">05</span>
+            <h3>A year of work, in squares</h3>
+            <p>Tasks finished and notes written, day by day, with your current and longest streak.</p>
+          </li>
+          <li data-step="theme">
+            <span class="lap-num mono">06</span>
+            <h3>Light or dark</h3>
+            <p>Switch from the bottom of the sidebar. Your phone and PC stay in sync either way.</p>
+          </li>
+        </ol>
+
+        <div class="lap-rail" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+    </section>
+
+    <!-- KEYBOARD -->
+    <section class="section keys-section" aria-labelledby="keys-title">
+      <div class="section-head reveal">
+        <p class="eyebrow">Keyboard first</p>
+        <h2 id="keys-title">Faster with shortcuts.</h2>
+      </div>
+      <div class="keys">
+        <div class="key-card glass spot reveal"><div class="key-combo"><kbd>Ctrl</kbd><kbd>K</kbd></div><p>Jump to a page or run a command</p></div>
+        <div class="key-card glass spot reveal"><div class="key-combo"><kbd>Ctrl</kbd><kbd>N</kbd></div><p>Add a task or deadline</p></div>
+        <div class="key-card glass spot reveal"><div class="key-combo"><kbd>Ctrl</kbd><kbd>1–9</kbd></div><p>Switch between pages</p></div>
+        <div class="key-card glass spot reveal"><div class="key-combo"><kbd>Ctrl</kbd><kbd>\</kbd></div><p>Hide or show the sidebar</p></div>
+      </div>
+    </section>
+
     <!-- DOWNLOAD -->
     <section id="download" class="section">
       <div class="section-head reveal">
         <p class="eyebrow">Download</p>
         <h2>Free. On the devices you already use.</h2>
-        <p class="muted">Latest release: <span data-version>v3.3</span><span data-date></span></p>
+        <p class="muted">Latest release: <span data-version>v3.4</span><span data-date></span></p>
       </div>
 
       <div class="dl-grid">

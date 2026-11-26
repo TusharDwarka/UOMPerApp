@@ -62,7 +62,7 @@ class _ModuleResourcesScreenState extends State<ModuleResourcesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('"General" is the default section and can\'t be removed')));
       return;
     }
-    showModalBottomSheet(
+    showAppSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => SheetScaffold(

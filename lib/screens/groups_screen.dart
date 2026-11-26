@@ -129,16 +129,32 @@ class _GroupsScreenState extends State<GroupsScreen> {
           builder: (context, _) {
             if (!service.canUseGroups) return _guestState(p);
             _ensureStreams(service);
-            return Column(
+            final header = ScreenHeader(
+              title: 'Groups',
+              eyebrow: 'Your cohort, shared timetable & chat',
+              actions: [
+                CircleIconButton(icon: Icons.key_rounded, tooltip: 'Join with code', onPressed: _joinWithCode),
+                CircleIconButton(icon: Icons.add_rounded, filled: true, tooltip: 'Create group', onPressed: _create),
+              ],
+            );
+            return LayoutBuilder(builder: (context, c) {
+              // PC: your groups and Discover side by side, no tab switching.
+              if (wideDesktop(c)) {
+                return Column(children: [
+                  header,
+                  Expanded(
+                    child: SplitPanes(
+                      padding: const EdgeInsets.fromLTRB(0, 4, 20, 16),
+                      main: _myGroups(p, service),
+                      side: Padding(padding: const EdgeInsets.only(top: 4), child: _discover(p, service)),
+                      sideTitle: 'Discover',
+                    ),
+                  ),
+                ]);
+              }
+              return Column(
               children: [
-                ScreenHeader(
-                  title: 'Groups',
-                  eyebrow: 'Your cohort, shared timetable & chat',
-                  actions: [
-                    CircleIconButton(icon: Icons.key_rounded, tooltip: 'Join with code', onPressed: _joinWithCode),
-                    CircleIconButton(icon: Icons.add_rounded, filled: true, tooltip: 'Create group', onPressed: _create),
-                  ],
-                ),
+                header,
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
                   child: PillSegmented<int>(
@@ -151,6 +167,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 Expanded(child: _tab == 0 ? _myGroups(p, service) : _discover(p, service)),
               ],
             );
+            });
           },
         ),
       ),
@@ -187,7 +204,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
             icon: Icons.diversity_3_rounded,
             title: 'No groups yet',
             subtitle: 'Find your programme under Discover, join with a code from a classmate, or start one for your cohort.',
-            action: InkPillButton(label: 'Discover groups', icon: Icons.explore_rounded, onPressed: () => setState(() => _tab = 1)),
+            action: isDesktopPlatform ? null : InkPillButton(label: 'Discover groups', icon: Icons.explore_rounded, onPressed: () => setState(() => _tab = 1)),
           );
         }
         return ListView.separated(

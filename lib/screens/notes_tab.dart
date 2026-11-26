@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -23,13 +24,18 @@ const noteColors = <Color>[
 ];
 
 void showNoteEditor(BuildContext context, {Note? note}) {
-  showModalBottomSheet(
+  showAppSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    desktopWidth: 760,
     builder: (_) => NoteEditorSheet(note: note, colors: noteColors),
   );
 }
+
+/// Bumped by the header's "New note": the wide desktop layout creates the
+/// note inline; everywhere else it opens the editor sheet.
+final _newNoteRequests = ValueNotifier<int>(0);
 
 /// Notes as their own section (no longer tucked under Files).
 class NotesScreen extends StatelessWidget {
@@ -54,7 +60,12 @@ class NotesScreen extends StatelessWidget {
                   tooltip: 'Print note paper',
                   onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrintCenterScreen(initialTab: 1))),
                 ),
-                CircleIconButton(icon: Icons.add_rounded, filled: true, tooltip: 'New note', onPressed: () => showNoteEditor(context)),
+                CircleIconButton(
+                  icon: Icons.add_rounded,
+                  filled: true,
+                  tooltip: 'New note',
+                  onPressed: () => isDesktopPlatform ? _newNoteRequests.value++ : showNoteEditor(context),
+                ),
               ],
             ),
             const Expanded(child: NotesView()),
@@ -78,10 +89,47 @@ class _NotesViewState extends State<NotesView> {
   String _query = '';
   String? _subject;
 
+  // Desktop two-pane state.
+  bool _wide = false;
+  int? _selectedId; // note open in the editor pane
+  bool _creating = false; // editor pane holds a new, unsaved note
+  int _editorKey = 0; // bumps only when the user switches notes
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => context.read<NoteProvider>().loadNotes());
+    _newNoteRequests.addListener(_onNewNote);
+  }
+
+  @override
+  void dispose() {
+    _newNoteRequests.removeListener(_onNewNote);
+    super.dispose();
+  }
+
+  void _onNewNote() {
+    if (!mounted) return;
+    if (_wide) {
+      _newInline();
+    } else {
+      showNoteEditor(context);
+    }
+  }
+
+  void _newInline() => setState(() {
+        _creating = true;
+        _selectedId = null;
+        _editorKey++;
+      });
+
+  void _open(Note n) {
+    if (!_creating && n.id == _selectedId) return;
+    setState(() {
+      _creating = false;
+      _selectedId = n.id;
+      _editorKey++;
+    });
   }
 
   @override
@@ -96,7 +144,10 @@ class _NotesViewState extends State<NotesView> {
       return n.title.toLowerCase().contains(q) || n.content.toLowerCase().contains(q) || n.subject.toLowerCase().contains(q);
     }).toList();
 
-    return Column(
+    return LayoutBuilder(builder: (context, c) {
+      _wide = wideDesktop(c);
+      if (_wide) return _desktop(p, notes, filtered, subjects);
+      return Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
@@ -158,8 +209,178 @@ class _NotesViewState extends State<NotesView> {
         ),
       ],
     );
+    });
+  }
+
+  /// PC: list of notes on the left, the open note on the right (saved as
+  /// you type), like a desktop notes app.
+  Widget _desktop(Palette p, List<Note> notes, List<Note> filtered, List<String> subjects) {
+    Note? selected;
+    if (!_creating) {
+      for (final n in notes) {
+        if (n.id == _selectedId) selected = n;
+      }
+      // Nothing chosen yet (or it was deleted): open the first note.
+      if (selected == null && filtered.isNotEmpty) {
+        selected = filtered.first;
+        _selectedId = selected.id;
+      }
+    }
+
+    final list = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+          child: TextField(
+            style: const TextStyle(fontSize: 13.5),
+            decoration: const InputDecoration(
+              isDense: true,
+              hintText: 'Search notes',
+              prefixIcon: Icon(Icons.search_rounded, size: 18),
+              prefixIconConstraints: BoxConstraints(minWidth: 36, minHeight: 34),
+              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            ),
+            onChanged: (v) => setState(() => _query = v),
+          ),
+        ),
+        Row(children: [
+          if (subjects.isNotEmpty)
+            Flexible(
+              child: ChoicePill<String>(
+                title: 'Module',
+                value: _subject ?? '',
+                options: ['', ...subjects],
+                labelOf: (s) => s.isEmpty ? 'All modules' : s,
+                onChanged: (s) => setState(() => _subject = s.isEmpty ? null : s),
+              ),
+            ),
+          const Spacer(),
+          Text('${filtered.length} ${filtered.length == 1 ? 'note' : 'notes'}', style: TextStyle(fontSize: 12, color: p.textMuted)),
+        ]),
+        const SizedBox(height: 8),
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Text(notes.isEmpty ? 'No notes yet' : 'No matches', style: TextStyle(color: p.textSecondary)),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, i) {
+                    final n = filtered[i];
+                    return _NoteRow(note: n, selected: !_creating && n.id == _selectedId, onTap: () => _open(n));
+                  },
+                ),
+        ),
+      ],
+    );
+
+    final Widget editor = _creating || selected != null
+        ? NoteEditorSheet(
+            key: ValueKey(_editorKey),
+            note: _creating ? null : selected,
+            colors: noteColors,
+            embedded: true,
+            onSaved: (n) => setState(() {
+              _creating = false;
+              _selectedId = n.id;
+            }),
+            onDeleted: () => setState(() {
+              _creating = false;
+              _selectedId = null;
+              _editorKey++;
+            }),
+          )
+        : EmptyState(
+            icon: Icons.sticky_note_2_outlined,
+            title: 'Empty canvas',
+            subtitle: 'Jot down ideas, formulas, lecture takeaways.',
+            action: InkPillButton(label: 'New note', icon: Icons.add, onPressed: _newInline),
+          );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(width: 300, child: list),
+          const SizedBox(width: 16),
+          Expanded(child: editor),
+        ],
+      ),
+    );
   }
 }
+
+/// One line in the desktop note list: colour dot, title, first line, date.
+class _NoteRow extends StatelessWidget {
+  final Note note;
+  final bool selected;
+  final VoidCallback onTap;
+  const _NoteRow({required this.note, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final color = noteColors[note.colorIndex % noteColors.length];
+    final firstLine = note.content
+        .split('\n')
+        .map((l) => l.replaceFirst(RegExp(r'^(# |• |- |☐ |☑ )'), '').replaceAll('**', '').trim())
+        .firstWhere((l) => l.isNotEmpty, orElse: () => '');
+    final now = DateTime.now();
+    final date = _sameDay(note.timestamp, now)
+        ? DateFormat('HH:mm').format(note.timestamp)
+        : DateFormat(note.timestamp.year == now.year ? 'd MMM' : 'd MMM yyyy').format(note.timestamp);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: HoverTap(
+        onTap: onTap,
+        builder: (hover) => AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+          decoration: BoxDecoration(
+            color: selected ? p.surface : (hover ? p.textPrimary.withValues(alpha: 0.04) : Colors.transparent),
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: selected ? p.softShadow : null,
+          ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              margin: const EdgeInsets.only(top: 4),
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: Border.all(color: Colors.black12)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(
+                    child: Text(note.title.isEmpty ? 'Untitled' : note.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: p.textPrimary)),
+                  ),
+                  if (note.isPinned == true) Icon(Icons.push_pin_rounded, size: 12, color: p.textMuted),
+                ]),
+                const SizedBox(height: 2),
+                Text(
+                  [date, if (note.subject.isNotEmpty && note.subject != 'General') note.subject, if (firstLine.isNotEmpty) firstLine]
+                      .join('  ·  '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: p.textSecondary),
+                ),
+              ]),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
 class _NoteCard extends StatelessWidget {
   final Note note;
@@ -172,9 +393,9 @@ class _NoteCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
         color: color,
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(isDesktopPlatform ? 14 : 26),
         child: InkWell(
-          borderRadius: BorderRadius.circular(26),
+          borderRadius: BorderRadius.circular(isDesktopPlatform ? 14 : 26),
           onTap: () => showNoteEditor(context, note: note),
           onLongPress: () => context.read<NoteProvider>().togglePin(note),
           child: Padding(
@@ -245,7 +466,19 @@ class NoteEditorSheet extends StatefulWidget {
   final Note? note;
   final List<Color> colors;
 
-  const NoteEditorSheet({super.key, this.note, required this.colors});
+  /// Desktop pane instead of a sheet: no close/Save, saves as you type.
+  final bool embedded;
+  final ValueChanged<Note>? onSaved;
+  final VoidCallback? onDeleted;
+
+  const NoteEditorSheet({
+    super.key,
+    this.note,
+    required this.colors,
+    this.embedded = false,
+    this.onSaved,
+    this.onDeleted,
+  });
 
   @override
   State<NoteEditorSheet> createState() => _NoteEditorSheetState();
@@ -261,9 +494,19 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
   bool _preview = false;
   final _contentFocus = FocusNode();
 
+  // Embedded autosave.
+  late final NoteProvider _provider;
+  Note? _note;
+  Timer? _debounce;
+  bool _dirty = false;
+  bool _saved = false;
+  Future<void> _writes = Future.value(); // keeps saves in order (no duplicate inserts)
+
   @override
   void initState() {
     super.initState();
+    _provider = context.read<NoteProvider>();
+    _note = widget.note;
     _isNew = widget.note == null;
     _titleController = TextEditingController(text: widget.note?.title ?? '');
     _contentController = TextEditingController(text: widget.note?.content ?? '');
@@ -271,10 +514,62 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
     _pinned = widget.note?.isPinned ?? false;
     _selectedColorIndex = widget.note != null ? widget.note!.colorIndex % widget.colors.length : Random().nextInt(widget.colors.length);
     _contentFocus.addListener(() => setState(() {}));
+    if (widget.embedded) {
+      for (final c in [_titleController, _contentController, _subjectController]) {
+        c.addListener(_changed);
+      }
+      if (_isNew) WidgetsBinding.instance.addPostFrameCallback((_) => _titleFocus.requestFocus());
+    }
+  }
+
+  final _titleFocus = FocusNode();
+  String _lastSnapshot = '';
+
+  String get _snapshot =>
+      '${_titleController.text}\u0000${_contentController.text}\u0000${_subjectController.text}\u0000$_selectedColorIndex\u0000$_pinned';
+
+  /// Something changed in the embedded editor: save shortly after typing stops.
+  void _changed() {
+    if (!widget.embedded || _snapshot == _lastSnapshot) return;
+    _dirty = true;
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 600), _persist);
+    if (_saved && mounted) setState(() => _saved = false);
+  }
+
+  /// Writes the note without closing anything (embedded mode).
+  void _persist() {
+    _debounce?.cancel();
+    if (!_dirty) return;
+    final title = _titleController.text.trim();
+    final content = _contentController.text.trim();
+    if (title.isEmpty && content.isEmpty) return; // never store blank notes
+    _dirty = false;
+    _lastSnapshot = _snapshot;
+    final firstSave = _note == null;
+    final note = _note ??= Note(timestamp: DateTime.now());
+    note
+      ..title = title.isEmpty ? content.split('\n').first : title
+      ..content = content
+      ..subject = _subjectController.text.trim().isEmpty ? 'General' : _subjectController.text.trim()
+      ..colorIndex = _selectedColorIndex
+      ..isPinned = _pinned
+      ..timestamp = DateTime.now();
+    _writes = _writes.then((_) => _provider.updateNote(note)).then((_) {
+      if (!mounted) return;
+      setState(() {
+        _isNew = false;
+        _saved = true;
+      });
+      if (firstSave) widget.onSaved?.call(note);
+    });
   }
 
   @override
   void dispose() {
+    if (widget.embedded) _persist(); // switching notes keeps what was typed
+    _debounce?.cancel();
+    _titleFocus.dispose();
     _titleController.dispose();
     _contentController.dispose();
     _subjectController.dispose();
@@ -369,7 +664,7 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
     }
     final words = text.trim().isEmpty ? 0 : text.trim().split(RegExp(r'\s+')).length;
 
-    final target = await showModalBottomSheet<int>(
+    final target = await showAppSheet<int>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -475,8 +770,15 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
   Future<void> _delete() async {
     final provider = context.read<NoteProvider>();
     final messenger = ScaffoldMessenger.of(context);
-    Navigator.pop(context);
-    final removed = await provider.deleteNote(widget.note!.id);
+    if (widget.embedded) {
+      _debounce?.cancel();
+      _dirty = false;
+      await _writes;
+      widget.onDeleted?.call();
+    } else {
+      Navigator.pop(context);
+    }
+    final removed = await provider.deleteNote((_note ?? widget.note)!.id);
     if (removed == null) return;
     messenger.showSnackBar(SnackBar(
       content: const Text('Note deleted'),
@@ -495,16 +797,26 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
     final typing = mq.viewInsets.bottom > 0;
     final writing = typing && _contentFocus.hasFocus;
 
-    return Container(
-      height: typing ? mq.size.height - mq.padding.top : mq.size.height * 0.88,
-      decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
+    final editor = Container(
+      height: isDesktopPlatform ? double.infinity : (typing ? mq.size.height - mq.padding.top : mq.size.height * 0.88),
+      decoration: BoxDecoration(color: bg, borderRadius: sheetRadius),
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, top: 10, left: 20, right: 12),
       child: Column(
         children: [
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(4))),
+          if (!isDesktopPlatform)
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(4))),
           Row(
             children: [
-              IconButton(icon: const Icon(Icons.close_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
+              if (widget.embedded)
+                Padding(
+                  padding: const EdgeInsets.only(left: 2),
+                  child: Text(
+                    _saved ? 'Saved' : (_dirty ? 'Editing…' : (_isNew ? 'New note' : 'Edited ${DateFormat('d MMM, HH:mm').format((_note ?? widget.note)!.timestamp)}')),
+                    style: const TextStyle(fontSize: 12, color: Colors.black45, fontWeight: FontWeight.w500),
+                  ),
+                )
+              else
+                IconButton(icon: const Icon(Icons.close_rounded, color: Colors.black87), onPressed: () => Navigator.pop(context)),
               const Spacer(),
               IconButton(
                 tooltip: 'Outline & find',
@@ -514,16 +826,20 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
               IconButton(
                 tooltip: _pinned ? 'Unpin' : 'Pin',
                 icon: Icon(_pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, color: Colors.black87),
-                onPressed: () => setState(() => _pinned = !_pinned),
+                onPressed: () {
+                  setState(() => _pinned = !_pinned);
+                  _changed();
+                },
               ),
               if (!_isNew)
                 IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent), onPressed: _delete),
               const SizedBox(width: 4),
+              if (!widget.embedded)
               Material(
                 color: Colors.black,
-                shape: const StadiumBorder(),
+                shape: isDesktopPlatform ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)) : const StadiumBorder(),
                 child: InkWell(
-                  customBorder: const StadiumBorder(),
+                  customBorder: isDesktopPlatform ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)) : const StadiumBorder(),
                   onTap: _save,
                   child: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 18, vertical: 10),
@@ -541,7 +857,10 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
                 children: List.generate(widget.colors.length, (index) {
                   final isSelected = _selectedColorIndex == index;
                   return GestureDetector(
-                    onTap: () => setState(() => _selectedColorIndex = index),
+                    onTap: () {
+                      setState(() => _selectedColorIndex = index);
+                      _changed();
+                    },
                     child: Container(
                       margin: const EdgeInsets.only(right: 8),
                       width: 32,
@@ -560,6 +879,7 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
           ],
           TextField(
             controller: _titleController,
+            focusNode: _titleFocus,
             style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600, color: Colors.black),
             decoration: const InputDecoration.collapsed(hintText: 'Title', hintStyle: TextStyle(color: Colors.black38), filled: false),
           ),
@@ -639,6 +959,20 @@ class _NoteEditorSheetState extends State<NoteEditorSheet> {
           ),
         ],
       ),
+    );
+    if (!isDesktopPlatform) return editor;
+    // The desktop theme outlines focused fields; on the note paper the
+    // title and body read as plain writing surfaces instead.
+    final theme = Theme.of(context);
+    return Theme(
+      data: theme.copyWith(
+        inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+        ),
+      ),
+      child: editor,
     );
   }
 }

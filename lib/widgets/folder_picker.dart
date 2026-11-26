@@ -83,7 +83,7 @@ class _FolderSheetState extends State<_FolderSheet> {
         prefixIcon: Icon(icon),
         filled: true,
         fillColor: p.surfaceAlt,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(isDesktopPlatform ? 12 : 18), borderSide: BorderSide.none),
       );
 
   @override
@@ -125,7 +125,7 @@ class _FolderSheetState extends State<_FolderSheet> {
               DropdownButtonFormField<String>(
                 initialValue: folder,
                 isExpanded: true,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(isDesktopPlatform ? 12 : 18),
                 menuMaxHeight: 420,
                 decoration: _deco(p, 'Folder', Icons.folder_rounded),
                 hint: const Text('Choose a folder'),
@@ -147,7 +147,7 @@ class _FolderSheetState extends State<_FolderSheet> {
                 key: ValueKey(folder), // reset when the folder changes
                 initialValue: section,
                 isExpanded: true,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(isDesktopPlatform ? 12 : 18),
                 decoration: _deco(p, 'Section', Icons.folder_open_rounded),
                 items: [
                   for (final s in sections) DropdownMenuItem(value: s, child: Text(s, maxLines: 1, overflow: TextOverflow.ellipsis)),

@@ -155,18 +155,18 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
         expand: false,
-        initialChildSize: 0.92,
-        maxChildSize: 0.95,
+        initialChildSize: isDesktopPlatform ? 1 : 0.92,
+        maxChildSize: isDesktopPlatform ? 1 : 0.95,
         minChildSize: 0.5,
         builder: (context, scroll) => Container(
-          decoration: BoxDecoration(color: p.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
+          decoration: BoxDecoration(color: p.surface, borderRadius: sheetRadius),
           child: Column(
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(22, 10, 12, 0),
                 child: Column(
                   children: [
-                    Container(width: 40, height: 4, decoration: BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
+                    if (!isDesktopPlatform) Container(width: 40, height: 4, decoration: BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
                     const SizedBox(height: 10),
                     Row(
                       children: [
@@ -279,7 +279,8 @@ class _AddEditClassSheetState extends State<AddEditClassSheet> {
                         child: Material(
                           elevation: 6,
                           color: p.surface,
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(isDesktopPlatform ? 12 : 20),
+                          clipBehavior: Clip.antiAlias,
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxHeight: 200, maxWidth: 360),
                             child: ListView(

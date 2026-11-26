@@ -8,7 +8,7 @@ Future<TimeOfDay?> showScrollTimePicker({
   required BuildContext context,
   required TimeOfDay initialTime,
 }) {
-  return showModalBottomSheet<TimeOfDay>(
+  return showAppSheet<TimeOfDay>(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
@@ -101,7 +101,7 @@ class _ScrollTimePickerSheetState extends State<_ScrollTimePickerSheet> {
     return Container(
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        borderRadius: sheetRadius,
       ),
       child: SafeArea(
         top: false,
@@ -110,7 +110,7 @@ class _ScrollTimePickerSheetState extends State<_ScrollTimePickerSheet> {
           children: [
             // Handle
             const SizedBox(height: 12),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
+            if (!isDesktopPlatform) Container(width: 40, height: 4, decoration: BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
             const SizedBox(height: 16),
 
             // Title

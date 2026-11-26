@@ -91,12 +91,7 @@ class _AcademicTabState extends State<AcademicTab> {
       return s != 0 ? s : a.id.compareTo(b.id);
     }
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 32),
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SoftCard(
+    final calendar = SoftCard(
             padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
             child: TableCalendar<AcademicTask>(
               firstDay: DateTime.utc(2020, 1, 1),
@@ -138,11 +133,10 @@ class _AcademicTabState extends State<AcademicTab> {
                 markerBuilder: (context, day, events) => events.isEmpty ? null : _markers(day, events),
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 18),
+          );
 
-        // ── Selected day agenda ──
+    // ── Selected day agenda ──
+    final agenda = <Widget>[
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: SectionLabel(
@@ -162,6 +156,46 @@ class _AcademicTabState extends State<AcademicTab> {
           ),
         for (final c in dayClasses) _classRow(p, c),
         for (final t in dayTasks) _eventRow(p, t, timetable),
+    ];
+
+    return LayoutBuilder(builder: (context, c) {
+      // PC: month on the left, the chosen day and what's coming up on the
+      // right, all visible at once.
+      if (wideDesktop(c)) {
+        return SplitPanes(
+          padding: const EdgeInsets.fromLTRB(16, 0, 20, 16),
+          mainFlex: 3,
+          sideFlex: 2,
+          main: ListView(children: [calendar]),
+          side: ListView(
+            padding: const EdgeInsets.fromLTRB(0, 16, 0, 16),
+            children: [
+              ...agenda,
+              if (upcoming.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: SectionLabel('Coming up · 14 days', padding: EdgeInsets.fromLTRB(4, 0, 0, 10)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [for (final t in upcoming) SizedBox(height: 128, child: _upcomingCard(t))],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      }
+      return ListView(
+      padding: const EdgeInsets.only(bottom: 32),
+      children: [
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: calendar),
+        const SizedBox(height: 18),
+        ...agenda,
 
         // ── Coming up ──
         if (upcoming.isNotEmpty) ...[
@@ -183,6 +217,7 @@ class _AcademicTabState extends State<AcademicTab> {
         ],
       ],
     );
+    });
   }
 
   Widget _dayCircle(DateTime day, {Color? bg, Color? border, required Color fg}) {
@@ -375,7 +410,7 @@ class _AcademicTabState extends State<AcademicTab> {
       child: Container(
         width: 170,
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(28)),
+        decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(isDesktopPlatform ? 14 : 28)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

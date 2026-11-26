@@ -24,6 +24,7 @@ import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/login_screen.dart';
 import 'theme/app_theme.dart';
+import 'widgets/ui.dart' show AppScrollBehavior;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -87,6 +88,7 @@ class UOMPerApp extends StatelessWidget {
       themeMode: themeProvider.themeMode,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
+      scrollBehavior: const AppScrollBehavior(),
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, authSnapshot) {
@@ -113,13 +115,16 @@ class SignedInGate extends StatefulWidget {
 class _SignedInGateState extends State<SignedInGate> {
   bool _ready = false;
   late final SyncService _sync;
-  late final GroupService _groups = context.read<GroupService>();
+  // Read up front: dispose() must not look up providers (the element is
+  // already deactivated by then).
+  late final GroupService _groups;
   StreamSubscription<Set<String>>? _settingsSub;
 
   @override
   void initState() {
     super.initState();
     _sync = context.read<SyncService>();
+    _groups = context.read<GroupService>();
     _bootstrap();
   }
 

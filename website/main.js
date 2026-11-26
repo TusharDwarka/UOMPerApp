@@ -281,6 +281,176 @@
     });
   }
 
+  /* ---------- Windows laptop: opens, zooms into features, zooms out (scroll-driven) ---------- */
+  function initLaptop() {
+    const section = document.getElementById('windows');
+    if (!section) return;
+    const lap = section.querySelector('.lap');
+    const screen = section.querySelector('.lap-screen');
+    const spot = section.querySelector('.lap-spot');
+    const steps = [...section.querySelectorAll('.lap-steps li')];
+    const rail = [...section.querySelectorAll('.lap-rail i')];
+    const img = {};
+    section.querySelectorAll('.lap-screen img').forEach((el) => { img[el.dataset.shot] = el; });
+
+    // Feature areas as fractions of the 1440×900 screenshot: x, y, w, h.
+    const R = {
+      palette: { shot: 'palette-dark', r: [0.295, 0.095, 0.41, 0.51] },
+      week: { shot: 'schedule-dark', r: [0.185, 0.2, 0.49, 0.42] },
+      cpa: { shot: 'grades-dark', r: [0.19, 0.155, 0.42, 0.29] },
+      activity: { shot: 'home-dark', r: [0.66, 0.765, 0.3, 0.235] },
+    };
+
+    // Small screens / reduced motion: no pinning, show zoomed crops on the cards instead.
+    const big = matchMedia('(min-width: 760px) and (min-height: 560px)');
+    if (reduceMotion || !big.matches) {
+      steps.forEach((li) => {
+        const f = R[li.dataset.step];
+        const shot = f ? f.shot : li.dataset.step === 'theme' ? 'home' : 'home-dark';
+        const [x, y, w, h] = f ? f.r : [0, 0, 1, 1];
+        if (!f && li.dataset.step === 'home') return; // the laptop above already shows Home
+        const crop = document.createElement('div');
+        crop.className = 'lap-crop';
+        crop.setAttribute('role', 'img');
+        crop.setAttribute('aria-label', img[shot].alt);
+        crop.style.setProperty('--img', `url("${img[shot].getAttribute('src')}")`);
+        crop.style.setProperty('--ar', `${w * 1440} / ${h * 900}`);
+        crop.style.setProperty('--bs', `${100 / w}%`);
+        crop.style.setProperty('--bp', `${w < 1 ? (x / (1 - w)) * 100 : 0}% ${h < 1 ? (y / (1 - h)) * 100 : 0}%`);
+        li.prepend(crop);
+      });
+      Object.values(img).forEach((el) => { el.loading = 'eager'; });
+      return;
+    }
+
+    section.classList.add('is-pinned');
+    Object.values(img).forEach((el) => { el.loading = 'eager'; });
+
+    // Camera stops along the scroll (0 → 1).
+    const STOPS = [
+      [0.00, 'intro'], [0.12, 'fit'], [0.18, 'fit'],
+      [0.26, 'palette'], [0.33, 'palette'], [0.385, 'fit'],
+      [0.45, 'week'], [0.53, 'week'], [0.585, 'fit'],
+      [0.65, 'cpa'], [0.72, 'cpa'], [0.765, 'fit'],
+      [0.83, 'activity'], [0.89, 'activity'], [0.94, 'fit'], [1.00, 'fit'],
+    ];
+    // Which screenshot is on screen (swapped while zoomed out).
+    const SHOTS = [[0, 'home-dark'], [0.205, 'palette-dark'], [0.385, 'schedule-dark'], [0.585, 'grades-dark'], [0.765, 'home-dark']];
+    // Caption ranges.
+    const STEPS = [[0.09, 'home'], [0.205, 'palette'], [0.385, 'week'], [0.585, 'cpa'], [0.765, 'activity'], [0.915, 'theme']];
+
+    let L = null; // layout measured on resize
+    function measure() {
+      section.style.setProperty('--s', 1); section.style.setProperty('--tx', '0px'); section.style.setProperty('--ty', '0px');
+      lap.style.setProperty('--lid', '0deg');
+      const vw = innerWidth, vh = innerHeight;
+      const lapW = Math.min(1000, vw * 0.88, (vh - 120) * 1.45);
+      section.style.setProperty('--lapw', `${lapW}px`);
+      const lr = lap.getBoundingClientRect();
+      const sr = screen.getBoundingClientRect();
+      const wide = vw >= 1100;
+      // Area the camera frames: right of the caption on wide screens, above it otherwise.
+      const box = wide
+        ? { x0: Math.min(440, vw * 0.33), x1: vw - 70, y0: 88, y1: vh - 50 }
+        : { x0: 28, x1: vw - 28, y0: 88, y1: vh - 250 };
+      L = {
+        vw, vh, box, lapW, lapH: lr.height,
+        scr: { x: sr.left - lr.left - lr.width / 2, y: sr.top - lr.top - lr.height / 2, w: sr.width, h: sr.height },
+      };
+      L.cam = {};
+      const bw = box.x1 - box.x0, bh = box.y1 - box.y0;
+      const bcx = (box.x0 + box.x1) / 2 - vw / 2, bcy = (box.y0 + box.y1) / 2 - vh / 2;
+      // Whole laptop framed in the box.
+      const fs = Math.min(1, bw / lr.width, bh / lr.height);
+      L.cam.fit = { s: fs, tx: bcx, ty: bcy };
+      // Closed and centred under the intro text.
+      L.cam.intro = { s: 0.78, tx: 0, ty: vh * 0.06 };
+      for (const [k, f] of Object.entries(R)) {
+        const [x, y, w, h] = f.r;
+        const s = Math.max(1, Math.min(3.4, (bw * 0.96) / (w * L.scr.w), (bh * 0.94) / (h * L.scr.h)));
+        const px = L.scr.x + (x + w / 2) * L.scr.w, py = L.scr.y + (y + h / 2) * L.scr.h;
+        L.cam[k] = { s, tx: bcx - px * s, ty: bcy - py * s };
+      }
+    }
+
+    const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+    const ease = (t) => t * t * (3 - 2 * t);
+    const range = (p, a, b) => clamp((p - a) / (b - a));
+    const lerp = (a, b, t) => a + (b - a) * t;
+
+    function render(p) {
+      // Camera between the two surrounding stops.
+      let i = 0;
+      while (i < STOPS.length - 2 && p > STOPS[i + 1][0]) i++;
+      const [pa, ka] = STOPS[i], [pb, kb] = STOPS[i + 1];
+      const t = ease(range(p, pa, pb));
+      const A = L.cam[ka], B = L.cam[kb];
+      section.style.setProperty('--s', lerp(A.s, B.s, t).toFixed(4));
+      section.style.setProperty('--tx', `${lerp(A.tx, B.tx, t).toFixed(1)}px`);
+      section.style.setProperty('--ty', `${lerp(A.ty, B.ty, t).toFixed(1)}px`);
+
+      // Lid opens, screen powers on, intro fades.
+      const open = ease(range(p, 0.015, 0.11));
+      lap.style.setProperty('--lid', `${(1 - open) * 84}deg`);
+      screen.style.setProperty('--power', (0.05 + 0.95 * ease(range(p, 0.05, 0.12))).toFixed(3));
+      section.style.setProperty('--intro', (1 - range(p, 0.01, 0.07)).toFixed(3));
+
+      // Highlight the feature being zoomed into.
+      const region = R[ka] || R[kb];
+      const amt = (R[ka] ? 1 - t : 0) + (R[kb] ? t : 0);
+      if (region && amt > 0.01) {
+        const [x, y, w, h] = region.r;
+        Object.assign(spot.style, { left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${h * 100}%` });
+        spot.style.opacity = clamp(amt * 1.4 - 0.2).toFixed(3);
+      } else spot.style.opacity = '0';
+
+      // Screenshot crossfades.
+      const op = {};
+      SHOTS.forEach(([at, key], j) => {
+        const next = SHOTS[j + 1] ? SHOTS[j + 1][0] : 2;
+        const v = Math.min(range(p, at - 0.012, at + 0.012), 1 - range(p, next - 0.012, next + 0.012));
+        op[key] = Math.max(op[key] || 0, j === 0 ? 1 - range(p, next - 0.012, next + 0.012) : v);
+      });
+      for (const [k, el] of Object.entries(img)) if (k !== 'home') el.style.opacity = (op[k] || 0).toFixed(3);
+      // Light theme wipes across at the end.
+      const wipe = ease(range(p, 0.935, 0.985));
+      img.home.style.opacity = wipe > 0 ? '1' : '0';
+      img.home.style.clipPath = `inset(0 ${(100 - wipe * 100).toFixed(2)}% 0 0)`;
+
+      // Caption + rail.
+      let s = -1;
+      STEPS.forEach(([at], j) => { if (p >= at) s = j; });
+      steps.forEach((li, j) => {
+        li.classList.toggle('is-active', j === s);
+        li.setAttribute('aria-hidden', String(j !== s));
+      });
+      rail.forEach((r, j) => r.classList.toggle('on', j === s));
+    }
+
+    let target = 0, cur = 0, raf = 0;
+    function progress() {
+      const r = section.getBoundingClientRect();
+      return clamp(-r.top / (r.height - innerHeight));
+    }
+    function loop() {
+      cur += (target - cur) * 0.14;
+      if (Math.abs(target - cur) < 0.0005) cur = target;
+      render(cur);
+      raf = cur === target ? 0 : requestAnimationFrame(loop);
+    }
+    function onScroll() {
+      target = progress();
+      if (!raf) raf = requestAnimationFrame(loop);
+    }
+
+    measure();
+    cur = target = progress();
+    render(cur);
+    addEventListener('scroll', onScroll, { passive: true });
+    addEventListener('resize', () => { measure(); cur = target = progress(); render(cur); });
+    big.addEventListener('change', () => location.reload());
+  }
+
   /* ---------- Nav background on scroll ---------- */
   function initNav() {
     const nav = document.querySelector('.nav');
@@ -342,6 +512,7 @@
   initReveal();
   initTabs();
   initTilt();
+  initLaptop();
   initNav();
   initRelease();
 })();

@@ -30,6 +30,7 @@ import '../widgets/ui.dart';
 import '../widgets/weekly_chart.dart';
 import 'academic_tab.dart' show taskColor;
 import 'end_semester_celebration_screen.dart';
+import 'notes_tab.dart' show showNoteEditor;
 import 'home_screen.dart';
 
 class DashboardTab extends StatefulWidget {
@@ -82,7 +83,7 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   void _customize() {
-    showModalBottomSheet(
+    showAppSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -309,7 +310,7 @@ class _DashboardTabState extends State<DashboardTab> {
     final nextDeadline = pending.isEmpty ? null : pending.first;
     final remainingToday = todayClasses.where((s) => s.endMinutes > nowMin).length;
 
-    return Scaffold(
+    final phone = Scaffold(
       backgroundColor: p.canvas,
       body: SafeArea(
         child: Stack(
@@ -405,51 +406,7 @@ class _DashboardTabState extends State<DashboardTab> {
                       'focus' => [_buildProductivity(p, focus, timetable), const SizedBox(height: 24)],
                       'activity' => [const ActivityCard(), const SizedBox(height: 20)],
                       'deadlines' => [..._upcomingDeadlines(p, pending), const SizedBox(height: 14)],
-                      'today' => [
-                      SectionLabel(
-                        "Today's schedule",
-                        padding: const EdgeInsets.fromLTRB(4, 0, 0, 8),
-                        trailing: todayClasses.isEmpty
-                            ? null
-                            : (_isNoClassToday
-                                ? TextButton(onPressed: () => _undoDayOff(timetable), child: const Text('Undo day off'))
-                                : TextButton.icon(
-                                    onPressed: () => _declareDayOff(timetable, todayClasses),
-                                    icon: const Icon(Icons.beach_access_rounded, size: 18),
-                                    label: const Text('Day off'),
-                                  )),
-                      ),
-                      if (_isNoClassToday)
-                        SoftCard(
-                          child: Row(
-                            children: [
-                              const Text('🌴', style: TextStyle(fontSize: 34)),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Text('Day off declared — alarms are muted for today.',
-                                    style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w600)),
-                              ),
-                            ],
-                          ),
-                        )
-                      else if (todayClasses.isEmpty)
-                        SoftCard(
-                          child: Row(
-                            children: [
-                              Icon(now.weekday >= 6 ? Icons.weekend_rounded : Icons.free_breakfast_rounded, color: p.textSecondary),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Text(now.weekday >= 6 ? "It's the weekend!" : 'No classes today.',
-                                    style: TextStyle(color: p.textSecondary)),
-                              ),
-                              TextButton(onPressed: widget.onSeeAllClicked, child: const Text('Week')),
-                            ],
-                          ),
-                        )
-                      else
-                        for (final s in todayClasses) _timelineRow(p, s, nowMin),
-                          const SizedBox(height: 14),
-                        ],
+                      'today' => [..._todaySection(p, timetable, todayClasses, now, nowMin), const SizedBox(height: 14)],
                       _ => const <Widget>[],
                     },
                   const SizedBox(height: 8),
@@ -476,6 +433,327 @@ class _DashboardTabState extends State<DashboardTab> {
           ],
         ),
       ),
+    );
+
+    // Android/iOS: always the phone layout above, untouched.
+    if (!isDesktopPlatform) return phone;
+    return LayoutBuilder(
+      builder: (context, c) => c.maxWidth < 860
+          ? phone
+          : _buildDesktop(
+              p,
+              timetable: timetable,
+              resources: resources,
+              holiday: holiday,
+              focus: focus,
+              now: now,
+              todayClasses: todayClasses,
+              next: next,
+              pending: pending,
+              nextDeadline: nextDeadline,
+              remainingToday: remainingToday,
+            ),
+    );
+  }
+
+  List<Widget> _todaySection(Palette p, TimetableProvider timetable, List<ClassSession> todayClasses, DateTime now, int nowMin) => [
+        SectionLabel(
+          "Today's schedule",
+          padding: const EdgeInsets.fromLTRB(4, 0, 0, 8),
+          trailing: todayClasses.isEmpty
+              ? null
+              : (_isNoClassToday
+                  ? TextButton(onPressed: () => _undoDayOff(timetable), child: const Text('Undo day off'))
+                  : TextButton.icon(
+                      onPressed: () => _declareDayOff(timetable, todayClasses),
+                      icon: const Icon(Icons.beach_access_rounded, size: 18),
+                      label: const Text('Day off'),
+                    )),
+        ),
+        if (_isNoClassToday)
+          SoftCard(
+            child: Row(
+              children: [
+                const Text('🌴', style: TextStyle(fontSize: 34)),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text('Day off declared — alarms are muted for today.',
+                      style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+          )
+        else if (todayClasses.isEmpty)
+          SoftCard(
+            child: Row(
+              children: [
+                Icon(now.weekday >= 6 ? Icons.weekend_rounded : Icons.free_breakfast_rounded, color: p.textSecondary),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(now.weekday >= 6 ? "It's the weekend!" : 'No classes today.',
+                      style: TextStyle(color: p.textSecondary)),
+                ),
+                TextButton(onPressed: widget.onSeeAllClicked, child: const Text('Week')),
+              ],
+            ),
+          )
+        else
+          for (final s in todayClasses) _timelineRow(p, s, nowMin),
+      ];
+
+  // ───────────────────────── Desktop (Windows/macOS/Linux) ─────────────────────────
+
+  static String _timeGreeting(DateTime now) {
+    final h = now.hour;
+    if (h < 5) return 'Up late';
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  /// Wide-window home: a calm serif greeting, a quick-add box and shortcuts
+  /// (after the reference in images/image.png), then the same cards as the
+  /// phone arranged in two columns. Respects "Customise home".
+  Widget _buildDesktop(
+    Palette p, {
+    required TimetableProvider timetable,
+    required ResourceProvider resources,
+    required bool holiday,
+    required FocusProvider focus,
+    required DateTime now,
+    required List<ClassSession> todayClasses,
+    required UpcomingClass? next,
+    required List<AcademicTask> pending,
+    required AcademicTask? nextDeadline,
+    required int remainingToday,
+  }) {
+    final nowMin = now.hour * 60 + now.minute;
+    const leftIds = {'next', 'cards', 'today', 'deadlines'};
+    const gap = SizedBox(height: 18);
+
+    List<Widget> section(String id) => switch (id) {
+          'next' => [holiday ? _holidayCard(p) : _buildHero(p, timetable, next, now, todayClasses), gap],
+          'cards' => [
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: _deadlineCard(p, nextDeadline)),
+                    const SizedBox(width: 14),
+                    Expanded(child: _busCard(p)),
+                  ],
+                ),
+              ),
+              gap,
+            ],
+          'focus' => [_buildProductivity(p, focus, timetable), const SizedBox(height: 26)],
+          'activity' => [const ActivityCard(), gap],
+          'deadlines' => [..._upcomingDeadlines(p, pending), gap],
+          'today' => [..._todaySection(p, timetable, todayClasses, now, nowMin), gap],
+          _ => const <Widget>[],
+        };
+
+    final shown = _order.where(_enabled.contains);
+    final left = [for (final id in shown.where(leftIds.contains)) ...section(id)];
+    final right = [for (final id in shown.where((id) => !leftIds.contains(id))) ...section(id)];
+
+    final week = timetable.getWeekNumber(now);
+    final dueSoon = pending.where((t) => !dateOnly(t.dueDate).isAfter(dateOnly(now).add(const Duration(days: 7)))).length;
+    final facts = [
+      if (week >= 1) timetable.getWeekLabel(now),
+      if (holiday)
+        'Holiday mode'
+      else if (_isNoClassToday)
+        'Day off'
+      else if (todayClasses.isEmpty)
+        'No classes today'
+      else if (remainingToday == 0)
+        'Classes done for today'
+      else
+        '$remainingToday ${remainingToday == 1 ? 'class' : 'classes'} left today',
+      if (dueSoon > 0) '$dueSoon due this week',
+    ];
+
+    String? nextLine;
+    if (!holiday && next != null) {
+      final s = next.session;
+      final when = next.inProgress
+          ? 'now, until ${s.endTime}'
+          : isSameDate(next.date, now)
+              ? 'in ${formatCountdown(next.minutesUntilStart(now))}'
+              : '${next.date.difference(dateOnly(now)).inDays == 1 ? 'tomorrow' : DateFormat('EEEE').format(next.date)} at ${s.startTime}';
+      nextLine = '${s.subject} · $when';
+    }
+
+    final banners = <Widget>[
+      if (!holiday && timetable.semesterEnd != null && now.isAfter(timetable.semesterEnd!)) ...[
+        _banner(
+          p,
+          icon: Icons.celebration_rounded,
+          color: Colors.redAccent,
+          title: 'Semester ended',
+          subtitle: 'Finalise and start fresh for next semester.',
+          onTap: () => showDialog(context: context, builder: (_) => const EndSemesterDialog()),
+        ),
+        const SizedBox(height: 12),
+      ],
+      if (resources.unsortedCount > 0) ...[
+        _banner(
+          p,
+          icon: Icons.move_to_inbox_rounded,
+          color: Colors.deepOrange,
+          title: 'Unsorted inbox',
+          subtitle: '${resources.unsortedCount} file(s) waiting to be filed',
+          onTap: () => HomeNavigation.of(context, AppPage.files),
+        ),
+        const SizedBox(height: 12),
+      ],
+    ];
+
+    return Scaffold(
+      backgroundColor: p.canvas,
+      body: Stack(
+        children: [
+          ListView(
+            padding: const EdgeInsets.fromLTRB(40, 56, 40, 40),
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1040),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // ── Greeting ──
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(9)),
+                            child: Icon(Icons.school_rounded, size: 19, color: p.onInk),
+                          ),
+                          const SizedBox(width: 16),
+                          Flexible(
+                            child: Text(
+                              '${holiday ? 'Enjoy your break' : _timeGreeting(now)}, $_firstName.',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: desktopSerif.copyWith(
+                                  fontSize: 40, height: 1.15, fontWeight: FontWeight.w400, letterSpacing: -0.8, color: p.textPrimary),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(facts.join('  ·  '),
+                          textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: p.textSecondary)),
+                      const SizedBox(height: 30),
+
+                      // ── Quick add ──
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 700),
+                          child: _DesktopQuickAdd(subjects: todayClasses.map((s) => s.subject).toSet().toList()),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          _quickLink(p, Icons.view_day_outlined, 'Schedule', () => HomeNavigation.of(context, AppPage.schedule)),
+                          _quickLink(p, Icons.calendar_today_outlined, 'Hub', () => HomeNavigation.of(context, AppPage.hub)),
+                          _quickLink(p, Icons.view_kanban_outlined, 'Board', () => HomeNavigation.of(context, AppPage.board)),
+                          _quickLink(p, Icons.timer_outlined, 'Focus', () => HomeNavigation.of(context, AppPage.focus)),
+                          _quickLink(p, Icons.edit_note_rounded, 'New note', () => showNoteEditor(context)),
+                        ],
+                      ),
+                      if (nextLine != null) ...[
+                        const SizedBox(height: 6),
+                        Center(
+                          child: TextButton(
+                            onPressed: () => showClassDetailsSheet(context, next!.session, date: next.date),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.explore_outlined, size: 16, color: p.textMuted),
+                                const SizedBox(width: 8),
+                                Text('Next up', style: TextStyle(fontSize: 13.5, color: p.textMuted, fontWeight: FontWeight.w500)),
+                                const SizedBox(width: 10),
+                                Flexible(
+                                  child: Text(nextLine,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(fontSize: 13.5, color: p.textPrimary, fontWeight: FontWeight.w500)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 44),
+
+                      ...banners,
+
+                      // ── Cards ──
+                      if (left.isEmpty || right.isEmpty)
+                        Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...left, ...right])
+                      else
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 3, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: left)),
+                            const SizedBox(width: 28),
+                            Expanded(flex: 2, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: right)),
+                          ],
+                        ),
+                      const SizedBox(height: 4),
+                      Center(
+                        child: TextButton.icon(
+                          onPressed: _customize,
+                          style: TextButton.styleFrom(foregroundColor: p.textSecondary),
+                          icon: const Icon(Icons.tune_rounded, size: 17),
+                          label: const Text('Customise home'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+              colors: const [AppColors.accent, Colors.lightBlueAccent, Colors.pink, Colors.orange, Colors.purple],
+              createParticlePath: _drawStar,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _quickLink(Palette p, IconData icon, String label, VoidCallback onTap) {
+    return TextButton.icon(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        foregroundColor: p.textSecondary,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+      ),
+      icon: Icon(icon, size: 17),
+      label: Text(label),
     );
   }
 
@@ -994,5 +1272,134 @@ class _DashboardTabState extends State<DashboardTab> {
       i == 0 ? path.moveTo(pt.dx, pt.dy) : path.lineTo(pt.dx, pt.dy);
     }
     return path..close();
+  }
+}
+
+/// Desktop home's capture box: type a title, pick a type, press Enter and
+/// the usual task sheet opens pre-filled to set the date.
+class _DesktopQuickAdd extends StatefulWidget {
+  final List<String> subjects;
+  const _DesktopQuickAdd({required this.subjects});
+
+  @override
+  State<_DesktopQuickAdd> createState() => _DesktopQuickAddState();
+}
+
+class _DesktopQuickAddState extends State<_DesktopQuickAdd> {
+  final _text = TextEditingController();
+  final _focus = FocusNode();
+  String _type = 'Assignment';
+
+  @override
+  void initState() {
+    super.initState();
+    _text.addListener(() => setState(() {}));
+    _focus.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _text.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final title = _text.text.trim();
+    await showTaskSheet(context, initialTitle: title.isEmpty ? null : title, initialType: _type);
+    if (mounted) _text.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final hasText = _text.text.trim().isNotEmpty;
+    final focused = _focus.hasFocus;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOut,
+      padding: const EdgeInsets.fromLTRB(18, 8, 10, 10),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: focused ? p.textMuted.withValues(alpha: 0.7) : p.border, spreadRadius: 1),
+          BoxShadow(color: Colors.black.withValues(alpha: p.isDark ? 0.25 : 0.05), blurRadius: 20, offset: const Offset(0, 6)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _text,
+            focusNode: _focus,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submit(),
+            style: TextStyle(fontSize: 15.5, color: p.textPrimary),
+            decoration: InputDecoration(
+              filled: false,
+              isDense: true,
+              hintText: 'Add a deadline or task…',
+              hintStyle: TextStyle(color: p.textMuted, fontSize: 15.5),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              PopupMenuButton<String>(
+                tooltip: 'Type',
+                initialValue: _type,
+                onSelected: (v) => setState(() => _type = v),
+                itemBuilder: (_) => [for (final t in taskTypes) PopupMenuItem(value: t, height: 38, child: Text(t))],
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+                  decoration: BoxDecoration(border: Border.all(color: p.border), borderRadius: BorderRadius.circular(8)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(color: AppColors.forType(_type), shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(_type, style: TextStyle(fontSize: 13, color: p.textSecondary, fontWeight: FontWeight.w500)),
+                      Icon(Icons.expand_more_rounded, size: 18, color: p.textMuted),
+                    ],
+                  ),
+                ),
+              ),
+              const Spacer(),
+              AnimatedOpacity(
+                duration: const Duration(milliseconds: 120),
+                opacity: hasText ? 1 : 0,
+                child: Text('Enter ↵', style: TextStyle(fontSize: 12, color: p.textMuted)),
+              ),
+              const SizedBox(width: 10),
+              Tooltip(
+                message: 'Add',
+                child: Material(
+                  color: hasText ? p.ink : p.surfaceAlt,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: _submit,
+                    child: SizedBox(
+                      width: 34,
+                      height: 34,
+                      child: Icon(Icons.arrow_upward_rounded, size: 18, color: hasText ? p.onInk : p.textMuted),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

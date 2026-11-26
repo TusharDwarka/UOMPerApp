@@ -9,12 +9,12 @@ timer and study groups — on Android and Windows, synced through one account.
 
 Grab the latest build from the [**website**](https://uomper.pages.dev/#download) or from [**Releases**](https://github.com/TusharDwarka/UOMPerApp/releases/latest):
 
-- **Android** — `UOMPer-v3.3-android.apk`. Open it on your phone and allow "install unknown apps" when asked.
-- **Windows** — `UOMPer-v3.3-windows.zip`. Unzip anywhere and run `uom_per_app.exe` (keep the other files next to it).
+- **Android** — `UOMPer-v3.4-android.apk`. Open it on your phone and allow "install unknown apps" when asked.
+- **Windows** — `UOMPer-v3.4-windows.zip`. Unzip anywhere and run `uom_per_app.exe` (keep the other files next to it).
   Windows SmartScreen may warn because the app isn't signed: *More info → Run anyway*.
 
-> v3.3 adds how each module is marked (tests, assignments, exam), the mark you need for a pass/C/B/A,
-> CPA across every year, and the Activity heatmap on Home.
+> v3.4 redesigns the Windows app (sidebar, Ctrl K command palette, side-by-side panes, light and dark)
+> and gives Grades a simpler, calmer layout on Android and Windows.
 
 ## 📸 Screenshots
 
@@ -29,6 +29,10 @@ Grab the latest build from the [**website**](https://uomper.pages.dev/#download)
 | Focus |
 |:---:|
 | ![Focus](docs/screenshots/focus.png) |
+
+| Windows |
+|:---:|
+| ![The Windows app: sidebar, Home and the command palette](docs/screenshots/windows.png) |
 
 <sub>Rendered from the real screens with demo data: `flutter test tools/readme_screenshots_test.dart --update-goldens`.</sub>
 

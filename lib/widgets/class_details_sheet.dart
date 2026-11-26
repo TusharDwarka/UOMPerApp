@@ -54,7 +54,7 @@ Future<void> editClass(BuildContext context, {ClassSession? session, DateTime? f
     initialData = {'day': DateFormat('EEEE').format(d), 'specificDate': d.toIso8601String(), 'isTemporary': false};
   }
 
-  final result = await showModalBottomSheet<Map<String, dynamic>>(
+  final result = await showAppSheet<Map<String, dynamic>>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
@@ -89,7 +89,7 @@ Future<void> editClass(BuildContext context, {ClassSession? session, DateTime? f
 
 Future<void> showClassDetailsSheet(BuildContext context, ClassSession session, {DateTime? date}) {
   final day = dateOnly(date ?? DateTime.now());
-  return showModalBottomSheet(
+  return showAppSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

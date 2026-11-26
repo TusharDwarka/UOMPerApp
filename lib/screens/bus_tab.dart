@@ -202,7 +202,7 @@ class _BusTabState extends State<BusTab> {
   }
 
   Future<void> _addRoute() async {
-    final result = await showModalBottomSheet<Map<String, String>>(
+    final result = await showAppSheet<Map<String, String>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -224,7 +224,7 @@ class _BusTabState extends State<BusTab> {
   Future<void> _editRoute() async {
     final r = _route;
     if (r == null) return;
-    final result = await showModalBottomSheet<Map<String, String>>(
+    final result = await showAppSheet<Map<String, String>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -269,7 +269,7 @@ class _BusTabState extends State<BusTab> {
   }
 
   void _showRouteMenu() {
-    showModalBottomSheet(
+    showAppSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -390,7 +390,7 @@ class _BusTabState extends State<BusTab> {
   Future<void> _editTrip({Map<String, dynamic>? trip, int? index}) async {
     final r = _route;
     if (r == null) return;
-    final result = await showModalBottomSheet<Map<String, dynamic>>(
+    final result = await showAppSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -489,93 +489,119 @@ class _BusTabState extends State<BusTab> {
         : (nextIdx == -1 ? trips.length : nextIdx);
     final hiddenCount = _isTodayTab && !_showEarlier ? (nextIdx == -1 ? trips.length : nextIdx) : 0;
 
+    final header = ScreenHeader(
+      title: 'Bus',
+      eyebrow: '${DateFormat('EEEE').format(now)} · ${DateFormat('HH:mm').format(now)}',
+      actions: [
+        CircleIconButton(icon: Icons.download_rounded, tooltip: 'Import a shared route', onPressed: _importRoute),
+        if (_route != null) CircleIconButton(icon: Icons.more_horiz_rounded, tooltip: 'Route options', onPressed: _showRouteMenu),
+        CircleIconButton(icon: Icons.add_rounded, filled: true, tooltip: 'New route', onPressed: _addRoute),
+      ],
+    );
+    final top = _routes.isEmpty ? const <Widget>[] : <Widget>[
+      _buildRouteSelector(p),
+      const SizedBox(height: 14),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: PillSegmented<int>(
+          values: const [0, 1, 2],
+          selected: _day,
+          labelOf: (i) => i == busDayIndexFor(now) ? '${busDayLabels[i]} •' : busDayLabels[i],
+          onChanged: (i) => setState(() {
+            _day = i;
+            _showEarlier = false;
+          }),
+        ),
+      ),
+      const SizedBox(height: 16),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: _buildHero(p, trips, nextIdx, now),
+      ),
+    ];
+    final timetable = _routes.isEmpty ? const <Widget>[] : <Widget>[
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: SectionLabel(
+          '${busDayLabels[_day]} timetable',
+          padding: const EdgeInsets.fromLTRB(4, 0, 0, 10),
+          trailing: TextButton.icon(
+            onPressed: () => _editTrip(),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Add time'),
+          ),
+        ),
+      ),
+      if (trips.isEmpty)
+        Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(child: Text('No buses on this schedule yet', style: TextStyle(color: p.textSecondary))),
+        ),
+      if (hiddenCount > 0)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+          child: TextButton.icon(
+            onPressed: () => setState(() => _showEarlier = true),
+            icon: const Icon(Icons.expand_less_rounded),
+            label: Text('Show $hiddenCount earlier bus${hiddenCount == 1 ? '' : 'es'}'),
+          ),
+        ),
+      for (var i = firstVisible; i < trips.length; i++)
+        Padding(
+          key: i == nextIdx ? _nextKey : null,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+          child: _TripRow(
+            trip: trips[i],
+            isNext: _isTodayTab && i == nextIdx,
+            isPast: _isTodayTab && (nextIdx == -1 || i < nextIdx),
+            nowMinutes: nowMin,
+            showCountdown: _isTodayTab,
+            onTap: () => _editTrip(trip: trips[i], index: i),
+          ),
+        ),
+      if (_isTodayTab && nextIdx == -1 && trips.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Center(child: Text('No more buses today', style: TextStyle(color: p.textSecondary))),
+        ),
+    ];
+
     return Scaffold(
       backgroundColor: p.canvas,
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.only(bottom: 32),
-                children: [
-                  ScreenHeader(
-                    title: 'Bus',
-                    eyebrow: '${DateFormat('EEEE').format(now)} · ${DateFormat('HH:mm').format(now)}',
-                    actions: [
-                      CircleIconButton(icon: Icons.download_rounded, tooltip: 'Import a shared route', onPressed: _importRoute),
-                      if (_route != null) CircleIconButton(icon: Icons.more_horiz_rounded, tooltip: 'Route options', onPressed: _showRouteMenu),
-                      CircleIconButton(icon: Icons.add_rounded, filled: true, tooltip: 'New route', onPressed: _addRoute),
+            : LayoutBuilder(builder: (context, c) {
+                // PC: routes and the next bus on the left, the full day's
+                // timetable on the right; no long scroll to reach either.
+                if (_routes.isNotEmpty && wideDesktop(c)) {
+                  return Column(children: [
+                    header,
+                    Expanded(
+                      child: SplitPanes(
+                        padding: const EdgeInsets.fromLTRB(0, 4, 20, 16),
+                        mainFlex: 1,
+                        sideFlex: 1,
+                        main: ListView(padding: const EdgeInsets.only(top: 4, bottom: 16), children: top),
+                        side: ListView(padding: const EdgeInsets.only(top: 14, bottom: 16), children: timetable),
+                      ),
+                    ),
+                  ]);
+                }
+                return ListView(
+                  padding: const EdgeInsets.only(bottom: 32),
+                  children: [
+                    header,
+                    if (_routes.isEmpty)
+                      _buildEmpty(p)
+                    else ...[
+                      ...top,
+                      const SizedBox(height: 22),
+                      ...timetable,
                     ],
-                  ),
-                  if (_routes.isEmpty)
-                    _buildEmpty(p)
-                  else ...[
-                    _buildRouteSelector(p),
-                    const SizedBox(height: 14),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: PillSegmented<int>(
-                        values: const [0, 1, 2],
-                        selected: _day,
-                        labelOf: (i) => i == busDayIndexFor(now) ? '${busDayLabels[i]} •' : busDayLabels[i],
-                        onChanged: (i) => setState(() {
-                          _day = i;
-                          _showEarlier = false;
-                        }),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: _buildHero(p, trips, nextIdx, now),
-                    ),
-                    const SizedBox(height: 22),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: SectionLabel(
-                        '${busDayLabels[_day]} timetable',
-                        padding: const EdgeInsets.fromLTRB(4, 0, 0, 10),
-                        trailing: TextButton.icon(
-                          onPressed: () => _editTrip(),
-                          icon: const Icon(Icons.add_rounded, size: 18),
-                          label: const Text('Add time'),
-                        ),
-                      ),
-                    ),
-                    if (trips.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Center(child: Text('No buses on this schedule yet', style: TextStyle(color: p.textSecondary))),
-                      ),
-                    if (hiddenCount > 0)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                        child: TextButton.icon(
-                          onPressed: () => setState(() => _showEarlier = true),
-                          icon: const Icon(Icons.expand_less_rounded),
-                          label: Text('Show $hiddenCount earlier bus${hiddenCount == 1 ? '' : 'es'}'),
-                        ),
-                      ),
-                    for (var i = firstVisible; i < trips.length; i++)
-                      Padding(
-                        key: i == nextIdx ? _nextKey : null,
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-                        child: _TripRow(
-                          trip: trips[i],
-                          isNext: _isTodayTab && i == nextIdx,
-                          isPast: _isTodayTab && (nextIdx == -1 || i < nextIdx),
-                          nowMinutes: nowMin,
-                          showCountdown: _isTodayTab,
-                          onTap: () => _editTrip(trip: trips[i], index: i),
-                        ),
-                      ),
-                    if (_isTodayTab && nextIdx == -1 && trips.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Center(child: Text('No more buses today', style: TextStyle(color: p.textSecondary))),
-                      ),
                   ],
-                ],
-              ),
+                );
+              }),
       ),
     );
   }

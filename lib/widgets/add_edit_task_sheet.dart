@@ -25,8 +25,9 @@ Future<void> showTaskSheet(
   String? initialModule,
   DateTime? initialDate,
   String? initialStatus,
+  String? initialTitle,
 }) {
-  return showModalBottomSheet(
+  return showAppSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
@@ -36,6 +37,7 @@ Future<void> showTaskSheet(
       initialModule: initialModule,
       initialDate: initialDate,
       initialStatus: initialStatus,
+      initialTitle: initialTitle,
     ),
   );
 }
@@ -68,6 +70,9 @@ class AddEditTaskSheet extends StatefulWidget {
   final DateTime? initialDate;
   final String? initialStatus;
 
+  /// Pre-fills the title, e.g. from the desktop home's quick-add box.
+  final String? initialTitle;
+
   const AddEditTaskSheet({
     super.key,
     this.taskToEdit,
@@ -75,6 +80,7 @@ class AddEditTaskSheet extends StatefulWidget {
     this.initialModule,
     this.initialDate,
     this.initialStatus,
+    this.initialTitle,
   });
 
   @override
@@ -107,7 +113,7 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
   void initState() {
     super.initState();
     final t = widget.taskToEdit;
-    _title = TextEditingController(text: t?.title ?? '');
+    _title = TextEditingController(text: t?.title ?? widget.initialTitle ?? '');
     _subject = TextEditingController(text: t?.subject == 'General' ? '' : (t?.subject ?? widget.initialModule ?? ''));
     final initialType = t?.type ?? widget.initialCategory ?? 'Assignment';
     _type = taskTypes.contains(initialType) ? initialType : 'Other';
@@ -224,18 +230,18 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.9,
-      maxChildSize: 0.95,
+      initialChildSize: isDesktopPlatform ? 1 : 0.9,
+      maxChildSize: isDesktopPlatform ? 1 : 0.95,
       minChildSize: 0.5,
       builder: (context, scroll) => Container(
-        decoration: BoxDecoration(color: p.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
+        decoration: BoxDecoration(color: p.surface, borderRadius: sheetRadius),
         child: Column(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(22, 10, 12, 0),
               child: Column(
                 children: [
-                  Container(width: 40, height: 4, decoration: BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
+                  if (!isDesktopPlatform) Container(width: 40, height: 4, decoration: BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -381,7 +387,8 @@ class _AddEditTaskSheetState extends State<AddEditTaskSheet> {
                       child: Material(
                         elevation: 6,
                         color: p.surface,
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(isDesktopPlatform ? 12 : 18),
+                        clipBehavior: Clip.antiAlias,
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxHeight: 220, maxWidth: 360),
                           child: ListView(

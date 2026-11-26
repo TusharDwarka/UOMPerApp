@@ -822,7 +822,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   // --- Add / Edit Class Bottom Sheet ---
   Future<void> _showAddEditClassSheet({int? index}) async {
     final initialData = index != null ? _parsedSessions[index] : null;
-    final result = await showModalBottomSheet<Map<String, dynamic>>(
+    final result = await showAppSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

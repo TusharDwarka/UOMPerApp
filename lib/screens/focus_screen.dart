@@ -21,7 +21,7 @@ class FocusScreen extends StatelessWidget {
   Future<void> _editDurations(BuildContext context, FocusProvider focus) async {
     var f = focus.focusMinutes, b = focus.breakMinutes, g = focus.dailyGoalMinutes;
     var lb = focus.longBreakMinutes, n = focus.sessionsBeforeLongBreak, w = focus.workLimitMinutes;
-    await showModalBottomSheet(
+    await showAppSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -95,241 +95,277 @@ class FocusScreen extends StatelessWidget {
       FocusPhase.rest => focus.isLongBreak ? 'Long break' : 'Break',
     };
 
+    final header = ScreenHeader(
+  title: 'Focus',
+  eyebrow: 'Deep-work timer',
+  actions: [CircleIconButton(icon: Icons.tune_rounded, tooltip: 'Timer settings', onPressed: () => _editDurations(context, focus))],
+);
+    final average = <Widget>[
+      // "Time Average 4h 32min (6)"
+      Text('Time average', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w300, letterSpacing: -1.2, color: p.textSecondary)),
+      Text.rich(
+        TextSpan(children: [
+          TextSpan(text: _hm(avg)),
+          TextSpan(text: ' ($activeDays)', style: const TextStyle(fontSize: 16, letterSpacing: 0)),
+        ]),
+        style: TextStyle(fontSize: 40, height: 1.1, fontWeight: FontWeight.w400, letterSpacing: -1.6, color: p.textPrimary),
+      ),
+    ];
+    final breakTip = <Widget>[
+      if (focus.needsBreak && focus.phase != FocusPhase.rest) ...[
+        SoftCard(
+          radius: 28,
+          color: const Color(0xFFFFF3E0),
+          child: Row(
+            children: [
+              const Text('🧠', style: TextStyle(fontSize: 28)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  "You've focused ${_hm(focus.runMinutes)} without a real break. Rest your eyes for ${focus.longBreakMinutes} min.",
+                  style: const TextStyle(color: Color(0xFF6D4C00), fontWeight: FontWeight.w600),
+                ),
+              ),
+              TextButton(onPressed: focus.takeLongBreak, child: const Text('Break')),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+      ],
+    ];
+    final timer = SoftCard(
+      radius: 36,
+      color: focus.phase == FocusPhase.idle ? null : p.accent,
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  border: Border.all(color: focus.phase == FocusPhase.idle ? p.textPrimary : Colors.white, width: 1.3),
+                  borderRadius: BorderRadius.circular(40),
+                ),
+                child: Text(phaseLabel,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: focus.phase == FocusPhase.idle ? p.textPrimary : Colors.white)),
+              ),
+              const Spacer(),
+              if ((focus.taskTitle ?? focus.label).isNotEmpty && focus.phase != FocusPhase.idle)
+                Flexible(
+                  child: Text(focus.taskTitle ?? focus.label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: 210,
+            height: 210,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CircularProgressIndicator(
+                  value: focus.phase == FocusPhase.idle ? 0 : focus.progress,
+                  strokeWidth: 12,
+                  strokeCap: StrokeCap.round,
+                  backgroundColor: focus.phase == FocusPhase.idle ? p.surfaceAlt : Colors.white24,
+                  color: focus.phase == FocusPhase.idle ? p.accent : Colors.white,
+                ),
+                Center(
+                  child: Text(
+                    _fmt(focus.phase == FocusPhase.idle ? Duration(minutes: focus.focusMinutes) : focus.remaining),
+                    style: TextStyle(
+                      fontSize: 48,
+                      fontWeight: FontWeight.w300,
+                      letterSpacing: -2,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      color: focus.phase == FocusPhase.idle ? p.textPrimary : Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          if (focus.phase == FocusPhase.idle) ...[
+            _TaskLinkRow(focus: focus),
+            const SizedBox(height: 12),
+            if (modules.isNotEmpty && focus.taskId == null)
+              SizedBox(
+                height: 40,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (final m in modules)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: ChoiceChip(
+                          label: Text(m, overflow: TextOverflow.ellipsis),
+                          selected: focus.label == m,
+                          showCheckmark: false,
+                          selectedColor: p.ink,
+                          labelStyle: TextStyle(color: focus.label == m ? p.onInk : p.textPrimary),
+                          onSelected: (sel) => focus.setLabel(sel ? m : ''),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 12),
+            _SessionDots(done: focus.sessionsSinceLongBreak, total: focus.sessionsBeforeLongBreak),
+            const SizedBox(height: 12),
+            InkPillButton(
+              label: 'Start ${focus.focusMinutes} min focus',
+              icon: Icons.play_arrow_rounded,
+              expand: true,
+              onPressed: () => focus.start(),
+            ),
+          ] else
+            Row(
+              children: [
+                Expanded(
+                  child: _WhitePill(
+                    label: focus.isPaused ? 'Resume' : 'Pause',
+                    icon: focus.isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                    onTap: focus.isPaused ? focus.resume : focus.pause,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: _WhitePill(label: 'Stop', icon: Icons.stop_rounded, onTap: focus.stop, outlined: true)),
+              ],
+            ),
+        ],
+      ),
+    );
+    final stats = Row(
+      children: [
+        Expanded(
+          child: SoftCard(
+            radius: 28,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Today', style: TextStyle(color: p.textSecondary, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Text(_hm(focus.todayMinutes),
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w300, letterSpacing: -1, color: p.textPrimary)),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(value: goalProgress, minHeight: 7, backgroundColor: p.surfaceAlt, color: p.accent),
+                ),
+                const SizedBox(height: 6),
+                Text('Goal ${_hm(focus.dailyGoalMinutes)}', style: TextStyle(fontSize: 12, color: p.textSecondary)),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: SoftCard(
+            radius: 28,
+            color: p.ink,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Streak', style: TextStyle(color: p.onInk.withValues(alpha: 0.7), fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Text('${focus.streak} 🔥',
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w300, color: p.onInk)),
+                const SizedBox(height: 10),
+                Text('days with 25+ min', style: TextStyle(fontSize: 12, color: p.onInk.withValues(alpha: 0.7))),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+    final weekly = <Widget>[
+      WeeklyBarsChart(values: focus.weekMinutes(), todayIndex: todayIdx),
+      const SizedBox(height: 10),
+      Row(
+        children: [
+          const Icon(Icons.north_east_rounded, size: 18),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text('Weekly productivity', maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
+          ),
+          const SizedBox(width: 8),
+          if (wow != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(8)),
+              child: Text('${wow >= 0 ? '+' : ''}$wow%', style: TextStyle(color: p.onInk, fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text('Last week ${_hm(focus.lastWeekTotal)}', textAlign: TextAlign.right, maxLines: 1,
+                overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: p.textSecondary)),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Text('Your weekly focus also counts on your groups\' leaderboards.',
+          style: TextStyle(fontSize: 12, color: p.textMuted)),
+    ];
+
     return Scaffold(
       backgroundColor: p.canvas,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 32),
-          children: [
-            ScreenHeader(
-              title: 'Focus',
-              eyebrow: 'Deep-work timer',
-              actions: [CircleIconButton(icon: Icons.tune_rounded, tooltip: 'Timer settings', onPressed: () => _editDurations(context, focus))],
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // "Time Average 4h 32min (6)"
-                  Text('Time average', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w300, letterSpacing: -1.2, color: p.textSecondary)),
-                  Text.rich(
-                    TextSpan(children: [
-                      TextSpan(text: _hm(avg)),
-                      TextSpan(text: ' ($activeDays)', style: const TextStyle(fontSize: 16, letterSpacing: 0)),
-                    ]),
-                    style: TextStyle(fontSize: 40, height: 1.1, fontWeight: FontWeight.w400, letterSpacing: -1.6, color: p.textPrimary),
-                  ),
-                  const SizedBox(height: 18),
-
-                  if (focus.needsBreak && focus.phase != FocusPhase.rest) ...[
-                    SoftCard(
-                      radius: 28,
-                      color: const Color(0xFFFFF3E0),
-                      child: Row(
-                        children: [
-                          const Text('🧠', style: TextStyle(fontSize: 28)),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              "You've focused ${_hm(focus.runMinutes)} without a real break. Rest your eyes for ${focus.longBreakMinutes} min.",
-                              style: const TextStyle(color: Color(0xFF6D4C00), fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          TextButton(onPressed: focus.takeLongBreak, child: const Text('Break')),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-
-                  // ── Timer card ──
-                  SoftCard(
-                    radius: 36,
-                    color: focus.phase == FocusPhase.idle ? null : p.accent,
-                    padding: const EdgeInsets.all(22),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: focus.phase == FocusPhase.idle ? p.textPrimary : Colors.white, width: 1.3),
-                                borderRadius: BorderRadius.circular(40),
-                              ),
-                              child: Text(phaseLabel,
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: focus.phase == FocusPhase.idle ? p.textPrimary : Colors.white)),
-                            ),
-                            const Spacer(),
-                            if ((focus.taskTitle ?? focus.label).isNotEmpty && focus.phase != FocusPhase.idle)
-                              Flexible(
-                                child: Text(focus.taskTitle ?? focus.label, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 18),
-                        SizedBox(
-                          width: 210,
-                          height: 210,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              CircularProgressIndicator(
-                                value: focus.phase == FocusPhase.idle ? 0 : focus.progress,
-                                strokeWidth: 12,
-                                strokeCap: StrokeCap.round,
-                                backgroundColor: focus.phase == FocusPhase.idle ? p.surfaceAlt : Colors.white24,
-                                color: focus.phase == FocusPhase.idle ? p.accent : Colors.white,
-                              ),
-                              Center(
-                                child: Text(
-                                  _fmt(focus.phase == FocusPhase.idle ? Duration(minutes: focus.focusMinutes) : focus.remaining),
-                                  style: TextStyle(
-                                    fontSize: 48,
-                                    fontWeight: FontWeight.w300,
-                                    letterSpacing: -2,
-                                    fontFeatures: const [FontFeature.tabularFigures()],
-                                    color: focus.phase == FocusPhase.idle ? p.textPrimary : Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        if (focus.phase == FocusPhase.idle) ...[
-                          _TaskLinkRow(focus: focus),
-                          const SizedBox(height: 12),
-                          if (modules.isNotEmpty && focus.taskId == null)
-                            SizedBox(
-                              height: 40,
-                              child: ListView(
-                                scrollDirection: Axis.horizontal,
-                                children: [
-                                  for (final m in modules)
-                                    Padding(
-                                      padding: const EdgeInsets.only(right: 6),
-                                      child: ChoiceChip(
-                                        label: Text(m, overflow: TextOverflow.ellipsis),
-                                        selected: focus.label == m,
-                                        showCheckmark: false,
-                                        selectedColor: p.ink,
-                                        labelStyle: TextStyle(color: focus.label == m ? p.onInk : p.textPrimary),
-                                        onSelected: (sel) => focus.setLabel(sel ? m : ''),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          const SizedBox(height: 12),
-                          _SessionDots(done: focus.sessionsSinceLongBreak, total: focus.sessionsBeforeLongBreak),
-                          const SizedBox(height: 12),
-                          InkPillButton(
-                            label: 'Start ${focus.focusMinutes} min focus',
-                            icon: Icons.play_arrow_rounded,
-                            expand: true,
-                            onPressed: () => focus.start(),
-                          ),
-                        ] else
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _WhitePill(
-                                  label: focus.isPaused ? 'Resume' : 'Pause',
-                                  icon: focus.isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                                  onTap: focus.isPaused ? focus.resume : focus.pause,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(child: _WhitePill(label: 'Stop', icon: Icons.stop_rounded, onTap: focus.stop, outlined: true)),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // ── Today + streak ──
-                  Row(
+        child: LayoutBuilder(builder: (context, c) {
+          // PC: timer on the left, today/streak/week on the right; nothing
+          // below the fold.
+          if (wideDesktop(c)) {
+            return Column(children: [
+              header,
+              Expanded(
+                child: SplitPanes(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                  sidePanel: false,
+                  mainFlex: 5,
+                  sideFlex: 4,
+                  main: SingleChildScrollView(child: timer),
+                  side: ListView(
                     children: [
-                      Expanded(
-                        child: SoftCard(
-                          radius: 28,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Today', style: TextStyle(color: p.textSecondary, fontWeight: FontWeight.w600)),
-                              const SizedBox(height: 6),
-                              Text(_hm(focus.todayMinutes),
-                                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w300, letterSpacing: -1, color: p.textPrimary)),
-                              const SizedBox(height: 10),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: LinearProgressIndicator(value: goalProgress, minHeight: 7, backgroundColor: p.surfaceAlt, color: p.accent),
-                              ),
-                              const SizedBox(height: 6),
-                              Text('Goal ${_hm(focus.dailyGoalMinutes)}', style: TextStyle(fontSize: 12, color: p.textSecondary)),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: SoftCard(
-                          radius: 28,
-                          color: p.ink,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Streak', style: TextStyle(color: p.onInk.withValues(alpha: 0.7), fontWeight: FontWeight.w600)),
-                              const SizedBox(height: 6),
-                              Text('${focus.streak} 🔥',
-                                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w300, color: p.onInk)),
-                              const SizedBox(height: 10),
-                              Text('days with 25+ min', style: TextStyle(fontSize: 12, color: p.onInk.withValues(alpha: 0.7))),
-                            ],
-                          ),
-                        ),
-                      ),
+                      ...breakTip,
+                      SoftCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: average)),
+                      const SizedBox(height: 14),
+                      stats,
+                      const SizedBox(height: 14),
+                      SoftCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: weekly)),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  WeeklyBarsChart(values: focus.weekMinutes(), todayIndex: todayIdx),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      const Icon(Icons.north_east_rounded, size: 18),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text('Weekly productivity', maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontWeight: FontWeight.w600, color: p.textPrimary)),
-                      ),
-                      const SizedBox(width: 8),
-                      if (wow != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(8)),
-                          child: Text('${wow >= 0 ? '+' : ''}$wow%', style: TextStyle(color: p.onInk, fontSize: 12, fontWeight: FontWeight.w700)),
-                        ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text('Last week ${_hm(focus.lastWeekTotal)}', textAlign: TextAlign.right, maxLines: 1,
-                            overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: p.textSecondary)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text('Your weekly focus also counts on your groups\' leaderboards.',
-                      style: TextStyle(fontSize: 12, color: p.textMuted)),
-                ],
+                ),
               ),
-            ),
-          ],
-        ),
+            ]);
+          }
+          return ListView(
+            padding: const EdgeInsets.only(bottom: 32),
+            children: [
+              header,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ...average,
+                    const SizedBox(height: 18),
+                    ...breakTip,
+                    timer,
+                    const SizedBox(height: 14),
+                    stats,
+                    const SizedBox(height: 14),
+                    ...weekly,
+                  ],
+                ),
+              ),
+            ],
+          );
+        }),
       ),
     );
   }
@@ -393,6 +429,7 @@ class _TaskLinkRow extends StatelessWidget {
             title: 'Focus on a task',
             options: [none, ...tasks.map((t) => t.syncId!)],
             selected: linked ?? none,
+            anchor: context,
             labelOf: (id) => id == none ? 'No task (free focus)' : tasks.firstWhere((t) => t.syncId == id).title,
             subtitleOf: (id) {
               if (id == none) return 'Just track time';
