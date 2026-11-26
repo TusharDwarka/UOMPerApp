@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -8,8 +10,14 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Release signing key. Both files are gitignored: back them up, updates need the same key.
+val keyProps = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
 android {
-    namespace = "com.example.uom_per_app"
+    namespace = "io.github.tushardwarka.uomper"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -24,8 +32,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.uom_per_app"
+        applicationId = "io.github.tushardwarka.uomper"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -34,11 +41,19 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            // No debug-key fallback: without key.properties a release build must fail.
+            storeFile = keyProps.getProperty("storeFile")?.let { rootProject.file(it) }
+            storePassword = keyProps.getProperty("storePassword")
+            keyAlias = keyProps.getProperty("keyAlias")
+            keyPassword = keyProps.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

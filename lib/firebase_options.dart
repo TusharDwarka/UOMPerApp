@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCNnfAWNgnkQh_9iJsMk3mOVfPL3VjwQLA',
-    appId: '1:202748519700:android:4a8f050e437f55721b8e01',
+    appId: '1:202748519700:android:c4805e8035c02feb1b8e01',
     messagingSenderId: '202748519700',
     projectId: 'uomperapp',
     storageBucket: 'uomperapp.firebasestorage.app',

@@ -1,4 +1,4 @@
-package com.example.uom_per_app
+package io.github.tushardwarka.uomper
 
 import android.content.Context
 import android.content.Intent

@@ -116,11 +116,11 @@ class WidgetService {
       // Trigger widget update
       await HomeWidget.updateWidget(
         androidName: _androidWidgetName,
-        qualifiedAndroidName: 'com.example.uom_per_app.UomperWidgetProvider',
+        qualifiedAndroidName: 'io.github.tushardwarka.uomper.UomperWidgetProvider',
       );
       await HomeWidget.updateWidget(
         androidName: 'TaskWidgetProvider',
-        qualifiedAndroidName: 'com.example.uom_per_app.TaskWidgetProvider',
+        qualifiedAndroidName: 'io.github.tushardwarka.uomper.TaskWidgetProvider',
       );
     } catch (e) {
       // Silently fail — widget is optional

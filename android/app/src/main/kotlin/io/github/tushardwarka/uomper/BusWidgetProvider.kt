@@ -1,4 +1,4 @@
-package com.example.uom_per_app
+package io.github.tushardwarka.uomper
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -12,7 +12,7 @@ import java.util.Calendar
 class BusWidgetProvider : AppWidgetProvider() {
 
     companion object {
-        const val ACTION_NEXT_ROUTE = "com.example.uom_per_app.ACTION_NEXT_BUS_ROUTE"
+        const val ACTION_NEXT_ROUTE = "io.github.tushardwarka.uomper.ACTION_NEXT_BUS_ROUTE"
     }
 
     override fun onReceive(context: Context, intent: Intent) {

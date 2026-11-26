@@ -1,4 +1,4 @@
-package com.example.uom_per_app
+package io.github.tushardwarka.uomper
 
 import io.flutter.embedding.android.FlutterActivity
 

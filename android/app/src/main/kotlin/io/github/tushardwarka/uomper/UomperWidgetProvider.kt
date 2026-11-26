@@ -1,4 +1,4 @@
-package com.example.uom_per_app
+package io.github.tushardwarka.uomper
 
 import android.appwidget.AppWidgetManager
 import android.util.Log

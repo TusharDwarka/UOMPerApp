@@ -9,12 +9,22 @@ timer and study groups — on Android and Windows, synced through one account.
 
 Grab the latest build from the [**website**](https://uomper.pages.dev/#download) or from [**Releases**](https://github.com/TusharDwarka/UOMPerApp/releases/latest):
 
-- **Android** — `UOMPer-v3.4-android.apk`. Open it on your phone and allow "install unknown apps" when asked.
-- **Windows** — `UOMPer-v3.4-windows.zip`. Unzip anywhere and run `uom_per_app.exe` (keep the other files next to it).
+- **Android** — `UOMPer-v3.5-android.apk`. Open it on your phone and allow "install unknown apps" when asked.
+  If Android offers to scan the app, that's Google Play Protect checking an app it hasn't seen: tap *Scan app* and
+  install if it passes.
+- **Windows** — `UOMPer-v3.5-windows.zip`. Unzip anywhere and run `uom_per_app.exe` (keep the other files next to it).
   Windows SmartScreen may warn because the app isn't signed: *More info → Run anyway*.
 
-> v3.4 redesigns the Windows app (sidebar, Ctrl K command palette, side-by-side panes, light and dark)
-> and gives Grades a simpler, calmer layout on Android and Windows.
+### Moving from v3.4 or earlier (Android)
+
+v3.5 has a new app ID and signing key, so it installs **as a second app** next to the old one.
+
+1. In the old app, open **Settings**. Guests: tap **Create account** first, or your data can't be moved.
+2. Go online, tap **Sync now** and wait for **Synced**.
+3. Install v3.5 and sign in with the same account.
+4. Check your data, then uninstall the old app. Add your home-screen widgets again.
+
+Attached files, Focus timer history, home layout and theme stay in the old app, so save any files you need first.
 
 ## 📸 Screenshots
 
@@ -130,6 +140,9 @@ flutter run                 # phone
 flutter run -d windows      # PC
 flutter test                # logic + layout/overflow tests
 ```
+
+Release APKs are signed with a private key that isn't in the repo. To build one, create your own keystore and an
+`android/key.properties` with `storeFile`, `storePassword`, `keyAlias` and `keyPassword`.
 
 ## 🛠 Tech stack
 Flutter · Provider · Isar (local DB) · Firebase Auth + Cloud Firestore (sync & groups) · Gemini (timetable import)
