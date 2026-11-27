@@ -36,9 +36,6 @@ Attached files, Focus timer history, home layout and theme stay in the old app, 
 |:---:|:---:|:---:|:---:|
 | ![Grades and CPA](docs/screenshots/grades.png) | ![Module assessment breakdown](docs/screenshots/module_marks.png) | ![Activity heatmap on Home](docs/screenshots/activity.png) | ![Board](docs/screenshots/board.png) |
 
-| Focus |
-|:---:|
-| ![Focus](docs/screenshots/focus.png) |
 
 | Windows |
 |:---:|
